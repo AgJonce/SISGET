@@ -9572,11 +9572,19 @@ def setor_nome_duplicado(
 # SETOR - INCLUIR
 # ============================================================
 
+# ============================================================
+# SETOR - INCLUIR
+# ============================================================
+
 def setor_incluir():
 
     st.subheader(
         "🧩 Dados do Setor"
     )
+
+    # ========================================================
+    # BUSCAR UNIDADES ADMINISTRATIVAS ATIVAS
+    # ========================================================
 
     unidades = _sisget_fetch(
         """
@@ -9617,7 +9625,15 @@ def setor_incluir():
             "⚠️ Nenhuma Unidade Administrativa ativa cadastrada."
         )
 
+        st.info(
+            "Cadastre primeiro uma Unidade Administrativa."
+        )
+
         return
+
+    # ========================================================
+    # MONTAR OPÇÕES DAS UNIDADES ADMINISTRATIVAS
+    # ========================================================
 
     opcoes = {}
 
@@ -9647,6 +9663,10 @@ def setor_incluir():
             entidade_id
         )
 
+    # ========================================================
+    # SELECIONAR UNIDADE ADMINISTRATIVA
+    # ========================================================
+
     unidade_selecionada = st.selectbox(
         "Unidade Administrativa *",
         list(
@@ -9662,6 +9682,10 @@ def setor_incluir():
         unidade_selecionada
     ]
 
+    # ========================================================
+    # GERAR CÓDIGO
+    # ========================================================
+
     codigo = (
         sisget_proximo_codigo_setor(
             unidade_administrativa_id
@@ -9673,7 +9697,7 @@ def setor_incluir():
     )
 
     # ========================================================
-    # SETORES SUPERIORES
+    # BUSCAR SETORES EXISTENTES DA UNIDADE
     # ========================================================
 
     setores_superiores = _sisget_fetch(
@@ -9692,11 +9716,13 @@ def setor_incluir():
         )
     )
 
-    opcoes_superiores = {
-        "Sem setor superior": None
-    }
+    opcoes_superiores = {}
 
-    for setor_id, codigo_setor, nome_setor in setores_superiores:
+    for (
+        setor_id,
+        codigo_setor,
+        nome_setor
+    ) in setores_superiores:
 
         opcoes_superiores[
             f"{codigo_setor} - {nome_setor}"
@@ -9711,12 +9737,48 @@ def setor_incluir():
         clear_on_submit=True
     ):
 
-        setor_superior = st.selectbox(
-            "Setor superior",
-            list(
-                opcoes_superiores.keys()
-            )
+        tipo_setor = st.radio(
+            "Tipo de estrutura *",
+            [
+                "Setor principal",
+                "Subsetor"
+            ],
+            horizontal=True
         )
+
+        setor_superior = None
+
+        # ====================================================
+        # SUBSETOR
+        # ====================================================
+
+        if tipo_setor == "Subsetor":
+
+            if not opcoes_superiores:
+
+                st.warning(
+                    "⚠️ Ainda não existe nenhum setor "
+                    "nesta Unidade Administrativa."
+                )
+
+                st.caption(
+                    "Cadastre primeiro um setor principal."
+                )
+
+            else:
+
+                setor_superior = st.selectbox(
+                    "Setor ao qual este subsetor pertence *",
+                    list(
+                        opcoes_superiores.keys()
+                    )
+                )
+
+        st.markdown("---")
+
+        # ====================================================
+        # DADOS DO SETOR
+        # ====================================================
 
         nome = st.text_input(
             "Nome do Setor *",
@@ -9741,10 +9803,18 @@ def setor_incluir():
             use_container_width=True
         )
 
+    # ========================================================
+    # SALVAR
+    # ========================================================
+
     if salvar:
 
         nome = nome.strip()
         sigla = sigla.strip()
+
+        # ====================================================
+        # NOME OBRIGATÓRIO
+        # ====================================================
 
         if not nome:
 
@@ -9753,6 +9823,43 @@ def setor_incluir():
             )
 
             return
+
+        # ====================================================
+        # VALIDAR SUBSETOR
+        # ====================================================
+
+        if tipo_setor == "Subsetor":
+
+            if not opcoes_superiores:
+
+                st.warning(
+                    "⚠️ Para cadastrar um subsetor, "
+                    "cadastre primeiro um setor principal."
+                )
+
+                return
+
+            if not setor_superior:
+
+                st.warning(
+                    "⚠️ Selecione o setor superior."
+                )
+
+                return
+
+            setor_pai_id = (
+                opcoes_superiores[
+                    setor_superior
+                ]
+            )
+
+        else:
+
+            setor_pai_id = None
+
+        # ====================================================
+        # NOME DUPLICADO
+        # ====================================================
 
         if setor_nome_duplicado(
             unidade_administrativa_id,
@@ -9765,6 +9872,10 @@ def setor_incluir():
             )
 
             return
+
+        # ====================================================
+        # RECALCULAR CÓDIGO
+        # ====================================================
 
         codigo = (
             sisget_proximo_codigo_setor(
@@ -9780,11 +9891,34 @@ def setor_incluir():
 
             return
 
-        setor_pai_id = (
-            opcoes_superiores[
-                setor_superior
-            ]
+        # ====================================================
+        # VALIDAR CÓDIGO DUPLICADO
+        # ====================================================
+
+        codigo_existente = _sisget_fetchone(
+            """
+            SELECT id
+            FROM setores
+            WHERE entidade_id = ?
+              AND codigo = ?
+            """,
+            (
+                entidade_id,
+                codigo
+            )
         )
+
+        if codigo_existente:
+
+            st.warning(
+                "⚠️ Esse código de setor já está cadastrado."
+            )
+
+            return
+
+        # ====================================================
+        # INSERT
+        # ====================================================
 
         sucesso = _sisget_salvar(
             """
@@ -9820,16 +9954,25 @@ def setor_incluir():
             )
         )
 
+        # ====================================================
+        # SUCESSO
+        # ====================================================
+
         if sucesso:
 
-            st.success(
-                f"✅ Setor cadastrado com sucesso! Código: {codigo}"
-            )
+            if setor_pai_id is None:
 
+                st.success(
+                    f"✅ Setor cadastrado com sucesso! "
+                    f"Código: {codigo}"
+                )
 
-# ============================================================
-# SETOR - LOCALIZAR
-# ============================================================
+            else:
+
+                st.success(
+                    f"✅ Subsetor cadastrado com sucesso! "
+                    f"Código: {codigo}"
+                )
 
 def setor_localizar():
 
