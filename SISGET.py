@@ -526,10 +526,14 @@ def sisget_voltar_localizar(
 # CABEÇALHO PADRÃO DAS TELAS
 # ============================================================
 
+# ============================================================
+# CABEÇALHO PADRÃO DAS TELAS
+# BOTÃO VOLTAR
+# ============================================================
+
 def sisget_cabecalho_tela(
     titulo,
-    chave,
-    voltar_para="principal"
+    voltar=None
 ):
 
     col1, col2 = st.columns(
@@ -552,60 +556,17 @@ def sisget_cabecalho_tela(
 
     with col2:
 
-        if st.button(
-            "⬅️ Voltar",
-            use_container_width=True,
-            key=f"btn_voltar_{chave}_{voltar_para}"
-        ):
+        if voltar is not None:
 
-            # =================================================
-            # LIMPAR REGISTRO SELECIONADO
-            # =================================================
+            if st.button(
+                "⬅️ Voltar",
+                use_container_width=True,
+                key=f"btn_voltar_{titulo}"
+            ):
 
-            st.session_state[
-                f"sisget_id_{chave}"
-            ] = None
-
-            # =================================================
-            # VOLTAR PARA TELA PRINCIPAL
-            # =================================================
-
-            if voltar_para == "principal":
-
-                st.session_state[
-                    f"sisget_tela_{chave}"
-                ] = "principal"
-
-            # =================================================
-            # VOLTAR PARA LOCALIZAR
-            # =================================================
-
-            elif voltar_para == "localizar":
-
-                st.session_state[
-                    f"sisget_tela_{chave}"
-                ] = "localizar"
-
-            # =================================================
-            # PADRÃO
-            # =================================================
-
-            else:
-
-                st.session_state[
-                    f"sisget_tela_{chave}"
-                ] = "principal"
-
-            st.rerun()
+                voltar()
 
     st.markdown("---")
-
-# ============================================================
-# GRID PADRÃO DO SISGET
-#
-# DUPLO CLIQUE = ABRIR PARA ALTERAÇÃO
-# ============================================================
-
 def sisget_grid_localizar(
     df,
     chave,
