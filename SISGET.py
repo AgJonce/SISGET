@@ -1122,64 +1122,588 @@ def modulo_em_desenvolvimento(
 # INÍCIO
 # ============================================================
 
+# ============================================================
+# TELA INICIAL DO SISGET
+# ============================================================
+
 def tela_inicio():
+
+    # ========================================================
+    # CABEÇALHO
+    # ========================================================
 
     st.title(
         "🏛️ SISGET"
     )
 
-
     st.subheader(
         "Sistema Integrado de Gestão Pública"
     )
 
+    st.caption(
+        "Gestão pública, conhecimento, treinamento e suporte "
+        "em um único ambiente."
+    )
 
     st.markdown("---")
 
 
-    c1, c2, c3, c4 = (
-        st.columns(4)
+    # ========================================================
+    # ACESSOS RÁPIDOS
+    # ========================================================
+
+    st.subheader(
+        "🚀 Acessos Rápidos"
     )
 
 
-    c1.metric(
-        "Sistema",
-        "SISGET"
-    )
+    col1, col2, col3, col4 = st.columns(4)
 
 
-    c2.metric(
-        "Banco",
-        "PostgreSQL"
-    )
+    # ========================================================
+    # SITE
+    # ========================================================
+
+    with col1:
+
+        st.markdown(
+            "### 🌐 Site"
+        )
+
+        st.caption(
+            "Acesse o portal oficial do SISGET."
+        )
+
+        st.link_button(
+            "🌐 Acessar Site",
+            "https://SEU-SITE-AQUI.com.br",
+            use_container_width=True
+        )
 
 
-    c3.metric(
-        "Servidor",
-        "Supabase"
-    )
+    # ========================================================
+    # YOUTUBE
+    # ========================================================
+
+    with col2:
+
+        st.markdown(
+            "### ▶️ Videoaulas"
+        )
+
+        st.caption(
+            "Treinamentos e aulas sobre o sistema."
+        )
+
+        st.link_button(
+            "▶️ Canal no YouTube",
+            "https://www.youtube.com/@SEU_CANAL",
+            use_container_width=True
+        )
 
 
-    c4.metric(
-        "Situação",
-        "Online"
-        if testar_conexao()
-        else "Offline"
-    )
+    # ========================================================
+    # TREINAMENTO
+    # ========================================================
+
+    with col3:
+
+        st.markdown(
+            "### 🎓 Treinamento"
+        )
+
+        st.caption(
+            "Aprenda a utilizar os módulos do SISGET."
+        )
+
+        if st.button(
+            "🎓 Área de Treinamento",
+            use_container_width=True,
+            key="home_treinamento"
+        ):
+
+            st.session_state[
+                "home_secao"
+            ] = "treinamento"
+
+            st.rerun()
+
+
+    # ========================================================
+    # CHATBOT
+    # ========================================================
+
+    with col4:
+
+        st.markdown(
+            "### 🤖 Assistente"
+        )
+
+        st.caption(
+            "Tire dúvidas sobre o SISGET."
+        )
+
+        if st.button(
+            "🤖 Abrir Assistente",
+            use_container_width=True,
+            key="home_chatbot"
+        ):
+
+            st.session_state[
+                "home_secao"
+            ] = "chatbot"
+
+            st.rerun()
 
 
     st.markdown("---")
 
 
-    st.info(
-        "Selecione um módulo no menu lateral."
+    # ========================================================
+    # CONTROLE DA ÁREA DA HOME
+    # ========================================================
+
+    if "home_secao" not in st.session_state:
+
+        st.session_state[
+            "home_secao"
+        ] = "inicio"
+
+
+    secao = st.session_state[
+        "home_secao"
+    ]
+
+
+    # ========================================================
+    # CHATBOT
+    # ========================================================
+
+    if secao == "chatbot":
+
+        if st.button(
+            "⬅️ Voltar para Início",
+            key="home_voltar_chatbot"
+        ):
+
+            st.session_state[
+                "home_secao"
+            ] = "inicio"
+
+            st.rerun()
+
+
+        st.markdown("---")
+
+
+        # CHAMA A DEF DO ASSISTENTE
+        modulo_assistente()
+
+        return
+
+
+    # ========================================================
+    # TREINAMENTO
+    # ========================================================
+
+    if secao == "treinamento":
+
+        if st.button(
+            "⬅️ Voltar para Início",
+            key="home_voltar_treinamento"
+        ):
+
+            st.session_state[
+                "home_secao"
+            ] = "inicio"
+
+            st.rerun()
+
+
+        st.markdown("---")
+
+
+        st.header(
+            "🎓 Central de Treinamento"
+        )
+
+        st.caption(
+            "Treinamentos organizados por módulo do SISGET."
+        )
+
+
+        treinamento = st.selectbox(
+            "Selecione o módulo",
+            [
+                "Cadastro Básico",
+                "Solicitações",
+                "Planejamento",
+                "SISCOM - Licitações e Compras",
+                "SISCON - Contratos",
+                "Contabilidade e Orçamento",
+                "Almoxarifado",
+                "Patrimônio",
+                "SISOPB - Obras Públicas",
+                "SISPRO - Problemas Urbanos",
+                "SICOM / TCEMG"
+            ],
+            key="home_treinamento_modulo"
+        )
+
+
+        st.markdown("---")
+
+
+        # ====================================================
+        # CADASTRO BÁSICO
+        # ====================================================
+
+        if treinamento == "Cadastro Básico":
+
+            st.subheader(
+                "🏛️ Cadastro Básico"
+            )
+
+            st.write(
+                """
+                O Cadastro Básico é responsável pela estrutura
+                administrativa utilizada pelos demais módulos
+                do SISGET.
+                """
+            )
+
+            st.markdown(
+                """
+                **Conteúdo do treinamento:**
+
+                - Cadastro de Entidades
+                - Cadastro de Órgãos
+                - Unidades Orçamentárias
+                - Unidades Administrativas
+                - Setores
+                - Exercícios
+                - Organograma
+                """
+            )
+
+
+        # ====================================================
+        # SISCOM
+        # ====================================================
+
+        elif treinamento == "SISCOM - Licitações e Compras":
+
+            st.subheader(
+                "🛒 SISCOM - Licitações e Compras"
+            )
+
+            st.markdown(
+                """
+                **Conteúdo do treinamento:**
+
+                - Solicitação da contratação
+                - DFD
+                - Estudos Técnicos Preliminares
+                - Termo de Referência
+                - Pesquisa de preços
+                - Processo licitatório
+                - Contratação direta
+                - Julgamento
+                - Homologação
+                """
+            )
+
+
+        # ====================================================
+        # CONTABILIDADE
+        # ====================================================
+
+        elif treinamento == "Contabilidade e Orçamento":
+
+            st.subheader(
+                "📚 Contabilidade e Orçamento"
+            )
+
+            st.markdown(
+                """
+                **Conteúdo do treinamento:**
+
+                - Orçamento
+                - Dotação
+                - Cota
+                - Reserva
+                - Empenho
+                - Liquidação
+                - Ordem de Pagamento
+                - Pagamento
+                - Estornos
+                - Restos a Pagar
+                """
+            )
+
+
+        # ====================================================
+        # OUTROS
+        # ====================================================
+
+        else:
+
+            st.info(
+                f"🎓 O treinamento de **{treinamento}** "
+                "será disponibilizado nesta área."
+            )
+
+
+        return
+
+
+    # ========================================================
+    # HOME NORMAL
+    # ========================================================
+
+    st.header(
+        "📚 Central de Conhecimento"
     )
 
 
-# ============================================================
-# CADASTRO BÁSICO
-# ============================================================
+    aba1, aba2, aba3 = st.tabs(
+        [
+            "⚖️ Licitações e Contratos",
+            "📊 Contabilidade Pública",
+            "📘 Guias SISGET"
+        ]
+    )
 
+
+    # ========================================================
+    # LICITAÇÕES
+    # ========================================================
+
+    with aba1:
+
+        st.subheader(
+            "⚖️ Licitações e Contratos Administrativos"
+        )
+
+
+        st.markdown(
+            """
+            ### Lei nº 14.133/2021
+
+            A Lei nº 14.133/2021 estabelece normas gerais
+            de licitação e contratação para as Administrações
+            Públicas.
+
+            No SISGET ela está diretamente relacionada aos
+            módulos de:
+
+            - Planejamento da contratação
+            - DFD
+            - ETP
+            - Termo de Referência
+            - Pesquisa de preços
+            - Licitação
+            - Contratação direta
+            - Atas de Registro de Preços
+            - Contratos
+            - Fiscalização e execução contratual
+            """
+        )
+
+
+        st.link_button(
+            "⚖️ Consultar Lei 14.133/2021",
+            "https://www.planalto.gov.br/ccivil_03/_ato2019-2022/2021/lei/l14133.htm",
+            use_container_width=True
+        )
+
+
+        st.markdown("---")
+
+
+        st.subheader(
+            "🏛️ SICOM / TCEMG"
+        )
+
+
+        st.write(
+            """
+            O SISGET também possui integração estrutural
+            com informações exigidas pelo SICOM do
+            Tribunal de Contas do Estado de Minas Gerais.
+            """
+        )
+
+
+        st.link_button(
+            "🏛️ Portal do TCEMG",
+            "https://www.tce.mg.gov.br/",
+            use_container_width=True
+        )
+
+
+    # ========================================================
+    # CONTABILIDADE
+    # ========================================================
+
+    with aba2:
+
+        st.subheader(
+            "📊 Contabilidade Pública"
+        )
+
+
+        st.markdown(
+            """
+            ### Lei nº 4.320/1964
+
+            Trata de normas gerais de Direito Financeiro,
+            elaboração e controle dos orçamentos e balanços
+            públicos.
+
+            No SISGET ela se relaciona principalmente com:
+
+            - Receita
+            - Despesa
+            - Orçamento
+            - Empenho
+            - Liquidação
+            - Pagamento
+            - Restos a Pagar
+            - Demonstrativos contábeis
+            """
+        )
+
+
+        st.link_button(
+            "📖 Consultar Lei 4.320/1964",
+            "https://www.planalto.gov.br/ccivil_03/leis/l4320.htm",
+            use_container_width=True
+        )
+
+
+        st.markdown("---")
+
+
+        st.markdown(
+            """
+            ### Lei de Responsabilidade Fiscal
+
+            A Lei Complementar nº 101/2000 estabelece
+            normas de finanças públicas voltadas para
+            responsabilidade na gestão fiscal.
+            """
+        )
+
+
+        st.link_button(
+            "📖 Consultar LC 101/2000",
+            "https://www.planalto.gov.br/ccivil_03/leis/lcp/lcp101.htm",
+            use_container_width=True
+        )
+
+
+        st.markdown("---")
+
+
+        st.markdown(
+            """
+            ### MCASP
+
+            O Manual de Contabilidade Aplicada ao Setor
+            Público orienta procedimentos e registros da
+            contabilidade aplicada ao setor público.
+            """
+        )
+
+
+    # ========================================================
+    # GUIAS SISGET
+    # ========================================================
+
+    with aba3:
+
+        st.subheader(
+            "📘 Guias do SISGET"
+        )
+
+
+        st.write(
+            "Escolha uma área para consultar informações."
+        )
+
+
+        col1, col2 = st.columns(2)
+
+
+        with col1:
+
+            st.info(
+                """
+                🏛️ **Estrutura Administrativa**
+
+                Entidades  
+                Órgãos  
+                Unidades Orçamentárias  
+                Unidades Administrativas  
+                Setores
+                """
+            )
+
+
+            st.info(
+                """
+                🛒 **Compras e Licitações**
+
+                Solicitações  
+                Planejamento  
+                Pesquisa de Preços  
+                Licitação  
+                Contratação Direta
+                """
+            )
+
+
+        with col2:
+
+            st.info(
+                """
+                📑 **Contratos**
+
+                Contratos  
+                Aditivos  
+                Responsáveis  
+                Fiscalização  
+                Execução
+                """
+            )
+
+
+            st.info(
+                """
+                💰 **Execução Orçamentária**
+
+                Cota  
+                Reserva  
+                Empenho  
+                Liquidação  
+                Ordem de Pagamento  
+                Pagamento  
+                Restos a Pagar
+                """
+            )
+
+
+    # ========================================================
+    # RODAPÉ
+    # ========================================================
+
+    st.markdown("---")
+
+
+    st.caption(
+        "SISGET - Sistema Integrado de Gestão Pública"
+    )
 def cadastro_basico():
 
     st.title(
