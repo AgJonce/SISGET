@@ -1,0 +1,15 @@
+streamlit
+openai==0.28
+requests
+geopy
+matplotlib==3.9.2
+fpdf 
+folium
+datetime
+streamlit_folium
+PyPDF2
+cryptography
+reportlab
+Plotly
+streamlit-aggrid
+psycopg2-binary
