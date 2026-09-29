@@ -1163,71 +1163,341 @@ def tela_inicio():
     )
 
 
+# ============================================================
+# CADASTRO BÁSICO
+# ============================================================
+
 def cadastro_basico():
 
     st.title(
         "🏛️ Cadastro Básico"
     )
 
-
-    opcao = st.sidebar.radio(
-
-        "Cadastro Básico",
-
-        [
-            "🏢 Entidades",
-            "🏛️ Órgãos",
-            "💼 Unidades Orçamentárias",
-            "🏬 Unidades Administrativas",
-            "🧩 Setores",
-            "📅 Exercícios",
-            "🌳 Organograma"
-        ],
-
-        key="menu_cadastro_basico"
+    st.caption(
+        "Estrutura administrativa e organizacional do SISGET."
     )
 
+    st.markdown("---")
 
-    if opcao == "🏢 Entidades":
+
+    # ========================================================
+    # CONTROLE DO SUBMÓDULO
+    # ========================================================
+
+    if "cadastro_basico_modulo" not in st.session_state:
+
+        st.session_state[
+            "cadastro_basico_modulo"
+        ] = "principal"
+
+
+    modulo = st.session_state[
+        "cadastro_basico_modulo"
+    ]
+
+
+    # ========================================================
+    # TELA PRINCIPAL
+    # ========================================================
+
+    if modulo == "principal":
+
+        st.subheader(
+            "📋 Selecione o cadastro"
+        )
+
+        st.write("")
+
+
+        # ====================================================
+        # PRIMEIRA LINHA
+        # ====================================================
+
+        col1, col2, col3 = st.columns(3)
+
+
+        with col1:
+
+            if st.button(
+                "🏢 Entidades",
+                use_container_width=True,
+                key="btn_cb_entidades"
+            ):
+
+                st.session_state[
+                    "cadastro_basico_modulo"
+                ] = "entidades"
+
+                st.rerun()
+
+
+        with col2:
+
+            if st.button(
+                "🏛️ Órgãos",
+                use_container_width=True,
+                key="btn_cb_orgaos"
+            ):
+
+                st.session_state[
+                    "cadastro_basico_modulo"
+                ] = "orgaos"
+
+                st.rerun()
+
+
+        with col3:
+
+            if st.button(
+                "💼 Unidades Orçamentárias",
+                use_container_width=True,
+                key="btn_cb_uo"
+            ):
+
+                st.session_state[
+                    "cadastro_basico_modulo"
+                ] = "unidades_orcamentarias"
+
+                st.rerun()
+
+
+        # ====================================================
+        # SEGUNDA LINHA
+        # ====================================================
+
+        col4, col5, col6 = st.columns(3)
+
+
+        with col4:
+
+            if st.button(
+                "🏬 Unidades Administrativas",
+                use_container_width=True,
+                key="btn_cb_ua"
+            ):
+
+                st.session_state[
+                    "cadastro_basico_modulo"
+                ] = "unidades_administrativas"
+
+                st.rerun()
+
+
+        with col5:
+
+            if st.button(
+                "🧩 Setores",
+                use_container_width=True,
+                key="btn_cb_setores"
+            ):
+
+                st.session_state[
+                    "cadastro_basico_modulo"
+                ] = "setores"
+
+                st.rerun()
+
+
+        with col6:
+
+            if st.button(
+                "📅 Exercícios",
+                use_container_width=True,
+                key="btn_cb_exercicios"
+            ):
+
+                st.session_state[
+                    "cadastro_basico_modulo"
+                ] = "exercicios"
+
+                st.rerun()
+
+
+        # ====================================================
+        # TERCEIRA LINHA
+        # ====================================================
+
+        col7, col8, col9 = st.columns(3)
+
+
+        with col7:
+
+            if st.button(
+                "🌳 Organograma",
+                use_container_width=True,
+                key="btn_cb_organograma"
+            ):
+
+                st.session_state[
+                    "cadastro_basico_modulo"
+                ] = "organograma"
+
+                st.rerun()
+
+
+        with col8:
+
+            st.empty()
+
+
+        with col9:
+
+            st.empty()
+
+
+        st.markdown("---")
+
+
+        st.info(
+            "Selecione uma opção para acessar o cadastro."
+        )
+
+
+    # ========================================================
+    # ENTIDADES
+    # ========================================================
+
+    elif modulo == "entidades":
+
+        if st.button(
+            "⬅️ Voltar ao Cadastro Básico",
+            key="voltar_cb_entidades"
+        ):
+
+            st.session_state[
+                "cadastro_basico_modulo"
+            ] = "principal"
+
+            st.rerun()
+
 
         cadastro_entidades()
 
 
-    elif opcao == "🏛️ Órgãos":
+    # ========================================================
+    # ÓRGÃOS
+    # ========================================================
+
+    elif modulo == "orgaos":
+
+        if st.button(
+            "⬅️ Voltar ao Cadastro Básico",
+            key="voltar_cb_orgaos"
+        ):
+
+            st.session_state[
+                "cadastro_basico_modulo"
+            ] = "principal"
+
+            st.rerun()
+
 
         cadastro_orgaos()
 
 
-    elif opcao == "💼 Unidades Orçamentárias":
+    # ========================================================
+    # UNIDADES ORÇAMENTÁRIAS
+    # ========================================================
+
+    elif modulo == "unidades_orcamentarias":
+
+        if st.button(
+            "⬅️ Voltar ao Cadastro Básico",
+            key="voltar_cb_uo"
+        ):
+
+            st.session_state[
+                "cadastro_basico_modulo"
+            ] = "principal"
+
+            st.rerun()
+
 
         cadastro_unidades_orcamentarias()
 
 
-    elif opcao == "🏬 Unidades Administrativas":
+    # ========================================================
+    # UNIDADES ADMINISTRATIVAS
+    # ========================================================
+
+    elif modulo == "unidades_administrativas":
+
+        if st.button(
+            "⬅️ Voltar ao Cadastro Básico",
+            key="voltar_cb_ua"
+        ):
+
+            st.session_state[
+                "cadastro_basico_modulo"
+            ] = "principal"
+
+            st.rerun()
+
 
         cadastro_unidades_administrativas()
 
 
-    elif opcao == "🧩 Setores":
+    # ========================================================
+    # SETORES
+    # ========================================================
+
+    elif modulo == "setores":
+
+        if st.button(
+            "⬅️ Voltar ao Cadastro Básico",
+            key="voltar_cb_setores"
+        ):
+
+            st.session_state[
+                "cadastro_basico_modulo"
+            ] = "principal"
+
+            st.rerun()
+
 
         cadastro_setores()
 
 
-    elif opcao == "📅 Exercícios":
+    # ========================================================
+    # EXERCÍCIOS
+    # ========================================================
+
+    elif modulo == "exercicios":
+
+        if st.button(
+            "⬅️ Voltar ao Cadastro Básico",
+            key="voltar_cb_exercicios"
+        ):
+
+            st.session_state[
+                "cadastro_basico_modulo"
+            ] = "principal"
+
+            st.rerun()
+
 
         cadastro_exercicios()
 
 
-    elif opcao == "🌳 Organograma":
+    # ========================================================
+    # ORGANOGRAMA
+    # ========================================================
+
+    elif modulo == "organograma":
+
+        if st.button(
+            "⬅️ Voltar ao Cadastro Básico",
+            key="voltar_cb_organograma"
+        ):
+
+            st.session_state[
+                "cadastro_basico_modulo"
+            ] = "principal"
+
+            st.rerun()
+
 
         organograma_sisget()
-
-
-# ============================================================
-# PLACEHOLDERS TEMPORÁRIOS
-#
-# VAMOS SUBSTITUIR UM POR UM
-# ============================================================
 
 def cadastro_entidades():
 
