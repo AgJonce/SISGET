@@ -11862,14 +11862,1415 @@ def organograma_sisget():
             "↳ Subsetores",
             total_subsetores
         )
+# ============================================================
+# MÓDULO DE SOLICITAÇÕES
+# ============================================================
+
 def modulo_solicitacoes():
 
-    modulo_em_desenvolvimento(
-        "Solicitações",
-        "📝"
+    sisget_tela_principal(
+        titulo="Solicitações",
+        chave="solicitacoes",
+        func_incluir=solicitacao_incluir,
+        func_localizar=solicitacao_localizar,
+        func_alterar=solicitacao_alterar,
+        func_excluir=solicitacao_excluir,
+        func_imprimir=solicitacao_imprimir,
+        icone="📝"
     )
 
 
+# ============================================================
+# PRÓXIMO NÚMERO DA SOLICITAÇÃO
+# ============================================================
+
+def sisget_proximo_numero_solicitacao():
+
+    resultado = _sisget_fetchone(
+        """
+        SELECT COALESCE(
+            MAX(numero),
+            0
+        )
+        FROM solicitacoes
+        """
+    )
+
+    if not resultado:
+
+        return 1
+
+    return int(
+        resultado[0]
+    ) + 1
+
+
+# ============================================================
+# SOLICITAÇÃO - INCLUIR
+# ============================================================
+
+def solicitacao_incluir():
+
+    st.subheader(
+        "📝 Nova Solicitação"
+    )
+
+    # ========================================================
+    # NÚMERO
+    # ========================================================
+
+    numero = (
+        sisget_proximo_numero_solicitacao()
+    )
+
+    st.info(
+        f"🔢 Solicitação nº {str(numero).zfill(6)}"
+    )
+
+    # ========================================================
+    # BUSCAR UNIDADES ADMINISTRATIVAS
+    # ========================================================
+
+    unidades = _sisget_fetch(
+        """
+        SELECT
+            a.id,
+            a.codigo,
+            a.nome,
+
+            u.id,
+            u.codigo,
+            u.nome,
+
+            e.id,
+            e.codigo,
+            e.nome,
+
+            o.id,
+            o.codigo,
+            o.nome
+
+        FROM unidades_administrativas a
+
+        INNER JOIN unidades_orcamentarias u
+            ON u.id = a.unidade_orcamentaria_id
+
+        INNER JOIN entidades e
+            ON e.id = a.entidade_id
+
+        INNER JOIN orgaos o
+            ON o.id = a.orgao_id
+
+        WHERE a.ativo = TRUE
+          AND u.ativo = TRUE
+          AND e.ativo = TRUE
+          AND o.ativo = TRUE
+
+        ORDER BY
+            o.codigo,
+            e.codigo,
+            u.codigo,
+            a.codigo
+        """
+    )
+
+    if not unidades:
+
+        st.warning(
+            "⚠️ Nenhuma Unidade Administrativa ativa cadastrada."
+        )
+
+        return
+
+    # ========================================================
+    # OPÇÕES
+    # ========================================================
+
+    opcoes_unidades = {}
+
+    for (
+        ua_id,
+        codigo_ua,
+        nome_ua,
+
+        uo_id,
+        codigo_uo,
+        nome_uo,
+
+        entidade_id,
+        codigo_entidade,
+        nome_entidade,
+
+        orgao_id,
+        codigo_orgao,
+        nome_orgao
+    ) in unidades:
+
+        descricao = (
+            f"{codigo_orgao} - {nome_orgao}"
+            f" → "
+            f"{codigo_entidade} - {nome_entidade}"
+            f" → "
+            f"{codigo_uo} - {nome_uo}"
+            f" → "
+            f"{codigo_ua} - {nome_ua}"
+        )
+
+        opcoes_unidades[
+            descricao
+        ] = (
+            orgao_id,
+            entidade_id,
+            uo_id,
+            ua_id
+        )
+
+    unidade_selecionada = st.selectbox(
+        "Unidade Administrativa *",
+        list(
+            opcoes_unidades.keys()
+        ),
+        key="solicitacao_incluir_unidade"
+    )
+
+    (
+        orgao_id,
+        entidade_id,
+        unidade_orcamentaria_id,
+        unidade_administrativa_id
+    ) = opcoes_unidades[
+        unidade_selecionada
+    ]
+
+    # ========================================================
+    # SETORES
+    # ========================================================
+
+    setores = _sisget_fetch(
+        """
+        SELECT
+            id,
+            codigo,
+            nome
+        FROM setores
+        WHERE unidade_administrativa_id = ?
+          AND ativo = TRUE
+        ORDER BY
+            codigo,
+            nome
+        """,
+        (
+            unidade_administrativa_id,
+        )
+    )
+
+    opcoes_setores = {
+        "Sem setor específico": None
+    }
+
+    for (
+        setor_id,
+        codigo_setor,
+        nome_setor
+    ) in setores:
+
+        opcoes_setores[
+            f"{codigo_setor} - {nome_setor}"
+        ] = setor_id
+
+    setor_selecionado = st.selectbox(
+        "Setor solicitante",
+        list(
+            opcoes_setores.keys()
+        ),
+        key="solicitacao_incluir_setor"
+    )
+
+    setor_id = (
+        opcoes_setores[
+            setor_selecionado
+        ]
+    )
+
+    # ========================================================
+    # SOLICITANTE
+    # ========================================================
+
+    usuario_logado = (
+        st.session_state.get(
+            "usuario_logado",
+            ""
+        )
+    )
+
+    # ========================================================
+    # FORMULÁRIO
+    # ========================================================
+
+    with st.form(
+        "form_solicitacao_incluir",
+        clear_on_submit=True
+    ):
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+
+            tipo = st.selectbox(
+                "Tipo de Solicitação *",
+                [
+                    "Aquisição de Material",
+                    "Contratação de Serviço",
+                    "Obra / Serviço de Engenharia",
+                    "Tecnologia da Informação",
+                    "Manutenção",
+                    "Outros"
+                ]
+            )
+
+        with col2:
+
+            prioridade = st.selectbox(
+                "Prioridade *",
+                [
+                    "Baixa",
+                    "Normal",
+                    "Alta",
+                    "Urgente"
+                ],
+                index=1
+            )
+
+        titulo = st.text_input(
+            "Objeto / Título da Solicitação *",
+            max_chars=200,
+            placeholder=(
+                "Ex.: Aquisição de materiais de escritório"
+            )
+        )
+
+        descricao = st.text_area(
+            "Descrição",
+            height=140,
+            placeholder=(
+                "Descreva o que está sendo solicitado."
+            )
+        )
+
+        justificativa = st.text_area(
+            "Justificativa *",
+            height=140,
+            placeholder=(
+                "Informe a necessidade e o motivo da solicitação."
+            )
+        )
+
+        solicitante = st.text_input(
+            "Solicitante",
+            value=usuario_logado,
+            max_chars=200
+        )
+
+        data_solicitacao = st.date_input(
+            "Data da Solicitação",
+            value=datetime.now().date()
+        )
+
+        st.markdown("---")
+
+        salvar = st.form_submit_button(
+            "💾 Registrar Solicitação",
+            type="primary",
+            use_container_width=True
+        )
+
+    # ========================================================
+    # SALVAR
+    # ========================================================
+
+    if salvar:
+
+        titulo = titulo.strip()
+        descricao = descricao.strip()
+        justificativa = justificativa.strip()
+        solicitante = solicitante.strip()
+
+        if not titulo:
+
+            st.warning(
+                "⚠️ Informe o objeto da solicitação."
+            )
+
+            return
+
+        if not justificativa:
+
+            st.warning(
+                "⚠️ Informe a justificativa."
+            )
+
+            return
+
+        # ====================================================
+        # RECALCULAR NÚMERO
+        # ====================================================
+
+        numero = (
+            sisget_proximo_numero_solicitacao()
+        )
+
+        sucesso = _sisget_salvar(
+            """
+            INSERT INTO solicitacoes
+            (
+                numero,
+
+                orgao_id,
+                entidade_id,
+                unidade_orcamentaria_id,
+                unidade_administrativa_id,
+                setor_id,
+
+                tipo,
+                prioridade,
+
+                titulo,
+                descricao,
+                justificativa,
+
+                solicitante,
+
+                status,
+                data_solicitacao
+            )
+            VALUES
+            (
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?
+            )
+            """,
+            (
+                numero,
+
+                orgao_id,
+                entidade_id,
+                unidade_orcamentaria_id,
+                unidade_administrativa_id,
+                setor_id,
+
+                tipo,
+                prioridade,
+
+                titulo,
+                descricao if descricao else None,
+                justificativa,
+
+                solicitante if solicitante else None,
+
+                "Aberta",
+                data_solicitacao
+            )
+        )
+
+        if sucesso:
+
+            st.success(
+                "✅ Solicitação registrada com sucesso! "
+                f"Nº {str(numero).zfill(6)}"
+            )
+
+
+# ============================================================
+# SOLICITAÇÃO - LOCALIZAR
+# ============================================================
+
+def solicitacao_localizar():
+
+    st.subheader(
+        "🔎 Localizar Solicitações"
+    )
+
+    col1, col2, col3 = st.columns(
+        [1, 2, 1]
+    )
+
+    with col1:
+
+        filtro_numero = st.text_input(
+            "Número",
+            key="solicitacao_localizar_numero"
+        )
+
+    with col2:
+
+        filtro_texto = st.text_input(
+            "Objeto",
+            key="solicitacao_localizar_texto"
+        )
+
+    with col3:
+
+        filtro_status = st.selectbox(
+            "Status",
+            [
+                "Todos",
+                "Aberta",
+                "Em análise",
+                "Aprovada",
+                "Rejeitada",
+                "Em atendimento",
+                "Concluída"
+            ],
+            key="solicitacao_localizar_status"
+        )
+
+    sql = """
+        SELECT
+            s.id,
+
+            LPAD(
+                s.numero::text,
+                6,
+                '0'
+            ) AS "Número",
+
+            s.data_solicitacao
+                AS "Data",
+
+            s.tipo
+                AS "Tipo",
+
+            s.titulo
+                AS "Objeto",
+
+            s.prioridade
+                AS "Prioridade",
+
+            COALESCE(
+                se.nome,
+                ''
+            ) AS "Setor",
+
+            s.solicitante
+                AS "Solicitante",
+
+            s.status
+                AS "Status"
+
+        FROM solicitacoes s
+
+        LEFT JOIN setores se
+            ON se.id = s.setor_id
+
+        WHERE 1 = 1
+    """
+
+    parametros = []
+
+    if filtro_numero.strip():
+
+        try:
+
+            numero = int(
+                filtro_numero.strip()
+            )
+
+            sql += """
+                AND s.numero = ?
+            """
+
+            parametros.append(
+                numero
+            )
+
+        except ValueError:
+
+            pass
+
+    if filtro_texto.strip():
+
+        sql += """
+            AND s.titulo ILIKE ?
+        """
+
+        parametros.append(
+            f"%{filtro_texto.strip()}%"
+        )
+
+    if filtro_status != "Todos":
+
+        sql += """
+            AND s.status = ?
+        """
+
+        parametros.append(
+            filtro_status
+        )
+
+    sql += """
+        ORDER BY
+            s.numero DESC
+    """
+
+    df = _sisget_dataframe(
+        sql,
+        tuple(parametros)
+    )
+
+    if df.empty:
+
+        st.info(
+            "Nenhuma solicitação encontrada."
+        )
+
+        return None
+
+    st.caption(
+        f"Solicitações encontradas: {len(df)}"
+    )
+
+    return sisget_grid_localizar(
+        df=df,
+        chave="solicitacoes",
+        coluna_id="id",
+        altura=450
+    )
+
+
+# ============================================================
+# SOLICITAÇÃO - ALTERAR
+# ============================================================
+
+def solicitacao_alterar(
+    solicitacao_id
+):
+
+    registro = _sisget_fetchone(
+        """
+        SELECT
+            numero,
+            tipo,
+            prioridade,
+            titulo,
+            descricao,
+            justificativa,
+            solicitante,
+            status,
+            data_solicitacao,
+
+            orgao_id,
+            entidade_id,
+            unidade_orcamentaria_id,
+            unidade_administrativa_id,
+            setor_id
+
+        FROM solicitacoes
+
+        WHERE id = ?
+        """,
+        (
+            solicitacao_id,
+        )
+    )
+
+    if not registro:
+
+        st.error(
+            "❌ Solicitação não encontrada."
+        )
+
+        return
+
+    (
+        numero,
+        tipo_atual,
+        prioridade_atual,
+        titulo_atual,
+        descricao_atual,
+        justificativa_atual,
+        solicitante_atual,
+        status_atual,
+        data_solicitacao,
+        orgao_id,
+        entidade_id,
+        unidade_orcamentaria_id,
+        unidade_administrativa_id,
+        setor_id
+    ) = registro
+
+    st.info(
+        f"📝 Solicitação nº {str(numero).zfill(6)}"
+    )
+
+    # ========================================================
+    # ESTRUTURA
+    # ========================================================
+
+    estrutura = _sisget_fetchone(
+        """
+        SELECT
+            o.codigo,
+            o.nome,
+
+            e.codigo,
+            e.nome,
+
+            u.codigo,
+            u.nome,
+
+            a.codigo,
+            a.nome,
+
+            COALESCE(
+                se.codigo,
+                ''
+            ),
+
+            COALESCE(
+                se.nome,
+                ''
+            )
+
+        FROM solicitacoes s
+
+        LEFT JOIN orgaos o
+            ON o.id = s.orgao_id
+
+        LEFT JOIN entidades e
+            ON e.id = s.entidade_id
+
+        LEFT JOIN unidades_orcamentarias u
+            ON u.id = s.unidade_orcamentaria_id
+
+        LEFT JOIN unidades_administrativas a
+            ON a.id = s.unidade_administrativa_id
+
+        LEFT JOIN setores se
+            ON se.id = s.setor_id
+
+        WHERE s.id = ?
+        """,
+        (
+            solicitacao_id,
+        )
+    )
+
+    if estrutura:
+
+        st.caption(
+            (
+                f"🏛️ {estrutura[0]} - {estrutura[1]}"
+                f"  →  🏢 {estrutura[2]} - {estrutura[3]}"
+                f"  →  💼 {estrutura[4]} - {estrutura[5]}"
+                f"  →  🏬 {estrutura[6]} - {estrutura[7]}"
+            )
+        )
+
+        if estrutura[8]:
+
+            st.caption(
+                f"🧩 {estrutura[8]} - {estrutura[9]}"
+            )
+
+    # ========================================================
+    # FORM
+    # ========================================================
+
+    tipos = [
+        "Aquisição de Material",
+        "Contratação de Serviço",
+        "Obra / Serviço de Engenharia",
+        "Tecnologia da Informação",
+        "Manutenção",
+        "Outros"
+    ]
+
+    prioridades = [
+        "Baixa",
+        "Normal",
+        "Alta",
+        "Urgente"
+    ]
+
+    status_opcoes = [
+        "Aberta",
+        "Em análise",
+        "Aprovada",
+        "Rejeitada",
+        "Em atendimento",
+        "Concluída"
+    ]
+
+    with st.form(
+        f"form_solicitacao_alterar_{solicitacao_id}"
+    ):
+
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+
+            tipo = st.selectbox(
+                "Tipo",
+                tipos,
+                index=(
+                    tipos.index(tipo_atual)
+                    if tipo_atual in tipos
+                    else 0
+                )
+            )
+
+        with col2:
+
+            prioridade = st.selectbox(
+                "Prioridade",
+                prioridades,
+                index=(
+                    prioridades.index(prioridade_atual)
+                    if prioridade_atual in prioridades
+                    else 1
+                )
+            )
+
+        with col3:
+
+            status = st.selectbox(
+                "Status",
+                status_opcoes,
+                index=(
+                    status_opcoes.index(status_atual)
+                    if status_atual in status_opcoes
+                    else 0
+                )
+            )
+
+        titulo = st.text_input(
+            "Objeto / Título *",
+            value=titulo_atual or "",
+            max_chars=200
+        )
+
+        descricao = st.text_area(
+            "Descrição",
+            value=descricao_atual or "",
+            height=140
+        )
+
+        justificativa = st.text_area(
+            "Justificativa *",
+            value=justificativa_atual or "",
+            height=140
+        )
+
+        solicitante = st.text_input(
+            "Solicitante",
+            value=solicitante_atual or "",
+            max_chars=200
+        )
+
+        st.markdown("---")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+
+            salvar = st.form_submit_button(
+                "💾 Salvar Alterações",
+                type="primary",
+                use_container_width=True
+            )
+
+        with col2:
+
+            cancelar = st.form_submit_button(
+                "❌ Cancelar",
+                use_container_width=True
+            )
+
+    if cancelar:
+
+        st.session_state[
+            "sisget_id_solicitacoes"
+        ] = None
+
+        st.session_state[
+            "sisget_tela_solicitacoes"
+        ] = "localizar"
+
+        st.rerun()
+
+    if salvar:
+
+        titulo = titulo.strip()
+        descricao = descricao.strip()
+        justificativa = justificativa.strip()
+        solicitante = solicitante.strip()
+
+        if not titulo:
+
+            st.warning(
+                "⚠️ Informe o objeto."
+            )
+
+            return
+
+        if not justificativa:
+
+            st.warning(
+                "⚠️ Informe a justificativa."
+            )
+
+            return
+
+        sucesso = _sisget_salvar(
+            """
+            UPDATE solicitacoes
+            SET
+                tipo = ?,
+                prioridade = ?,
+                titulo = ?,
+                descricao = ?,
+                justificativa = ?,
+                solicitante = ?,
+                status = ?
+            WHERE id = ?
+            """,
+            (
+                tipo,
+                prioridade,
+                titulo,
+                descricao if descricao else None,
+                justificativa,
+                solicitante if solicitante else None,
+                status,
+                solicitacao_id
+            )
+        )
+
+        if sucesso:
+
+            st.session_state[
+                "sisget_id_solicitacoes"
+            ] = None
+
+            st.session_state[
+                "sisget_tela_solicitacoes"
+            ] = "localizar"
+
+            st.success(
+                "✅ Solicitação alterada com sucesso!"
+            )
+
+            st.rerun()
+
+
+# ============================================================
+# SOLICITAÇÃO - EXCLUIR
+# ============================================================
+
+def solicitacao_excluir():
+
+    st.subheader(
+        "🗑️ Excluir Solicitação"
+    )
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            id,
+
+            LPAD(
+                numero::text,
+                6,
+                '0'
+            ) AS "Número",
+
+            data_solicitacao
+                AS "Data",
+
+            titulo
+                AS "Objeto",
+
+            solicitante
+                AS "Solicitante",
+
+            status
+                AS "Status"
+
+        FROM solicitacoes
+
+        ORDER BY
+            numero DESC
+        """
+    )
+
+    if df.empty:
+
+        st.info(
+            "Nenhuma solicitação cadastrada."
+        )
+
+        return
+
+    registro_id = sisget_grid_localizar(
+        df=df,
+        chave="excluir_solicitacoes",
+        coluna_id="id",
+        altura=420
+    )
+
+    if not registro_id:
+
+        st.caption(
+            "Dê duplo clique na solicitação que deseja excluir."
+        )
+
+        return
+
+    registro = _sisget_fetchone(
+        """
+        SELECT
+            numero,
+            titulo,
+            status
+        FROM solicitacoes
+        WHERE id = ?
+        """,
+        (
+            registro_id,
+        )
+    )
+
+    if not registro:
+
+        return
+
+    numero = registro[0]
+    titulo = registro[1]
+    status = registro[2]
+
+    st.markdown("---")
+
+    st.error(
+        (
+            f"⚠️ Solicitação nº "
+            f"**{str(numero).zfill(6)}**\n\n"
+            f"**{titulo}**"
+        )
+    )
+
+    if status == "Concluída":
+
+        st.warning(
+            "⚠️ Esta solicitação está concluída."
+        )
+
+    confirmar = st.checkbox(
+        "Confirmo que desejo excluir esta solicitação.",
+        key=f"confirmar_exclusao_solicitacao_{registro_id}"
+    )
+
+    if st.button(
+        "🗑️ Confirmar Exclusão",
+        type="primary",
+        use_container_width=True,
+        key=f"btn_excluir_solicitacao_{registro_id}"
+    ):
+
+        if not confirmar:
+
+            st.warning(
+                "⚠️ Marque a confirmação."
+            )
+
+            return
+
+        sucesso = _sisget_salvar(
+            """
+            DELETE FROM solicitacoes
+            WHERE id = ?
+            """,
+            (
+                registro_id,
+            )
+        )
+
+        if sucesso:
+
+            st.session_state[
+                "sisget_id_solicitacoes"
+            ] = None
+
+            st.session_state[
+                "sisget_tela_solicitacoes"
+            ] = "principal"
+
+            st.success(
+                "✅ Solicitação excluída."
+            )
+
+            st.rerun()
+
+
+# ============================================================
+# SOLICITAÇÕES - IMPRIMIR
+# ============================================================
+
+def solicitacao_imprimir():
+
+    st.subheader(
+        "🖨️ Relatório de Solicitações"
+    )
+
+    status = st.selectbox(
+        "Status",
+        [
+            "Todos",
+            "Aberta",
+            "Em análise",
+            "Aprovada",
+            "Rejeitada",
+            "Em atendimento",
+            "Concluída"
+        ],
+        key="solicitacao_imprimir_status"
+    )
+
+    sql = """
+        SELECT
+            s.numero,
+            s.data_solicitacao,
+            s.tipo,
+            s.titulo,
+            s.prioridade,
+            COALESCE(
+                se.nome,
+                ''
+            ),
+            COALESCE(
+                s.solicitante,
+                ''
+            ),
+            s.status
+
+        FROM solicitacoes s
+
+        LEFT JOIN setores se
+            ON se.id = s.setor_id
+
+        WHERE 1 = 1
+    """
+
+    parametros = []
+
+    if status != "Todos":
+
+        sql += """
+            AND s.status = ?
+        """
+
+        parametros.append(
+            status
+        )
+
+    sql += """
+        ORDER BY
+            s.numero
+    """
+
+    dados = _sisget_fetch(
+        sql,
+        tuple(parametros)
+    )
+
+    if not dados:
+
+        st.info(
+            "Nenhuma solicitação encontrada."
+        )
+
+        return
+
+    visualizacao = []
+
+    for registro in dados:
+
+        visualizacao.append({
+
+            "Número":
+                str(registro[0]).zfill(6),
+
+            "Data":
+                (
+                    registro[1].strftime(
+                        "%d/%m/%Y"
+                    )
+                    if registro[1]
+                    else ""
+                ),
+
+            "Tipo":
+                registro[2],
+
+            "Objeto":
+                registro[3],
+
+            "Prioridade":
+                registro[4],
+
+            "Setor":
+                registro[5],
+
+            "Solicitante":
+                registro[6],
+
+            "Status":
+                registro[7]
+        })
+
+    df = pd.DataFrame(
+        visualizacao
+    )
+
+    st.dataframe(
+        df,
+        use_container_width=True,
+        hide_index=True
+    )
+
+    st.caption(
+        f"Total de solicitações: {len(df)}"
+    )
+
+    # ========================================================
+    # PDF
+    # ========================================================
+
+    if st.button(
+        "📄 Gerar PDF",
+        type="primary",
+        use_container_width=True,
+        key="gerar_pdf_solicitacoes"
+    ):
+
+        buffer = BytesIO()
+
+        documento = SimpleDocTemplate(
+            buffer,
+            pagesize=A4,
+            rightMargin=0.8 * cm,
+            leftMargin=0.8 * cm,
+            topMargin=1.0 * cm,
+            bottomMargin=1.0 * cm
+        )
+
+        estilos = (
+            getSampleStyleSheet()
+        )
+
+        texto_tabela = ParagraphStyle(
+            "TextoSolicitacao",
+            parent=estilos["Normal"],
+            fontSize=7,
+            leading=8
+        )
+
+        elementos = []
+
+        elementos.append(
+            Paragraph(
+                "SISGET - Sistema Integrado de Gestão Pública",
+                estilos["Heading1"]
+            )
+        )
+
+        elementos.append(
+            Paragraph(
+                "Relatório de Solicitações",
+                estilos["Heading2"]
+            )
+        )
+
+        elementos.append(
+            Paragraph(
+                f"Status: {status}",
+                estilos["Normal"]
+            )
+        )
+
+        elementos.append(
+            Spacer(
+                1,
+                0.4 * cm
+            )
+        )
+
+        tabela_dados = [[
+            "Nº",
+            "Data",
+            "Tipo",
+            "Objeto",
+            "Prioridade",
+            "Setor",
+            "Status"
+        ]]
+
+        for registro in dados:
+
+            tabela_dados.append([
+
+                str(
+                    registro[0]
+                ).zfill(6),
+
+                (
+                    registro[1].strftime(
+                        "%d/%m/%Y"
+                    )
+                    if registro[1]
+                    else ""
+                ),
+
+                Paragraph(
+                    str(
+                        registro[2] or ""
+                    ),
+                    texto_tabela
+                ),
+
+                Paragraph(
+                    str(
+                        registro[3] or ""
+                    ),
+                    texto_tabela
+                ),
+
+                str(
+                    registro[4] or ""
+                ),
+
+                Paragraph(
+                    str(
+                        registro[5] or ""
+                    ),
+                    texto_tabela
+                ),
+
+                str(
+                    registro[7] or ""
+                )
+            ])
+
+        tabela = Table(
+            tabela_dados,
+            colWidths=[
+                1.2 * cm,
+                1.8 * cm,
+                2.8 * cm,
+                5.5 * cm,
+                1.7 * cm,
+                3.0 * cm,
+                2.0 * cm
+            ],
+            repeatRows=1
+        )
+
+        tabela.setStyle(
+            TableStyle([
+
+                (
+                    "BACKGROUND",
+                    (0, 0),
+                    (-1, 0),
+                    colors.lightgrey
+                ),
+
+                (
+                    "FONTNAME",
+                    (0, 0),
+                    (-1, 0),
+                    "Helvetica-Bold"
+                ),
+
+                (
+                    "GRID",
+                    (0, 0),
+                    (-1, -1),
+                    0.5,
+                    colors.grey
+                ),
+
+                (
+                    "VALIGN",
+                    (0, 0),
+                    (-1, -1),
+                    "MIDDLE"
+                ),
+
+                (
+                    "FONTSIZE",
+                    (0, 0),
+                    (-1, -1),
+                    7
+                )
+            ])
+        )
+
+        elementos.append(
+            tabela
+        )
+
+        elementos.append(
+            Spacer(
+                1,
+                0.5 * cm
+            )
+        )
+
+        elementos.append(
+            Paragraph(
+                f"Total de registros: {len(dados)}",
+                estilos["Normal"]
+            )
+        )
+
+        elementos.append(
+            Paragraph(
+                (
+                    "Emitido em: "
+                    + datetime.now().strftime(
+                        "%d/%m/%Y %H:%M"
+                    )
+                ),
+                estilos["Normal"]
+            )
+        )
+
+        documento.build(
+            elementos
+        )
+
+        buffer.seek(0)
+
+        st.download_button(
+            "⬇️ Baixar Relatório em PDF",
+            data=buffer,
+            file_name="relatorio_solicitacoes.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+            key="baixar_pdf_solicitacoes"
+        )
 # ============================================================
 # PLANEJAMENTO
 # ============================================================
