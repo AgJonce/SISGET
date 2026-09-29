@@ -11204,6 +11204,10 @@ def cadastro_exercicios():
 # ORGANOGRAMA DO SISGET
 # ============================================================
 
+# ============================================================
+# ORGANOGRAMA DO SISGET
+# ============================================================
+
 def organograma_sisget():
 
     st.title(
@@ -11235,7 +11239,9 @@ def organograma_sisget():
             codigo,
             nome
         FROM orgaos
-        ORDER BY codigo, nome
+        ORDER BY
+            codigo,
+            nome
         """
     )
 
@@ -11288,9 +11294,14 @@ def organograma_sisget():
             id,
             codigo,
             nome,
-            COALESCE(sigla, ''),
+            COALESCE(
+                sigla,
+                ''
+            ),
             ativo
+
         FROM orgaos
+
         WHERE 1 = 1
     """
 
@@ -11345,7 +11356,8 @@ def organograma_sisget():
     total_subsetores = 0
 
     # ========================================================
-    # FUNÇÃO INTERNA PARA SETORES / SUBSETORES
+    # FUNÇÃO INTERNA
+    # MOSTRAR SETORES E SUBSETORES
     # ========================================================
 
     def mostrar_setores(
@@ -11373,7 +11385,7 @@ def organograma_sisget():
         ) in encontrados:
 
             # =================================================
-            # TIPO
+            # IDENTIFICAR TIPO
             # =================================================
 
             if pai_id is None:
@@ -11381,24 +11393,12 @@ def organograma_sisget():
                 total_setores += 1
 
                 icone = "🧩"
-                tipo = "Setor"
 
             else:
 
                 total_subsetores += 1
 
                 icone = "↳"
-                tipo = "Subsetor"
-
-            # =================================================
-            # SITUAÇÃO
-            # =================================================
-
-            situacao = (
-                ""
-                if ativo_setor
-                else " 🔴"
-            )
 
             # =================================================
             # SIGLA
@@ -11411,42 +11411,43 @@ def organograma_sisget():
             )
 
             # =================================================
+            # SITUAÇÃO
+            # =================================================
+
+            situacao = (
+                ""
+                if ativo_setor
+                else " 🔴"
+            )
+
+            # =================================================
             # INDENTAÇÃO
             # =================================================
 
-            margem = (
-                80
-                + (
-                    nivel * 28
+            indentacao = (
+                "&nbsp;&nbsp;&nbsp;&nbsp;"
+                * (
+                    nivel + 5
                 )
             )
 
             # =================================================
-            # EXIBIR
+            # EXIBIR SETOR
             # =================================================
 
             st.markdown(
-                f"""
-                <div style="
-                    margin-left:{margem}px;
-                    padding:6px 10px;
-                    margin-top:3px;
-                    border-left:2px solid #d0d0d0;
-                ">
-                    {icone}
-                    <b>{codigo_setor} - {nome_setor}</b>
-                    {sigla_texto}
-                    {situacao}
-                    <small style="color:#777; margin-left:8px;">
-                        {tipo}
-                    </small>
-                </div>
-                """,
+                (
+                    f"{indentacao}"
+                    f"{icone} "
+                    f"**{codigo_setor} - {nome_setor}**"
+                    f"{sigla_texto}"
+                    f"{situacao}"
+                ),
                 unsafe_allow_html=True
             )
 
             # =================================================
-            # SUBSETORES
+            # MOSTRAR FILHOS
             # =================================================
 
             mostrar_setores(
@@ -11491,7 +11492,9 @@ def organograma_sisget():
                 codigo,
                 nome,
                 ativo
+
             FROM entidades
+
             WHERE orgao_id = ?
         """
 
@@ -11560,17 +11563,11 @@ def organograma_sisget():
                 )
 
                 st.markdown(
-                    f"""
-                    <div style="
-                        margin-left:10px;
-                        padding:8px 10px;
-                        margin-top:5px;
-                        font-size:16px;
-                    ">
-                        🏢 <b>{codigo_entidade} - {nome_entidade}</b>
-                        {situacao_entidade}
-                    </div>
-                    """,
+                    (
+                        "&nbsp;&nbsp;"
+                        f"🏢 **{codigo_entidade} - {nome_entidade}**"
+                        f"{situacao_entidade}"
+                    ),
                     unsafe_allow_html=True
                 )
 
@@ -11584,7 +11581,9 @@ def organograma_sisget():
                         codigo,
                         nome,
                         ativo
+
                     FROM unidades_orcamentarias
+
                     WHERE entidade_id = ?
                 """
 
@@ -11604,32 +11603,29 @@ def organograma_sisget():
                         nome
                 """
 
-                unidades_orcamentarias = _sisget_fetch(
-                    sql_uos,
-                    tuple(
-                        parametros_uos
+                unidades_orcamentarias = (
+                    _sisget_fetch(
+                        sql_uos,
+                        tuple(
+                            parametros_uos
+                        )
                     )
                 )
 
                 if not unidades_orcamentarias:
 
                     st.markdown(
-                        """
-                        <div style="
-                            margin-left:35px;
-                            color:#888;
-                            font-size:13px;
-                        ">
-                            Nenhuma Unidade Orçamentária cadastrada.
-                        </div>
-                        """,
+                        (
+                            "&nbsp;&nbsp;&nbsp;&nbsp;"
+                            "Nenhuma Unidade Orçamentária cadastrada."
+                        ),
                         unsafe_allow_html=True
                     )
 
                     continue
 
                 # =============================================
-                # UOs
+                # UNIDADES ORÇAMENTÁRIAS
                 # =============================================
 
                 for (
@@ -11648,16 +11644,11 @@ def organograma_sisget():
                     )
 
                     st.markdown(
-                        f"""
-                        <div style="
-                            margin-left:35px;
-                            padding:6px 10px;
-                            margin-top:3px;
-                        ">
-                            💼 <b>{codigo_uo} - {nome_uo}</b>
-                            {situacao_uo}
-                        </div>
-                        """,
+                        (
+                            "&nbsp;&nbsp;&nbsp;&nbsp;"
+                            f"💼 **{codigo_uo} - {nome_uo}**"
+                            f"{situacao_uo}"
+                        ),
                         unsafe_allow_html=True
                     )
 
@@ -11670,9 +11661,14 @@ def organograma_sisget():
                             id,
                             codigo,
                             nome,
-                            COALESCE(sigla, ''),
+                            COALESCE(
+                                sigla,
+                                ''
+                            ),
                             ativo
+
                         FROM unidades_administrativas
+
                         WHERE unidade_orcamentaria_id = ?
                     """
 
@@ -11704,22 +11700,18 @@ def organograma_sisget():
                     if not unidades_administrativas:
 
                         st.markdown(
-                            """
-                            <div style="
-                                margin-left:60px;
-                                color:#888;
-                                font-size:13px;
-                            ">
-                                Nenhuma Unidade Administrativa cadastrada.
-                            </div>
-                            """,
+                            (
+                                "&nbsp;&nbsp;&nbsp;&nbsp;"
+                                "&nbsp;&nbsp;"
+                                "Nenhuma Unidade Administrativa cadastrada."
+                            ),
                             unsafe_allow_html=True
                         )
 
                         continue
 
                     # =========================================
-                    # UAs
+                    # UNIDADES ADMINISTRATIVAS
                     # =========================================
 
                     for (
@@ -11745,17 +11737,13 @@ def organograma_sisget():
                         )
 
                         st.markdown(
-                            f"""
-                            <div style="
-                                margin-left:60px;
-                                padding:6px 10px;
-                                margin-top:3px;
-                            ">
-                                🏬 <b>{codigo_ua} - {nome_ua}</b>
-                                {sigla_ua_texto}
-                                {situacao_ua}
-                            </div>
-                            """,
+                            (
+                                "&nbsp;&nbsp;&nbsp;&nbsp;"
+                                "&nbsp;&nbsp;&nbsp;&nbsp;"
+                                f"🏬 **{codigo_ua} - {nome_ua}**"
+                                f"{sigla_ua_texto}"
+                                f"{situacao_ua}"
+                            ),
                             unsafe_allow_html=True
                         )
 
@@ -11769,9 +11757,14 @@ def organograma_sisget():
                                 setor_pai_id,
                                 codigo,
                                 nome,
-                                COALESCE(sigla, ''),
+                                COALESCE(
+                                    sigla,
+                                    ''
+                                ),
                                 ativo
+
                             FROM setores
+
                             WHERE unidade_administrativa_id = ?
                         """
 
@@ -11801,22 +11794,19 @@ def organograma_sisget():
                         if not setores:
 
                             st.markdown(
-                                """
-                                <div style="
-                                    margin-left:85px;
-                                    color:#888;
-                                    font-size:13px;
-                                ">
-                                    Nenhum setor cadastrado.
-                                </div>
-                                """,
+                                (
+                                    "&nbsp;&nbsp;&nbsp;&nbsp;"
+                                    "&nbsp;&nbsp;&nbsp;&nbsp;"
+                                    "&nbsp;&nbsp;"
+                                    "Nenhum setor cadastrado."
+                                ),
                                 unsafe_allow_html=True
                             )
 
                             continue
 
                         # =====================================
-                        # EXIBIR SETORES E SUBSETORES
+                        # MOSTRAR SETORES
                         # =====================================
 
                         mostrar_setores(
