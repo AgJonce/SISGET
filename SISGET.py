@@ -523,41 +523,82 @@ def sisget_voltar_localizar(
 
 
 # ============================================================
-# CABEÇALHO DE TELA
+# CABEÇALHO PADRÃO DAS TELAS
 # ============================================================
 
 def sisget_cabecalho_tela(
     titulo,
-    voltar=None
+    chave,
+    voltar_para="principal"
 ):
 
-    c1, c2 = st.columns(
+    col1, col2 = st.columns(
         [6, 1]
     )
 
+    # ========================================================
+    # TÍTULO
+    # ========================================================
 
-    with c1:
+    with col1:
 
         st.subheader(
             titulo
         )
 
+    # ========================================================
+    # BOTÃO VOLTAR
+    # ========================================================
 
-    if voltar is not None:
+    with col2:
 
-        with c2:
+        if st.button(
+            "⬅️ Voltar",
+            use_container_width=True,
+            key=f"btn_voltar_{chave}_{voltar_para}"
+        ):
 
-            if st.button(
-                "⬅️ Voltar",
-                use_container_width=True,
-                key=f"voltar_{titulo}_{voltar}"
-            ):
+            # =================================================
+            # LIMPAR REGISTRO SELECIONADO
+            # =================================================
 
-                voltar()
+            st.session_state[
+                f"sisget_id_{chave}"
+            ] = None
 
+            # =================================================
+            # VOLTAR PARA TELA PRINCIPAL
+            # =================================================
+
+            if voltar_para == "principal":
+
+                st.session_state[
+                    f"sisget_tela_{chave}"
+                ] = "principal"
+
+            # =================================================
+            # VOLTAR PARA LOCALIZAR
+            # =================================================
+
+            elif voltar_para == "localizar":
+
+                st.session_state[
+                    f"sisget_tela_{chave}"
+                ] = "localizar"
+
+            # =================================================
+            # PADRÃO
+            # =================================================
+
+            else:
+
+                st.session_state[
+                    f"sisget_tela_{chave}"
+                ] = "principal"
+
+            st.rerun()
 
     st.markdown("---")
-
 
 # ============================================================
 # GRID PADRÃO DO SISGET
