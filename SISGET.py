@@ -7890,12 +7890,1530 @@ def unidade_orcamentaria_excluir():
                 f"Orçamentária: {erro}"
             )
 
+# ============================================================
+# CADASTRO DE UNIDADES ADMINISTRATIVAS
+# ============================================================
+
 def cadastro_unidades_administrativas():
 
-    modulo_em_desenvolvimento(
-        "Unidades Administrativas",
-        "🏬"
+    sisget_tela_principal(
+        titulo="Unidades Administrativas",
+        chave="unidades_administrativas",
+        func_incluir=unidade_administrativa_incluir,
+        func_localizar=unidade_administrativa_localizar,
+        func_alterar=unidade_administrativa_alterar,
+        func_excluir=unidade_administrativa_excluir,
+        func_imprimir=unidade_administrativa_imprimir,
+        icone="🏬"
     )
+
+
+# ============================================================
+# PRÓXIMO CÓDIGO DA UNIDADE ADMINISTRATIVA
+#
+# UO:
+# 001.001.001
+#
+# UA:
+# 001.001.001.001
+# 001.001.001.002
+#
+# REUTILIZA O PRIMEIRO CÓDIGO LIVRE
+# ============================================================
+
+def sisget_proximo_codigo_unidade_administrativa(
+    unidade_orcamentaria_id
+):
+
+    # ========================================================
+    # BUSCAR CÓDIGO DA UO
+    # ========================================================
+
+    unidade = _sisget_fetchone(
+        """
+        SELECT codigo
+        FROM unidades_orcamentarias
+        WHERE id = ?
+        """,
+        (
+            unidade_orcamentaria_id,
+        )
+    )
+
+    if not unidade:
+
+        return None
+
+    codigo_uo = str(
+        unidade[0] or ""
+    ).strip()
+
+    # ========================================================
+    # BUSCAR CÓDIGOS JÁ UTILIZADOS
+    # ========================================================
+
+    dados = _sisget_fetch(
+        """
+        SELECT codigo
+        FROM unidades_administrativas
+        WHERE unidade_orcamentaria_id = ?
+        ORDER BY codigo
+        """,
+        (
+            unidade_orcamentaria_id,
+        )
+    )
+
+    numeros_usados = set()
+
+    for registro in dados:
+
+        codigo = str(
+            registro[0] or ""
+        ).strip()
+
+        try:
+
+            parte = (
+                codigo.split(".")[-1]
+            )
+
+            numeros_usados.add(
+                int(parte)
+            )
+
+        except (
+            ValueError,
+            TypeError
+        ):
+
+            pass
+
+    # ========================================================
+    # PRIMEIRO NÚMERO LIVRE
+    # ========================================================
+
+    proximo = 1
+
+    while proximo in numeros_usados:
+
+        proximo += 1
+
+    numero_ua = str(
+        proximo
+    ).zfill(3)
+
+    return (
+        f"{codigo_uo}.{numero_ua}"
+    )
+
+
+# ============================================================
+# VALIDAR NOME DUPLICADO
+# ============================================================
+
+def unidade_administrativa_nome_duplicado(
+    unidade_orcamentaria_id,
+    nome,
+    unidade_id=None
+):
+
+    nome = nome.strip()
+
+    if unidade_id is None:
+
+        resultado = _sisget_fetchone(
+            """
+            SELECT id
+            FROM unidades_administrativas
+            WHERE unidade_orcamentaria_id = ?
+              AND LOWER(TRIM(nome)) = LOWER(TRIM(?))
+            """,
+            (
+                unidade_orcamentaria_id,
+                nome
+            )
+        )
+
+    else:
+
+        resultado = _sisget_fetchone(
+            """
+            SELECT id
+            FROM unidades_administrativas
+            WHERE unidade_orcamentaria_id = ?
+              AND LOWER(TRIM(nome)) = LOWER(TRIM(?))
+              AND id <> ?
+            """,
+            (
+                unidade_orcamentaria_id,
+                nome,
+                unidade_id
+            )
+        )
+
+    return resultado is not None
+
+
+# ============================================================
+# UNIDADE ADMINISTRATIVA - INCLUIR
+# ============================================================
+
+def unidade_administrativa_incluir():
+
+    st.subheader(
+        "🏬 Dados da Unidade Administrativa"
+    )
+
+    # ========================================================
+    # BUSCAR UNIDADES ORÇAMENTÁRIAS ATIVAS
+    # ========================================================
+
+    unidades = _sisget_fetch(
+        """
+        SELECT
+            u.id,
+            u.codigo,
+            u.nome,
+
+            e.id,
+            e.codigo,
+            e.nome,
+
+            o.id,
+            o.codigo,
+            o.nome
+
+        FROM unidades_orcamentarias u
+
+        INNER JOIN entidades e
+            ON e.id = u.entidade_id
+
+        INNER JOIN orgaos o
+            ON o.id = u.orgao_id
+
+        WHERE u.ativo = TRUE
+          AND e.ativo = TRUE
+          AND o.ativo = TRUE
+
+        ORDER BY
+            o.codigo,
+            e.codigo,
+            u.codigo
+        """
+    )
+
+    if not unidades:
+
+        st.warning(
+            "⚠️ Nenhuma Unidade Orçamentária ativa cadastrada."
+        )
+
+        st.info(
+            "Cadastre primeiro a Unidade Orçamentária."
+        )
+
+        return
+
+    # ========================================================
+    # OPÇÕES
+    # ========================================================
+
+    opcoes = {}
+
+    for (
+        uo_id,
+        codigo_uo,
+        nome_uo,
+        entidade_id,
+        codigo_entidade,
+        nome_entidade,
+        orgao_id,
+        codigo_orgao,
+        nome_orgao
+    ) in unidades:
+
+        descricao = (
+            f"{codigo_orgao} - {nome_orgao}"
+            f" → "
+            f"{codigo_entidade} - {nome_entidade}"
+            f" → "
+            f"{codigo_uo} - {nome_uo}"
+        )
+
+        opcoes[
+            descricao
+        ] = (
+            uo_id,
+            entidade_id,
+            orgao_id
+        )
+
+    unidade_selecionada = st.selectbox(
+        "Unidade Orçamentária *",
+        list(
+            opcoes.keys()
+        ),
+        key="ua_incluir_uo"
+    )
+
+    (
+        unidade_orcamentaria_id,
+        entidade_id,
+        orgao_id
+    ) = opcoes[
+        unidade_selecionada
+    ]
+
+    # ========================================================
+    # CÓDIGO AUTOMÁTICO
+    # ========================================================
+
+    codigo = (
+        sisget_proximo_codigo_unidade_administrativa(
+            unidade_orcamentaria_id
+        )
+    )
+
+    st.info(
+        f"🔢 Código automático: {codigo}"
+    )
+
+    # ========================================================
+    # FORMULÁRIO
+    # ========================================================
+
+    with st.form(
+        "form_unidade_administrativa_incluir",
+        clear_on_submit=True
+    ):
+
+        nome = st.text_input(
+            "Nome da Unidade Administrativa *",
+            max_chars=200
+        )
+
+        sigla = st.text_input(
+            "Sigla",
+            max_chars=30
+        )
+
+        ativo = st.checkbox(
+            "Unidade Administrativa ativa",
+            value=True
+        )
+
+        st.markdown("---")
+
+        salvar = st.form_submit_button(
+            "💾 Salvar",
+            type="primary",
+            use_container_width=True
+        )
+
+    # ========================================================
+    # SALVAR
+    # ========================================================
+
+    if salvar:
+
+        nome = nome.strip()
+        sigla = sigla.strip()
+
+        if not nome:
+
+            st.warning(
+                "⚠️ Informe o nome da Unidade Administrativa."
+            )
+
+            return
+
+        # ====================================================
+        # NOME DUPLICADO
+        # ====================================================
+
+        if unidade_administrativa_nome_duplicado(
+            unidade_orcamentaria_id,
+            nome
+        ):
+
+            st.warning(
+                "⚠️ Já existe uma Unidade Administrativa "
+                "com esse nome nesta Unidade Orçamentária."
+            )
+
+            return
+
+        # ====================================================
+        # RECALCULAR CÓDIGO
+        # ====================================================
+
+        codigo = (
+            sisget_proximo_codigo_unidade_administrativa(
+                unidade_orcamentaria_id
+            )
+        )
+
+        if not codigo:
+
+            st.error(
+                "❌ Não foi possível gerar o código."
+            )
+
+            return
+
+        # ====================================================
+        # VALIDAR CÓDIGO
+        # ====================================================
+
+        codigo_existente = _sisget_fetchone(
+            """
+            SELECT id
+            FROM unidades_administrativas
+            WHERE entidade_id = ?
+              AND codigo = ?
+            """,
+            (
+                entidade_id,
+                codigo
+            )
+        )
+
+        if codigo_existente:
+
+            st.warning(
+                "⚠️ Esse código já está cadastrado."
+            )
+
+            return
+
+        # ====================================================
+        # INSERT
+        # ====================================================
+
+        sucesso = _sisget_salvar(
+            """
+            INSERT INTO unidades_administrativas
+            (
+                entidade_id,
+                orgao_id,
+                unidade_orcamentaria_id,
+                codigo,
+                nome,
+                sigla,
+                ativo
+            )
+            VALUES
+            (
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?
+            )
+            """,
+            (
+                entidade_id,
+                orgao_id,
+                unidade_orcamentaria_id,
+                codigo,
+                nome,
+                sigla if sigla else None,
+                ativo
+            )
+        )
+
+        if sucesso:
+
+            st.success(
+                "✅ Unidade Administrativa cadastrada "
+                f"com sucesso! Código: {codigo}"
+            )
+
+
+# ============================================================
+# UNIDADE ADMINISTRATIVA - LOCALIZAR
+# ============================================================
+
+def unidade_administrativa_localizar():
+
+    st.subheader(
+        "🔎 Localizar Unidades Administrativas"
+    )
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        filtro_nome = st.text_input(
+            "Nome",
+            key="ua_localizar_nome"
+        )
+
+    with col2:
+
+        filtro_situacao = st.selectbox(
+            "Situação",
+            [
+                "Todas",
+                "Ativas",
+                "Inativas"
+            ],
+            key="ua_localizar_situacao"
+        )
+
+    # ========================================================
+    # SQL
+    # ========================================================
+
+    sql = """
+        SELECT
+            a.id,
+
+            o.codigo || ' - ' || o.nome
+                AS "Órgão",
+
+            e.codigo || ' - ' || e.nome
+                AS "Entidade",
+
+            u.codigo || ' - ' || u.nome
+                AS "Unidade Orçamentária",
+
+            a.codigo
+                AS "Código",
+
+            a.nome
+                AS "Unidade Administrativa",
+
+            COALESCE(
+                a.sigla,
+                ''
+            ) AS "Sigla",
+
+            CASE
+                WHEN a.ativo = TRUE
+                    THEN 'Ativa'
+                ELSE 'Inativa'
+            END AS "Situação"
+
+        FROM unidades_administrativas a
+
+        INNER JOIN entidades e
+            ON e.id = a.entidade_id
+
+        INNER JOIN orgaos o
+            ON o.id = a.orgao_id
+
+        LEFT JOIN unidades_orcamentarias u
+            ON u.id = a.unidade_orcamentaria_id
+
+        WHERE 1 = 1
+    """
+
+    parametros = []
+
+    # ========================================================
+    # FILTRO NOME
+    # ========================================================
+
+    if filtro_nome.strip():
+
+        sql += """
+            AND a.nome ILIKE ?
+        """
+
+        parametros.append(
+            f"%{filtro_nome.strip()}%"
+        )
+
+    # ========================================================
+    # SITUAÇÃO
+    # ========================================================
+
+    if filtro_situacao == "Ativas":
+
+        sql += """
+            AND a.ativo = TRUE
+        """
+
+    elif filtro_situacao == "Inativas":
+
+        sql += """
+            AND a.ativo = FALSE
+        """
+
+    # ========================================================
+    # ORDENAR
+    # ========================================================
+
+    sql += """
+        ORDER BY
+            o.codigo,
+            e.codigo,
+            u.codigo,
+            a.codigo
+    """
+
+    df = _sisget_dataframe(
+        sql,
+        tuple(parametros)
+    )
+
+    if df.empty:
+
+        st.info(
+            "Nenhuma Unidade Administrativa encontrada."
+        )
+
+        return None
+
+    st.caption(
+        f"Registros encontrados: {len(df)}"
+    )
+
+    return sisget_grid_localizar(
+        df=df,
+        chave="unidades_administrativas",
+        coluna_id="id",
+        altura=420
+    )
+
+
+# ============================================================
+# UNIDADE ADMINISTRATIVA - ALTERAR
+# ============================================================
+
+def unidade_administrativa_alterar(
+    unidade_id
+):
+
+    registro = _sisget_fetchone(
+        """
+        SELECT
+            a.id,
+            a.entidade_id,
+            a.orgao_id,
+            a.unidade_orcamentaria_id,
+            a.codigo,
+            a.nome,
+            a.sigla,
+            a.ativo,
+
+            u.codigo,
+            u.nome,
+
+            e.codigo,
+            e.nome,
+
+            o.codigo,
+            o.nome
+
+        FROM unidades_administrativas a
+
+        INNER JOIN entidades e
+            ON e.id = a.entidade_id
+
+        INNER JOIN orgaos o
+            ON o.id = a.orgao_id
+
+        LEFT JOIN unidades_orcamentarias u
+            ON u.id = a.unidade_orcamentaria_id
+
+        WHERE a.id = ?
+        """,
+        (
+            unidade_id,
+        )
+    )
+
+    if not registro:
+
+        st.error(
+            "❌ Unidade Administrativa não encontrada."
+        )
+
+        return
+
+    (
+        id_unidade,
+        entidade_id,
+        orgao_id,
+        unidade_orcamentaria_id,
+        codigo_atual,
+        nome_atual,
+        sigla_atual,
+        ativo_atual,
+        codigo_uo,
+        nome_uo,
+        codigo_entidade,
+        nome_entidade,
+        codigo_orgao,
+        nome_orgao
+    ) = registro
+
+    # ========================================================
+    # SITUAÇÃO
+    # ========================================================
+
+    if ativo_atual:
+
+        st.success(
+            "🟢 Situação: ATIVA"
+        )
+
+    else:
+
+        st.warning(
+            "🔴 Situação: INATIVA"
+        )
+
+    # ========================================================
+    # HIERARQUIA
+    # ========================================================
+
+    st.text_input(
+        "Órgão",
+        value=(
+            f"{codigo_orgao} - {nome_orgao}"
+        ),
+        disabled=True
+    )
+
+    st.text_input(
+        "Entidade",
+        value=(
+            f"{codigo_entidade} - {nome_entidade}"
+        ),
+        disabled=True
+    )
+
+    st.text_input(
+        "Unidade Orçamentária",
+        value=(
+            f"{codigo_uo or ''} - {nome_uo or ''}"
+        ),
+        disabled=True
+    )
+
+    # ========================================================
+    # FORMULÁRIO
+    # ========================================================
+
+    with st.form(
+        f"form_ua_alterar_{unidade_id}"
+    ):
+
+        st.text_input(
+            "Código",
+            value=codigo_atual or "",
+            disabled=True
+        )
+
+        nome = st.text_input(
+            "Nome da Unidade Administrativa *",
+            value=nome_atual or "",
+            max_chars=200
+        )
+
+        sigla = st.text_input(
+            "Sigla",
+            value=sigla_atual or "",
+            max_chars=30
+        )
+
+        st.markdown("---")
+
+        col1, col2, col3, col4 = (
+            st.columns(4)
+        )
+
+        with col1:
+
+            salvar = st.form_submit_button(
+                "💾 Salvar",
+                type="primary",
+                use_container_width=True
+            )
+
+        with col2:
+
+            if ativo_atual:
+
+                alterar_status = st.form_submit_button(
+                    "🚫 Inativar",
+                    use_container_width=True
+                )
+
+            else:
+
+                alterar_status = st.form_submit_button(
+                    "✅ Ativar",
+                    use_container_width=True
+                )
+
+        with col3:
+
+            excluir = st.form_submit_button(
+                "🗑️ Excluir",
+                use_container_width=True
+            )
+
+        with col4:
+
+            cancelar = st.form_submit_button(
+                "❌ Cancelar",
+                use_container_width=True
+            )
+
+    # ========================================================
+    # CANCELAR
+    # ========================================================
+
+    if cancelar:
+
+        st.session_state[
+            "sisget_id_unidades_administrativas"
+        ] = None
+
+        st.session_state[
+            "sisget_tela_unidades_administrativas"
+        ] = "localizar"
+
+        st.rerun()
+
+    # ========================================================
+    # ALTERAR SITUAÇÃO
+    # ========================================================
+
+    if alterar_status:
+
+        sucesso = _sisget_salvar(
+            """
+            UPDATE unidades_administrativas
+            SET ativo = ?
+            WHERE id = ?
+            """,
+            (
+                not ativo_atual,
+                unidade_id
+            )
+        )
+
+        if sucesso:
+
+            st.session_state[
+                "sisget_id_unidades_administrativas"
+            ] = None
+
+            st.session_state[
+                "sisget_tela_unidades_administrativas"
+            ] = "localizar"
+
+            st.rerun()
+
+        return
+
+    # ========================================================
+    # EXCLUIR
+    # ========================================================
+
+    if excluir:
+
+        try:
+
+            cursor.execute(
+                """
+                DELETE FROM unidades_administrativas
+                WHERE id = ?
+                """,
+                (
+                    unidade_id,
+                )
+            )
+
+            conn.commit()
+
+            st.session_state[
+                "sisget_id_unidades_administrativas"
+            ] = None
+
+            st.session_state[
+                "sisget_tela_unidades_administrativas"
+            ] = "localizar"
+
+            st.rerun()
+
+        except Exception as erro:
+
+            conn.rollback()
+
+            st.error(
+                "❌ Não foi possível excluir a Unidade "
+                f"Administrativa: {erro}"
+            )
+
+        return
+
+    # ========================================================
+    # SALVAR
+    # ========================================================
+
+    if salvar:
+
+        nome = nome.strip()
+        sigla = sigla.strip()
+
+        if not nome:
+
+            st.warning(
+                "⚠️ Informe o nome da Unidade Administrativa."
+            )
+
+            return
+
+        if unidade_administrativa_nome_duplicado(
+            unidade_orcamentaria_id,
+            nome,
+            unidade_id
+        ):
+
+            st.warning(
+                "⚠️ Já existe outra Unidade Administrativa "
+                "com esse nome nesta Unidade Orçamentária."
+            )
+
+            return
+
+        sucesso = _sisget_salvar(
+            """
+            UPDATE unidades_administrativas
+            SET
+                nome = ?,
+                sigla = ?
+            WHERE id = ?
+            """,
+            (
+                nome,
+                sigla if sigla else None,
+                unidade_id
+            )
+        )
+
+        if sucesso:
+
+            st.session_state[
+                "sisget_id_unidades_administrativas"
+            ] = None
+
+            st.session_state[
+                "sisget_tela_unidades_administrativas"
+            ] = "localizar"
+
+            st.rerun()
+
+
+# ============================================================
+# UNIDADE ADMINISTRATIVA - EXCLUIR
+# ============================================================
+
+def unidade_administrativa_excluir():
+
+    st.subheader(
+        "🗑️ Excluir Unidade Administrativa"
+    )
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            a.id,
+
+            o.codigo || ' - ' || o.nome
+                AS "Órgão",
+
+            e.codigo || ' - ' || e.nome
+                AS "Entidade",
+
+            COALESCE(
+                u.codigo || ' - ' || u.nome,
+                ''
+            ) AS "Unidade Orçamentária",
+
+            a.codigo
+                AS "Código",
+
+            a.nome
+                AS "Unidade Administrativa",
+
+            COALESCE(
+                a.sigla,
+                ''
+            ) AS "Sigla",
+
+            CASE
+                WHEN a.ativo = TRUE
+                    THEN 'Ativa'
+                ELSE 'Inativa'
+            END AS "Situação"
+
+        FROM unidades_administrativas a
+
+        INNER JOIN entidades e
+            ON e.id = a.entidade_id
+
+        INNER JOIN orgaos o
+            ON o.id = a.orgao_id
+
+        LEFT JOIN unidades_orcamentarias u
+            ON u.id = a.unidade_orcamentaria_id
+
+        ORDER BY
+            o.codigo,
+            e.codigo,
+            u.codigo,
+            a.codigo
+        """
+    )
+
+    if df.empty:
+
+        st.info(
+            "Nenhuma Unidade Administrativa cadastrada."
+        )
+
+        return
+
+    registro_id = sisget_grid_localizar(
+        df=df,
+        chave="excluir_unidades_administrativas",
+        coluna_id="id",
+        altura=420
+    )
+
+    if not registro_id:
+
+        st.caption(
+            "Dê duplo clique na Unidade Administrativa "
+            "que deseja excluir."
+        )
+
+        return
+
+    unidade = _sisget_fetchone(
+        """
+        SELECT
+            codigo,
+            nome
+        FROM unidades_administrativas
+        WHERE id = ?
+        """,
+        (
+            registro_id,
+        )
+    )
+
+    if not unidade:
+
+        return
+
+    codigo = unidade[0]
+    nome = unidade[1]
+
+    # ========================================================
+    # VERIFICAR SETORES VINCULADOS
+    # ========================================================
+
+    setores = _sisget_fetchone(
+        """
+        SELECT COUNT(*)
+        FROM setores
+        WHERE unidade_administrativa_id = ?
+        """,
+        (
+            registro_id,
+        )
+    )
+
+    quantidade_setores = (
+        setores[0]
+        if setores
+        else 0
+    )
+
+    st.markdown("---")
+
+    st.error(
+        f"⚠️ Você está prestes a excluir "
+        f"**{codigo} - {nome}**."
+    )
+
+    if quantidade_setores > 0:
+
+        st.warning(
+            "⚠️ Esta Unidade Administrativa possui "
+            f"{quantidade_setores} setor(es) vinculado(s). "
+            "Remova os vínculos antes de excluir."
+        )
+
+        return
+
+    confirmar = st.checkbox(
+        "Confirmo que desejo excluir esta Unidade Administrativa.",
+        key=f"confirmar_exclusao_ua_{registro_id}"
+    )
+
+    if st.button(
+        "🗑️ Confirmar Exclusão",
+        type="primary",
+        use_container_width=True,
+        key=f"btn_excluir_ua_{registro_id}"
+    ):
+
+        if not confirmar:
+
+            st.warning(
+                "⚠️ Marque a confirmação antes de excluir."
+            )
+
+            return
+
+        try:
+
+            cursor.execute(
+                """
+                DELETE FROM unidades_administrativas
+                WHERE id = ?
+                """,
+                (
+                    registro_id,
+                )
+            )
+
+            conn.commit()
+
+            st.success(
+                "✅ Unidade Administrativa excluída com sucesso!"
+            )
+
+            st.session_state[
+                "sisget_tela_unidades_administrativas"
+            ] = "principal"
+
+            st.session_state[
+                "sisget_id_unidades_administrativas"
+            ] = None
+
+            st.rerun()
+
+        except Exception as erro:
+
+            conn.rollback()
+
+            st.error(
+                "❌ Não foi possível excluir a Unidade "
+                f"Administrativa: {erro}"
+            )
+
+
+# ============================================================
+# UNIDADE ADMINISTRATIVA - IMPRIMIR
+# ============================================================
+
+def unidade_administrativa_imprimir():
+
+    st.subheader(
+        "🖨️ Relatório de Unidades Administrativas"
+    )
+
+    # ========================================================
+    # FILTRO
+    # ========================================================
+
+    situacao = st.selectbox(
+        "Situação",
+        [
+            "Todas",
+            "Ativas",
+            "Inativas"
+        ],
+        key="ua_imprimir_situacao"
+    )
+
+    # ========================================================
+    # SQL
+    # ========================================================
+
+    sql = """
+        SELECT
+            o.codigo,
+            o.nome,
+
+            e.codigo,
+            e.nome,
+
+            u.codigo,
+            u.nome,
+
+            a.codigo,
+            a.nome,
+
+            COALESCE(
+                a.sigla,
+                ''
+            ),
+
+            a.ativo
+
+        FROM unidades_administrativas a
+
+        INNER JOIN entidades e
+            ON e.id = a.entidade_id
+
+        INNER JOIN orgaos o
+            ON o.id = a.orgao_id
+
+        LEFT JOIN unidades_orcamentarias u
+            ON u.id = a.unidade_orcamentaria_id
+
+        WHERE 1 = 1
+    """
+
+    if situacao == "Ativas":
+
+        sql += """
+            AND a.ativo = TRUE
+        """
+
+    elif situacao == "Inativas":
+
+        sql += """
+            AND a.ativo = FALSE
+        """
+
+    sql += """
+        ORDER BY
+            o.codigo,
+            e.codigo,
+            u.codigo,
+            a.codigo
+    """
+
+    dados = _sisget_fetch(
+        sql
+    )
+
+    if not dados:
+
+        st.info(
+            "Nenhuma Unidade Administrativa encontrada."
+        )
+
+        return
+
+    # ========================================================
+    # DATAFRAME
+    # ========================================================
+
+    visualizacao = []
+
+    for registro in dados:
+
+        visualizacao.append({
+
+            "Órgão":
+                f"{registro[0]} - {registro[1]}",
+
+            "Entidade":
+                f"{registro[2]} - {registro[3]}",
+
+            "Unidade Orçamentária":
+                (
+                    f"{registro[4]} - {registro[5]}"
+                    if registro[4]
+                    else ""
+                ),
+
+            "Código":
+                registro[6],
+
+            "Unidade Administrativa":
+                registro[7],
+
+            "Sigla":
+                registro[8],
+
+            "Situação":
+                (
+                    "Ativa"
+                    if registro[9]
+                    else "Inativa"
+                )
+        })
+
+    df = pd.DataFrame(
+        visualizacao
+    )
+
+    st.dataframe(
+        df,
+        use_container_width=True,
+        hide_index=True
+    )
+
+    st.caption(
+        f"Total de Unidades Administrativas: {len(df)}"
+    )
+
+    # ========================================================
+    # GERAR PDF
+    # ========================================================
+
+    if st.button(
+        "📄 Gerar PDF",
+        type="primary",
+        use_container_width=True,
+        key="gerar_pdf_unidades_administrativas"
+    ):
+
+        buffer = BytesIO()
+
+        documento = SimpleDocTemplate(
+            buffer,
+            pagesize=A4,
+            rightMargin=0.8 * cm,
+            leftMargin=0.8 * cm,
+            topMargin=1.0 * cm,
+            bottomMargin=1.0 * cm
+        )
+
+        estilos = (
+            getSampleStyleSheet()
+        )
+
+        texto_tabela = ParagraphStyle(
+            "TextoTabelaUA",
+            parent=estilos["Normal"],
+            fontSize=7,
+            leading=8
+        )
+
+        elementos = []
+
+        elementos.append(
+            Paragraph(
+                "SISGET - Sistema Integrado de Gestão Pública",
+                estilos["Heading1"]
+            )
+        )
+
+        elementos.append(
+            Paragraph(
+                "Relatório de Unidades Administrativas",
+                estilos["Heading2"]
+            )
+        )
+
+        elementos.append(
+            Paragraph(
+                f"Situação: {situacao}",
+                estilos["Normal"]
+            )
+        )
+
+        elementos.append(
+            Spacer(
+                1,
+                0.4 * cm
+            )
+        )
+
+        # ====================================================
+        # TABELA
+        # ====================================================
+
+        tabela_dados = [[
+            "Órgão",
+            "Entidade",
+            "UO",
+            "Código",
+            "Unidade Administrativa",
+            "Sigla",
+            "Situação"
+        ]]
+
+        for registro in dados:
+
+            tabela_dados.append([
+
+                Paragraph(
+                    f"{registro[0]} - {registro[1]}",
+                    texto_tabela
+                ),
+
+                Paragraph(
+                    f"{registro[2]} - {registro[3]}",
+                    texto_tabela
+                ),
+
+                Paragraph(
+                    (
+                        f"{registro[4]} - {registro[5]}"
+                        if registro[4]
+                        else ""
+                    ),
+                    texto_tabela
+                ),
+
+                str(
+                    registro[6] or ""
+                ),
+
+                Paragraph(
+                    str(
+                        registro[7] or ""
+                    ),
+                    texto_tabela
+                ),
+
+                str(
+                    registro[8] or ""
+                ),
+
+                (
+                    "Ativa"
+                    if registro[9]
+                    else "Inativa"
+                )
+            ])
+
+        tabela = Table(
+            tabela_dados,
+            colWidths=[
+                2.5 * cm,
+                2.7 * cm,
+                3.0 * cm,
+                2.2 * cm,
+                4.0 * cm,
+                1.5 * cm,
+                1.5 * cm
+            ],
+            repeatRows=1
+        )
+
+        tabela.setStyle(
+            TableStyle([
+
+                (
+                    "BACKGROUND",
+                    (0, 0),
+                    (-1, 0),
+                    colors.lightgrey
+                ),
+
+                (
+                    "FONTNAME",
+                    (0, 0),
+                    (-1, 0),
+                    "Helvetica-Bold"
+                ),
+
+                (
+                    "GRID",
+                    (0, 0),
+                    (-1, -1),
+                    0.5,
+                    colors.grey
+                ),
+
+                (
+                    "VALIGN",
+                    (0, 0),
+                    (-1, -1),
+                    "MIDDLE"
+                ),
+
+                (
+                    "FONTSIZE",
+                    (0, 0),
+                    (-1, -1),
+                    7
+                ),
+
+                (
+                    "LEFTPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    3
+                ),
+
+                (
+                    "RIGHTPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    3
+                ),
+
+                (
+                    "TOPPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    3
+                ),
+
+                (
+                    "BOTTOMPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    3
+                )
+            ])
+        )
+
+        elementos.append(
+            tabela
+        )
+
+        elementos.append(
+            Spacer(
+                1,
+                0.5 * cm
+            )
+        )
+
+        elementos.append(
+            Paragraph(
+                f"Total de registros: {len(dados)}",
+                estilos["Normal"]
+            )
+        )
+
+        elementos.append(
+            Paragraph(
+                (
+                    "Emitido em: "
+                    + datetime.now().strftime(
+                        "%d/%m/%Y %H:%M"
+                    )
+                ),
+                estilos["Normal"]
+            )
+        )
+
+        documento.build(
+            elementos
+        )
+
+        buffer.seek(0)
+
+        st.download_button(
+            label="⬇️ Baixar Relatório em PDF",
+            data=buffer,
+            file_name="relatorio_unidades_administrativas.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+            key="baixar_pdf_unidades_administrativas"
+        )
 
 
 def cadastro_setores():
