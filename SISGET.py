@@ -11200,6 +11200,10 @@ def cadastro_exercicios():
 # ORGANOGRAMA DO SISGET
 # ============================================================
 
+# ============================================================
+# ORGANOGRAMA DO SISGET
+# ============================================================
+
 def organograma_sisget():
 
     st.title(
@@ -11284,14 +11288,9 @@ def organograma_sisget():
             id,
             codigo,
             nome,
-            COALESCE(
-                sigla,
-                ''
-            ),
+            COALESCE(sigla, ''),
             ativo
-
         FROM orgaos
-
         WHERE 1 = 1
     """
 
@@ -11346,7 +11345,7 @@ def organograma_sisget():
     total_subsetores = 0
 
     # ========================================================
-    # FUNÇÃO INTERNA PARA EXIBIR SETORES / SUBSETORES
+    # FUNÇÃO INTERNA PARA SETORES / SUBSETORES
     # ========================================================
 
     def mostrar_setores(
@@ -11374,7 +11373,7 @@ def organograma_sisget():
         ) in encontrados:
 
             # =================================================
-            # IDENTIFICAR PRINCIPAL / SUBSETOR
+            # TIPO
             # =================================================
 
             if pai_id is None:
@@ -11382,7 +11381,6 @@ def organograma_sisget():
                 total_setores += 1
 
                 icone = "🧩"
-
                 tipo = "Setor"
 
             else:
@@ -11390,7 +11388,6 @@ def organograma_sisget():
                 total_subsetores += 1
 
                 icone = "↳"
-
                 tipo = "Subsetor"
 
             # =================================================
@@ -11403,6 +11400,10 @@ def organograma_sisget():
                 else " 🔴"
             )
 
+            # =================================================
+            # SIGLA
+            # =================================================
+
             sigla_texto = (
                 f" ({sigla_setor})"
                 if sigla_setor
@@ -11414,11 +11415,15 @@ def organograma_sisget():
             # =================================================
 
             margem = (
-                32
+                80
                 + (
                     nivel * 28
                 )
             )
+
+            # =================================================
+            # EXIBIR
+            # =================================================
 
             st.markdown(
                 f"""
@@ -11432,20 +11437,16 @@ def organograma_sisget():
                     <b>{codigo_setor} - {nome_setor}</b>
                     {sigla_texto}
                     {situacao}
-                    <span style="
-                        font-size:11px;
-                        color:#777;
-                        margin-left:8px;
-                    ">
+                    <small style="color:#777; margin-left:8px;">
                         {tipo}
-                    </span>
+                    </small>
                 </div>
                 """,
                 unsafe_allow_html=True
             )
 
             # =================================================
-            # RECURSÃO
+            # SUBSETORES
             # =================================================
 
             mostrar_setores(
@@ -11490,9 +11491,7 @@ def organograma_sisget():
                 codigo,
                 nome,
                 ativo
-
             FROM entidades
-
             WHERE orgao_id = ?
         """
 
@@ -11520,7 +11519,7 @@ def organograma_sisget():
         )
 
         # ====================================================
-        # EXPANDER DO ÓRGÃO
+        # ÓRGÃO
         # ====================================================
 
         with st.expander(
@@ -11568,9 +11567,7 @@ def organograma_sisget():
                         margin-top:5px;
                         font-size:16px;
                     ">
-                        🏢 <b>
-                        {codigo_entidade} - {nome_entidade}
-                        </b>
+                        🏢 <b>{codigo_entidade} - {nome_entidade}</b>
                         {situacao_entidade}
                     </div>
                     """,
@@ -11587,9 +11584,7 @@ def organograma_sisget():
                         codigo,
                         nome,
                         ativo
-
                     FROM unidades_orcamentarias
-
                     WHERE entidade_id = ?
                 """
 
@@ -11634,7 +11629,7 @@ def organograma_sisget():
                     continue
 
                 # =============================================
-                # PERCORRER UOs
+                # UOs
                 # =============================================
 
                 for (
@@ -11659,9 +11654,7 @@ def organograma_sisget():
                             padding:6px 10px;
                             margin-top:3px;
                         ">
-                            💼 <b>
-                            {codigo_uo} - {nome_uo}
-                            </b>
+                            💼 <b>{codigo_uo} - {nome_uo}</b>
                             {situacao_uo}
                         </div>
                         """,
@@ -11677,14 +11670,9 @@ def organograma_sisget():
                             id,
                             codigo,
                             nome,
-                            COALESCE(
-                                sigla,
-                                ''
-                            ),
+                            COALESCE(sigla, ''),
                             ativo
-
                         FROM unidades_administrativas
-
                         WHERE unidade_orcamentaria_id = ?
                     """
 
@@ -11731,7 +11719,7 @@ def organograma_sisget():
                         continue
 
                     # =========================================
-                    # PERCORRER UAs
+                    # UAs
                     # =========================================
 
                     for (
@@ -11763,9 +11751,7 @@ def organograma_sisget():
                                 padding:6px 10px;
                                 margin-top:3px;
                             ">
-                                🏬 <b>
-                                {codigo_ua} - {nome_ua}
-                                </b>
+                                🏬 <b>{codigo_ua} - {nome_ua}</b>
                                 {sigla_ua_texto}
                                 {situacao_ua}
                             </div>
@@ -11783,14 +11769,9 @@ def organograma_sisget():
                                 setor_pai_id,
                                 codigo,
                                 nome,
-                                COALESCE(
-                                    sigla,
-                                    ''
-                                ),
+                                COALESCE(sigla, ''),
                                 ativo
-
                             FROM setores
-
                             WHERE unidade_administrativa_id = ?
                         """
 
@@ -11835,13 +11816,13 @@ def organograma_sisget():
                             continue
 
                         # =====================================
-                        # MOSTRAR SETORES E SUBSETORES
+                        # EXIBIR SETORES E SUBSETORES
                         # =====================================
 
                         mostrar_setores(
                             setores,
                             setor_pai_id=None,
-                            nivel=2
+                            nivel=0
                         )
 
             st.markdown("---")
@@ -11891,12 +11872,6 @@ def organograma_sisget():
             "↳ Subsetores",
             total_subsetores
         )
-
-
-# ============================================================
-# SOLICITAÇÕES
-# ============================================================
-
 def modulo_solicitacoes():
 
     modulo_em_desenvolvimento(
