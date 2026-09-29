@@ -6220,22 +6220,10 @@ def cadastro_unidades_orcamentarias():
         func_localizar=unidade_orcamentaria_localizar,
         func_alterar=unidade_orcamentaria_alterar,
         func_excluir=unidade_orcamentaria_excluir,
-        func_imprimir=None,
+        func_imprimir=unidade_orcamentaria_imprimir,
         icone="💼"
     )
 
-
-# ============================================================
-# PRÓXIMO CÓDIGO DA UNIDADE ORÇAMENTÁRIA
-#
-# ENTIDADE 001.001
-#
-# 001.001.001
-# 001.001.002
-# 001.001.003
-#
-# REUTILIZA PRIMEIRO CÓDIGO LIVRE
-# ============================================================
 
 def sisget_proximo_codigo_unidade_orcamentaria(
     entidade_id
