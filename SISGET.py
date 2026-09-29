@@ -1696,9 +1696,41 @@ def entidade_excluir():
                 )
 
 # ============================================================
-# ENTIDADES - INCLUIR
-# CÓDIGO AUTOMÁTICO E REUTILIZÁVEL
+# PRÓXIMO CÓDIGO DISPONÍVEL DA ENTIDADE
 # ============================================================
+
+def sisget_proximo_codigo_entidade():
+
+    dados = _sisget_fetch(
+        """
+        SELECT codigo
+        FROM entidades
+        WHERE codigo ~ '^[0-9]+$'
+        ORDER BY CAST(codigo AS INTEGER)
+        """
+    )
+
+    codigos_usados = set()
+
+    for registro in dados:
+
+        try:
+
+            codigos_usados.add(
+                int(registro[0])
+            )
+
+        except (ValueError, TypeError):
+
+            pass
+
+    proximo = 1
+
+    while proximo in codigos_usados:
+
+        proximo += 1
+
+    return str(proximo).zfill(3)
 
 def entidade_incluir():
 
