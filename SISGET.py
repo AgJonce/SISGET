@@ -2038,51 +2038,361 @@ def entidade_excluir():
 # PRÓXIMO CÓDIGO DISPONÍVEL DA ENTIDADE
 # ============================================================
 
-def sisget_proximo_codigo_entidade():
+# ============================================================
+# PRÓXIMO CÓDIGO DA ENTIDADE
+#
+# ÓRGÃO 001:
+# 001.001
+# 001.002
+# 001.003
+#
+# SE EXCLUIR 001.002:
+# PRÓXIMO VOLTA A SER 001.002
+# ============================================================
+
+def sisget_proximo_codigo_entidade(
+    orgao_id
+):
+
+    # ========================================================
+    # BUSCAR CÓDIGO DO ÓRGÃO
+    # ========================================================
+
+    orgao = _sisget_fetchone(
+        """
+        SELECT codigo
+        FROM orgaos
+        WHERE id = ?
+        """,
+        (
+            orgao_id,
+        )
+    )
+
+    if not orgao:
+
+        return None
+
+    codigo_orgao = str(
+        orgao[0] or ""
+    ).strip()
+
+    if codigo_orgao.isdigit():
+
+        codigo_orgao = (
+            codigo_orgao.zfill(3)
+        )
+
+    # ========================================================
+    # BUSCAR ENTIDADES DESSE ÓRGÃO
+    # ========================================================
 
     dados = _sisget_fetch(
         """
         SELECT codigo
         FROM entidades
-        WHERE codigo ~ '^[0-9]+$'
-        ORDER BY CAST(codigo AS INTEGER)
-        """
+        WHERE orgao_id = ?
+        ORDER BY codigo
+        """,
+        (
+            orgao_id,
+        )
     )
 
-    codigos_usados = set()
+    numeros_usados = set()
 
     for registro in dados:
 
+        codigo = str(
+            registro[0] or ""
+        ).strip()
+
         try:
 
-            codigos_usados.add(
-                int(registro[0])
+            parte_numerica = (
+                codigo.split(".")[-1]
+            )
+
+            numeros_usados.add(
+                int(parte_numerica)
             )
 
         except (ValueError, TypeError):
 
             pass
 
+    # ========================================================
+    # PRIMEIRO NÚMERO LIVRE
+    # ========================================================
+
     proximo = 1
 
-    while proximo in codigos_usados:
+    while proximo in numeros_usados:
 
         proximo += 1
 
-    return str(proximo).zfill(3)
+    numero_entidade = str(
+        proximo
+    ).zfill(3)
+
+    return (
+        f"{codigo_orgao}.{numero_entidade}"
+    )
+
 
 # ============================================================
-# VALIDAR CNPJ
+# ENTIDADES - INCLUIR
 # ============================================================
 
-# ============================================================
-# VALIDAR CNPJ
-# ============================================================
+def entidade_incluir():
 
-# ============================================================
-# VALIDAR CNPJ
-# ============================================================
+    st.subheader(
+        "🏢 Dados da Entidade"
+    )
 
+    # ========================================================
+    # BUSCAR ÓRGÃOS ATIVOS
+    # ========================================================
+
+    orgaos = _sisget_fetch(
+        """
+        SELECT
+            id,
+            codigo,
+            nome
+        FROM orgaos
+        WHERE ativo = TRUE
+        ORDER BY codigo, nome
+        """
+    )
+
+    if not orgaos:
+
+        st.warning(
+            "⚠️ Nenhum órgão ativo cadastrado."
+        )
+
+        st.info(
+            "Cadastre primeiro o órgão."
+        )
+
+        return
+
+    # ========================================================
+    # OPÇÕES
+    # ========================================================
+
+    opcoes_orgaos = {
+
+        f"{codigo} - {nome}": orgao_id
+
+        for orgao_id, codigo, nome
+        in orgaos
+    }
+
+    orgao_selecionado = st.selectbox(
+        "Órgão *",
+        list(
+            opcoes_orgaos.keys()
+        ),
+        key="entidade_incluir_orgao"
+    )
+
+    orgao_id = (
+        opcoes_orgaos[
+            orgao_selecionado
+        ]
+    )
+
+    # ========================================================
+    # CÓDIGO AUTOMÁTICO
+    # ========================================================
+
+    codigo = (
+        sisget_proximo_codigo_entidade(
+            orgao_id
+        )
+    )
+
+    st.info(
+        f"🔢 Código automático da entidade: {codigo}"
+    )
+
+    # ========================================================
+    # FORMULÁRIO
+    # ========================================================
+
+    with st.form(
+        "form_entidade_incluir",
+        clear_on_submit=True
+    ):
+
+        nome = st.text_input(
+            "Nome da Entidade *",
+            max_chars=200
+        )
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+
+            cnpj = st.text_input(
+                "CNPJ",
+                max_chars=18,
+                placeholder="00.000.000/0000-00"
+            )
+
+        with col2:
+
+            tipo_entidade = st.selectbox(
+                "Tipo de Entidade",
+                [
+                    "Prefeitura",
+                    "Câmara",
+                    "Autarquia",
+                    "Fundação",
+                    "Consórcio",
+                    "Outro"
+                ]
+            )
+
+        ativo = st.checkbox(
+            "Entidade ativa",
+            value=True
+        )
+
+        st.markdown("---")
+
+        salvar = st.form_submit_button(
+            "💾 Salvar",
+            type="primary",
+            use_container_width=True
+        )
+
+    # ========================================================
+    # SALVAR
+    # ========================================================
+
+    if salvar:
+
+        nome = nome.strip()
+        cnpj = cnpj.strip()
+
+        # ====================================================
+        # NOME
+        # ====================================================
+
+        if not nome:
+
+            st.warning(
+                "⚠️ Informe o nome da entidade."
+            )
+
+            return
+
+        # ====================================================
+        # NOME DUPLICADO
+        # ====================================================
+
+        nome_existente = _sisget_fetchone(
+            """
+            SELECT id
+            FROM entidades
+            WHERE orgao_id = ?
+              AND LOWER(TRIM(nome)) = LOWER(TRIM(?))
+            """,
+            (
+                orgao_id,
+                nome
+            )
+        )
+
+        if nome_existente:
+
+            st.warning(
+                "⚠️ Já existe uma entidade com esse nome neste órgão."
+            )
+
+            return
+
+        # ====================================================
+        # CNPJ
+        # ====================================================
+
+        if cnpj:
+
+            if not validar_cnpj(
+                cnpj
+            ):
+
+                st.warning(
+                    "⚠️ CNPJ inválido."
+                )
+
+                return
+
+            if cnpj_entidade_duplicado(
+                cnpj
+            ):
+
+                st.warning(
+                    "⚠️ Já existe uma entidade cadastrada com esse CNPJ."
+                )
+
+                return
+
+            cnpj = "".join(
+                caractere
+                for caractere in cnpj
+                if caractere.isdigit()
+            )
+
+        # ====================================================
+        # RECALCULAR CÓDIGO
+        # ====================================================
+
+        codigo = (
+            sisget_proximo_codigo_entidade(
+                orgao_id
+            )
+        )
+
+        if not codigo:
+
+            st.error(
+                "❌ Não foi possível gerar o código da entidade."
+            )
+
+            return
+
+        # ====================================================
+        # VERIFICAR CÓDIGO
+        # ====================================================
+
+        codigo_existente = _sisget_fetchone(
+            """
+            SELECT id
+            FROM entidades
+            WHERE codigo = ?
+            """,
+            (
+                codigo,
+            )
+        )
+
+        if codigo_existente:
+
+            st.warning(
+                "⚠️ Esse código de entidade já está cadastrado."
+            )
+
+            return
+
+        # ====================================================
+        # INSERT
+        # ====================================================
+
+        sucesso = _
 def validar_cnpj(cnpj):
 
     cnpj = "".join(
@@ -2449,210 +2759,6 @@ def entidade_alterar_situacao(
             f"❌ Não foi possível alterar a situação: {erro}"
         )
 
-
-# ============================================================
-# ENTIDADES - INCLUIR
-# ============================================================
-
-def entidade_incluir():
-
-    st.subheader(
-        "🏢 Dados da Entidade"
-    )
-
-    # ========================================================
-    # CÓDIGO AUTOMÁTICO
-    # ========================================================
-
-    codigo = (
-        sisget_proximo_codigo_entidade()
-    )
-
-    st.info(
-        f"🔢 Código automático: {codigo}"
-    )
-
-    # ========================================================
-    # FORMULÁRIO
-    # ========================================================
-
-    with st.form(
-        "form_entidade_incluir",
-        clear_on_submit=True
-    ):
-
-        nome = st.text_input(
-            "Nome da Entidade *",
-            max_chars=200
-        )
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-
-            cnpj = st.text_input(
-                "CNPJ",
-                max_chars=18,
-                placeholder="00.000.000/0000-00"
-            )
-
-        with col2:
-
-            tipo_entidade = st.selectbox(
-                "Tipo de Entidade",
-                [
-                    "Prefeitura",
-                    "Câmara",
-                    "Autarquia",
-                    "Fundação",
-                    "Consórcio",
-                    "Outro"
-                ]
-            )
-
-        ativo = st.checkbox(
-            "Entidade ativa",
-            value=True
-        )
-
-        st.markdown("---")
-
-        salvar = st.form_submit_button(
-            "💾 Salvar",
-            type="primary",
-            use_container_width=True
-        )
-
-    # ========================================================
-    # SALVAR
-    # ========================================================
-
-    if salvar:
-
-        nome = nome.strip()
-        cnpj = cnpj.strip()
-
-        # ====================================================
-        # VALIDAR NOME
-        # ====================================================
-
-        if not nome:
-
-            st.warning(
-                "⚠️ Informe o nome da entidade."
-            )
-
-            return
-
-        # ====================================================
-        # VALIDAR NOME DUPLICADO
-        # ====================================================
-
-        nome_existente = _sisget_fetchone(
-            """
-            SELECT id
-            FROM entidades
-            WHERE LOWER(TRIM(nome)) = LOWER(TRIM(?))
-            """,
-            (
-                nome,
-            )
-        )
-
-        if nome_existente:
-
-            st.warning(
-                "⚠️ Já existe uma entidade cadastrada com esse nome."
-            )
-
-            return
-
-        # ====================================================
-        # VALIDAR CNPJ
-        # ====================================================
-
-        if cnpj:
-
-            if not validar_cnpj(cnpj):
-
-                st.warning(
-                    "⚠️ CNPJ inválido."
-                )
-
-                return
-
-            # =================================================
-            # VALIDAR CNPJ DUPLICADO
-            # =================================================
-
-            if cnpj_entidade_duplicado(cnpj):
-
-                st.warning(
-                    "⚠️ Já existe uma entidade cadastrada com esse CNPJ."
-                )
-
-                return
-
-            # =================================================
-            # LIMPAR CNPJ
-            # =================================================
-
-            cnpj = "".join(
-                caractere
-                for caractere in cnpj
-                if caractere.isdigit()
-            )
-
-        # ====================================================
-        # RECALCULAR CÓDIGO
-        # ====================================================
-
-        codigo = (
-            sisget_proximo_codigo_entidade()
-        )
-
-        # ====================================================
-        # INSERT
-        # ====================================================
-
-        sucesso = _sisget_salvar(
-            """
-            INSERT INTO entidades
-            (
-                codigo,
-                nome,
-                cnpj,
-                tipo_entidade,
-                ativo
-            )
-            VALUES
-            (
-                ?,
-                ?,
-                ?,
-                ?,
-                ?
-            )
-            """,
-            (
-                codigo,
-                nome,
-                cnpj if cnpj else None,
-                tipo_entidade,
-                ativo
-            )
-        )
-
-        if sucesso:
-
-            st.success(
-                f"✅ Entidade cadastrada com sucesso! Código: {codigo}"
-            )
-
-
-# ============================================================
-# ENTIDADES - ALTERAR
-# ============================================================
 
 def entidade_localizar():
 
