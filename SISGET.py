@@ -2424,30 +2424,33 @@ def entidade_incluir():
 
             return
 
-# ====================================================
-# VALIDAR CNPJ
-# ====================================================
 
-if cnpj:
+        # ====================================================
+        # VALIDAR CNPJ
+        # ====================================================
 
-    if not validar_cnpj(cnpj):
+        if cnpj:
 
-        st.warning(
-            "⚠️ CNPJ inválido."
-        )
+            if not validar_cnpj(cnpj):
 
-        return
+                st.warning(
+                    "⚠️ CNPJ inválido."
+                )
+
+                return
 
 
-    # =================================================
-    # VALIDAR CNPJ DUPLICADO
-    # =================================================
+            # =================================================
+            # VALIDAR CNPJ DUPLICADO
+            # =================================================
 
-    if cnpj_entidade_duplicado(cnpj):
+            if cnpj_entidade_duplicado(cnpj):
 
-        st.warning(
-            "⚠️ Já existe uma entidade cadastrada com esse CNPJ."
-        )
+                st.warning(
+                    "⚠️ Já existe uma entidade cadastrada com esse CNPJ."
+                )
+
+                return
 
         return
 
