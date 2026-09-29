@@ -1162,7 +1162,45 @@ def tela_inicio():
         "Selecione um módulo no menu lateral."
     )
 
+def login():
 
+    st.title("🏛️ SISGET")
+    st.subheader("🔐 Login no Sistema")
+
+    with st.form("form_login"):
+
+        usuario = st.text_input("👤 Usuário")
+
+        senha = st.text_input(
+            "🔑 Senha",
+            type="password"
+        )
+
+        entrar = st.form_submit_button(
+            "Entrar",
+            type="primary",
+            use_container_width=True
+        )
+
+    if entrar:
+
+        if usuario == "admin" and senha == "123":
+
+            st.session_state["usuario_logado"] = "admin"
+            st.session_state["usuario_id"] = 1
+            st.session_state["funcao_usuario"] = "Administrador"
+
+            st.success(
+                "✅ Login realizado com sucesso!"
+            )
+
+            st.rerun()
+
+        else:
+
+            st.error(
+                "🚫 Usuário ou senha inválidos."
+            )
 # ============================================================
 # CADASTRO BÁSICO
 # ============================================================
