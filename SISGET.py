@@ -1122,15 +1122,17 @@ def modulo_em_desenvolvimento(
 # TELA INICIAL DO SISGET
 # ============================================================
 
+# ============================================================
+# TELA INICIAL DO SISGET - LAYOUT HORIZONTAL
+# ============================================================
+
 def tela_inicio():
 
     # ========================================================
     # CABEÇALHO
     # ========================================================
 
-    st.title(
-        "🏛️ SISGET"
-    )
+    st.title("🏛️ SISGET")
 
     st.subheader(
         "Sistema Integrado de Gestão Pública"
@@ -1139,6 +1141,112 @@ def tela_inicio():
     st.caption(
         "Gestão, treinamento, legislação e suporte em um único ambiente."
     )
+
+    st.markdown("---")
+
+
+    # ========================================================
+    # ACESSOS PRINCIPAIS - HORIZONTAL
+    # ========================================================
+
+    col1, col2, col3, col4 = st.columns(4)
+
+
+    # ========================================================
+    # SITE
+    # ========================================================
+
+    with col1:
+
+        st.markdown(
+            "### 🌐 Site"
+        )
+
+        st.caption(
+            "Portal oficial do SISGET."
+        )
+
+        st.link_button(
+            "🌐 Acessar",
+            "https://SEU-SITE-AQUI.com.br",
+            use_container_width=True
+        )
+
+
+    # ========================================================
+    # YOUTUBE
+    # ========================================================
+
+    with col2:
+
+        st.markdown(
+            "### ▶️ Videoaulas"
+        )
+
+        st.caption(
+            "Canal de treinamentos."
+        )
+
+        st.link_button(
+            "▶️ YouTube",
+            "https://www.youtube.com/@SEU_CANAL",
+            use_container_width=True
+        )
+
+
+    # ========================================================
+    # TREINAMENTO
+    # ========================================================
+
+    with col3:
+
+        st.markdown(
+            "### 🎓 Treinamento"
+        )
+
+        st.caption(
+            "Aprenda a utilizar o SISGET."
+        )
+
+        if st.button(
+            "🎓 Abrir Treinamento",
+            use_container_width=True,
+            key="btn_home_treinamento"
+        ):
+
+            st.session_state[
+                "home_secao"
+            ] = "treinamento"
+
+            st.rerun()
+
+
+    # ========================================================
+    # CHATBOT
+    # ========================================================
+
+    with col4:
+
+        st.markdown(
+            "### 🤖 Assistente"
+        )
+
+        st.caption(
+            "Suporte e dúvidas do sistema."
+        )
+
+        if st.button(
+            "🤖 Abrir Chatbot",
+            use_container_width=True,
+            key="btn_home_chatbot"
+        ):
+
+            st.session_state[
+                "home_secao"
+            ] = "chatbot"
+
+            st.rerun()
+
 
     st.markdown("---")
 
@@ -1166,7 +1274,7 @@ def tela_inicio():
     if secao == "chatbot":
 
         if st.button(
-            "⬅️ Voltar para Início",
+            "⬅️ Voltar",
             key="voltar_home_chatbot"
         ):
 
@@ -1176,8 +1284,6 @@ def tela_inicio():
 
             st.rerun()
 
-
-        st.markdown("---")
 
         modulo_assistente()
 
@@ -1191,7 +1297,7 @@ def tela_inicio():
     if secao == "treinamento":
 
         if st.button(
-            "⬅️ Voltar para Início",
+            "⬅️ Voltar",
             key="voltar_home_treinamento"
         ):
 
@@ -1205,7 +1311,7 @@ def tela_inicio():
         st.markdown("---")
 
 
-        st.header(
+        st.subheader(
             "🎓 Central de Treinamento"
         )
 
@@ -1225,7 +1331,7 @@ def tela_inicio():
                 "SISPRO - Problemas Urbanos",
                 "SICOM / TCEMG"
             ],
-            key="home_treinamento_modulo"
+            key="treinamento_home_modulo"
         )
 
 
@@ -1234,12 +1340,10 @@ def tela_inicio():
 
         if treinamento == "Cadastro Básico":
 
-            st.subheader(
-                "🏛️ Cadastro Básico"
-            )
-
             st.markdown(
                 """
+                ### 🏛️ Cadastro Básico
+
                 Entidades • Órgãos • Unidades Orçamentárias •
                 Unidades Administrativas • Setores • Exercícios • Organograma
                 """
@@ -1248,13 +1352,11 @@ def tela_inicio():
 
         elif treinamento == "SISCOM - Licitações e Compras":
 
-            st.subheader(
-                "🛒 SISCOM - Licitações e Compras"
-            )
-
             st.markdown(
                 """
-                Solicitações • DFD • ETP • Termo de Referência •
+                ### 🛒 SISCOM
+
+                Solicitação • DFD • ETP • Termo de Referência •
                 Pesquisa de Preços • Licitação • Contratação Direta • Homologação
                 """
             )
@@ -1262,12 +1364,10 @@ def tela_inicio():
 
         elif treinamento == "Contabilidade e Orçamento":
 
-            st.subheader(
-                "📚 Contabilidade e Orçamento"
-            )
-
             st.markdown(
                 """
+                ### 📚 Contabilidade e Orçamento
+
                 Dotação • Cota • Reserva • Empenho • Liquidação •
                 Ordem de Pagamento • Pagamento • Restos a Pagar
                 """
@@ -1277,7 +1377,7 @@ def tela_inicio():
         else:
 
             st.info(
-                f"🎓 O treinamento de {treinamento} será disponibilizado nesta área."
+                f"🎓 Conteúdo de treinamento de {treinamento}."
             )
 
 
@@ -1285,154 +1385,7 @@ def tela_inicio():
 
 
     # ========================================================
-    # ACESSOS PRINCIPAIS
-    # ========================================================
-
-    st.subheader(
-        "🚀 Acessos"
-    )
-
-
-    col1, col2, col3, col4 = st.columns(4)
-
-
-    # ========================================================
-    # SITE
-    # ========================================================
-
-    with col1:
-
-        linha1, linha2 = st.columns(
-            [1.1, 1]
-        )
-
-        with linha1:
-
-            st.markdown(
-                "### 🌐 Site"
-            )
-
-        with linha2:
-
-            st.link_button(
-                "Acessar Site",
-                "https://SEU-SITE-AQUI.com.br",
-                use_container_width=True
-            )
-
-
-        st.write(
-            "Portal oficial do SISGET."
-        )
-
-
-    # ========================================================
-    # VIDEOAULAS
-    # ========================================================
-
-    with col2:
-
-        linha1, linha2 = st.columns(
-            [1.2, 1]
-        )
-
-        with linha1:
-
-            st.markdown(
-                "### ▶️ Videoaulas"
-            )
-
-        with linha2:
-
-            st.link_button(
-                "Abrir YouTube",
-                "https://www.youtube.com/@SEU_CANAL",
-                use_container_width=True
-            )
-
-
-        st.write(
-            "Canal de treinamentos."
-        )
-
-
-    # ========================================================
-    # TREINAMENTO
-    # ========================================================
-
-    with col3:
-
-        linha1, linha2 = st.columns(
-            [1.2, 1.2]
-        )
-
-        with linha1:
-
-            st.markdown(
-                "### 🎓 Treinamento"
-            )
-
-        with linha2:
-
-            if st.button(
-                "Abrir Treinamento",
-                use_container_width=True,
-                key="btn_home_treinamento"
-            ):
-
-                st.session_state[
-                    "home_secao"
-                ] = "treinamento"
-
-                st.rerun()
-
-
-        st.write(
-            "Aprenda a utilizar o SISGET."
-        )
-
-
-    # ========================================================
-    # ASSISTENTE
-    # ========================================================
-
-    with col4:
-
-        linha1, linha2 = st.columns(
-            [1.1, 1.1]
-        )
-
-        with linha1:
-
-            st.markdown(
-                "### 🤖 Assistente"
-            )
-
-        with linha2:
-
-            if st.button(
-                "Abrir Assistente",
-                use_container_width=True,
-                key="btn_home_chatbot"
-            ):
-
-                st.session_state[
-                    "home_secao"
-                ] = "chatbot"
-
-                st.rerun()
-
-
-        st.write(
-            "Suporte e dúvidas do sistema."
-        )
-
-
-    st.markdown("---")
-
-
-    # ========================================================
-    # CENTRAL DE CONHECIMENTO
+    # CENTRAL DE CONHECIMENTO - HORIZONTAL
     # ========================================================
 
     st.subheader(
@@ -1440,175 +1393,137 @@ def tela_inicio():
     )
 
 
-    aba1, aba2, aba3 = st.tabs(
-        [
-            "⚖️ Licitações e Contratos",
-            "📊 Contabilidade Pública",
-            "📘 Guias SISGET"
-        ]
-    )
+    col_lei, col_contab, col_guias = st.columns(3)
 
 
     # ========================================================
-    # LICITAÇÕES E CONTRATOS
+    # LICITAÇÕES
     # ========================================================
 
-    with aba1:
+    with col_lei:
 
-        col_lei1, col_lei2 = st.columns(2)
+        st.markdown(
+            "### ⚖️ Licitações e Contratos"
+        )
 
+        st.write(
+            "Lei nº 14.133/2021"
+        )
 
-        with col_lei1:
+        st.caption(
+            "Planejamento, licitações, contratação direta e contratos."
+        )
 
-            st.markdown(
-                "### ⚖️ Lei nº 14.133/2021"
-            )
+        st.link_button(
+            "📖 Lei 14.133/2021",
+            "https://www.planalto.gov.br/ccivil_03/_ato2019-2022/2021/lei/l14133.htm",
+            use_container_width=True
+        )
 
-            st.write(
-                "Lei de Licitações e Contratos Administrativos."
-            )
-
-            st.link_button(
-                "📖 Consultar Lei 14.133/2021",
-                "https://www.planalto.gov.br/ccivil_03/_ato2019-2022/2021/lei/l14133.htm",
-                use_container_width=True
-            )
-
-
-        with col_lei2:
-
-            st.markdown(
-                "### 🏛️ TCEMG / SICOM"
-            )
-
-            st.write(
-                "Informações e orientações do Tribunal de Contas."
-            )
-
-            st.link_button(
-                "🏛️ Acessar TCEMG",
-                "https://www.tce.mg.gov.br/",
-                use_container_width=True
-            )
+        st.link_button(
+            "🏛️ Portal TCEMG",
+            "https://www.tce.mg.gov.br/",
+            use_container_width=True
+        )
 
 
     # ========================================================
-    # CONTABILIDADE PÚBLICA
+    # CONTABILIDADE
     # ========================================================
 
-    with aba2:
+    with col_contab:
 
-        col_cont1, col_cont2, col_cont3 = st.columns(3)
+        st.markdown(
+            "### 📊 Contabilidade Pública"
+        )
 
+        st.write(
+            "Lei nº 4.320/1964"
+        )
 
-        with col_cont1:
+        st.caption(
+            "Orçamento, empenho, liquidação, pagamento e balanços."
+        )
 
-            st.markdown(
-                "### 📖 Lei 4.320/1964"
-            )
+        st.link_button(
+            "📖 Lei 4.320/1964",
+            "https://www.planalto.gov.br/ccivil_03/leis/l4320.htm",
+            use_container_width=True
+        )
 
-            st.write(
-                "Normas gerais de Direito Financeiro."
-            )
-
-            st.link_button(
-                "Consultar Lei 4.320",
-                "https://www.planalto.gov.br/ccivil_03/leis/l4320.htm",
-                use_container_width=True
-            )
-
-
-        with col_cont2:
-
-            st.markdown(
-                "### 📊 LRF"
-            )
-
-            st.write(
-                "Lei de Responsabilidade Fiscal."
-            )
-
-            st.link_button(
-                "Consultar LC 101/2000",
-                "https://www.planalto.gov.br/ccivil_03/leis/lcp/lcp101.htm",
-                use_container_width=True
-            )
-
-
-        with col_cont3:
-
-            st.markdown(
-                "### 📚 MCASP"
-            )
-
-            st.write(
-                "Manual de Contabilidade Aplicada ao Setor Público."
-            )
+        st.link_button(
+            "📖 LRF - LC 101/2000",
+            "https://www.planalto.gov.br/ccivil_03/leis/lcp/lcp101.htm",
+            use_container_width=True
+        )
 
 
     # ========================================================
-    # GUIAS SISGET
+    # GUIAS
     # ========================================================
 
-    with aba3:
+    with col_guias:
 
-        col_guia1, col_guia2, col_guia3, col_guia4 = st.columns(4)
+        st.markdown(
+            "### 📘 Guias SISGET"
+        )
 
+        st.caption(
+            "Acesso rápido aos principais fluxos do sistema."
+        )
 
-        with col_guia1:
-
-            st.info(
-                """
-                🏛️ **Cadastro Básico**
-
-                Entidades  
-                Órgãos  
-                Unidades  
-                Setores
-                """
-            )
-
-
-        with col_guia2:
-
-            st.info(
-                """
-                🛒 **Licitações**
-
-                Solicitações  
-                Planejamento  
-                Compras  
-                Licitação
-                """
-            )
+        st.markdown(
+            """
+            🏛️ Estrutura Administrativa  
+            🛒 Compras e Licitações  
+            📑 Contratos  
+            💰 Execução Orçamentária  
+            🏗️ Obras Públicas  
+            🏙️ Problemas Urbanos
+            """
+        )
 
 
-        with col_guia3:
-
-            st.info(
-                """
-                📑 **Contratos**
-
-                Contratos  
-                Aditivos  
-                Responsáveis  
-                Execução
-                """
-            )
+    st.markdown("---")
 
 
-        with col_guia4:
+    # ========================================================
+    # SEGUNDA FAIXA HORIZONTAL
+    # ========================================================
 
-            st.info(
-                """
-                💰 **Contabilidade**
+    col5, col6, col7, col8 = st.columns(4)
 
-                Reserva  
-                Empenho  
-                Liquidação  
-                Pagamento
-                """
-            )
+
+    with col5:
+
+        st.info(
+            "🏛️ **Cadastro Básico**\n\n"
+            "Entidades, órgãos, unidades e setores."
+        )
+
+
+    with col6:
+
+        st.info(
+            "🛒 **Compras e Licitações**\n\n"
+            "Planejamento, processos e contratação."
+        )
+
+
+    with col7:
+
+        st.info(
+            "📚 **Contabilidade**\n\n"
+            "Execução orçamentária e financeira."
+        )
+
+
+    with col8:
+
+        st.info(
+            "🏗️ **Gestão Pública**\n\n"
+            "Obras, patrimônio, almoxarifado e SISPRO."
+        )
 
 
     # ========================================================
