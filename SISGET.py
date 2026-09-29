@@ -4,7 +4,7 @@
 
 import os
 import psycopg2
-import plotly.express as pxDEF
+import plotly.express as px
 import plotly.graph_objects as go
 import sqlite3
 import streamlit as st
@@ -3094,9 +3094,316 @@ def entidade_alterar_situacao(
 # ENTIDADES - ALTERAR
 # ============================================================
 
-def entidade_alterar(
-    entidade_id
-):
+# ============================================================
+# ENTIDADES - ALTERAR
+# COMPLETO
+# ============================================================
+
+def entidade_alterar(entidade_id):
+
+    # ========================================================
+    # FUNÇÕES INTERNAS
+    # ========================================================
+
+    def buscar_responsavel(tipo_responsavel):
+
+        return _sisget_fetchone(
+            """
+            SELECT
+                id,
+                nome,
+                cpf,
+                cargo,
+                data_inicio,
+                data_fim,
+                email,
+                telefone
+            FROM entidades_responsaveis
+            WHERE entidade_id = ?
+              AND tipo_responsavel = ?
+              AND ativo = TRUE
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (
+                entidade_id,
+                tipo_responsavel
+            )
+        )
+
+
+    def campos_responsavel(
+        tipo_responsavel,
+        chave
+    ):
+
+        registro = buscar_responsavel(
+            tipo_responsavel
+        )
+
+        if registro:
+
+            (
+                responsavel_id,
+                nome_atual,
+                cpf_atual,
+                cargo_atual,
+                data_inicio_atual,
+                data_fim_atual,
+                email_atual,
+                telefone_atual
+            ) = registro
+
+        else:
+
+            responsavel_id = None
+            nome_atual = ""
+            cpf_atual = ""
+            cargo_atual = ""
+            data_inicio_atual = None
+            data_fim_atual = None
+            email_atual = ""
+            telefone_atual = ""
+
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+
+            nome = st.text_input(
+                "Nome",
+                value=nome_atual or "",
+                max_chars=200,
+                key=f"{chave}_nome"
+            )
+
+        with col2:
+
+            cpf = st.text_input(
+                "CPF",
+                value=cpf_atual or "",
+                max_chars=14,
+                placeholder="000.000.000-00",
+                key=f"{chave}_cpf"
+            )
+
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+
+            cargo = st.text_input(
+                "Cargo / Função",
+                value=cargo_atual or "",
+                max_chars=150,
+                key=f"{chave}_cargo"
+            )
+
+        with col2:
+
+            telefone_responsavel = st.text_input(
+                "Telefone",
+                value=telefone_atual or "",
+                max_chars=30,
+                key=f"{chave}_telefone"
+            )
+
+
+        email_responsavel = st.text_input(
+            "E-mail",
+            value=email_atual or "",
+            max_chars=200,
+            key=f"{chave}_email"
+        )
+
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+
+            data_inicio = st.date_input(
+                "Data de início",
+                value=data_inicio_atual,
+                format="DD/MM/YYYY",
+                key=f"{chave}_inicio"
+            )
+
+        with col2:
+
+            data_fim = st.date_input(
+                "Data de término",
+                value=data_fim_atual,
+                format="DD/MM/YYYY",
+                key=f"{chave}_fim"
+            )
+
+
+        return {
+
+            "id": responsavel_id,
+
+            "tipo": tipo_responsavel,
+
+            "nome": nome.strip(),
+
+            "cpf": cpf.strip(),
+
+            "cargo": cargo.strip(),
+
+            "telefone":
+                telefone_responsavel.strip(),
+
+            "email":
+                email_responsavel.strip(),
+
+            "data_inicio": data_inicio,
+
+            "data_fim": data_fim
+        }
+
+
+    def salvar_responsavel(dados):
+
+        responsavel_id = dados["id"]
+
+        nome_responsavel = dados["nome"]
+
+
+        # Se não foi informado nome,
+        # não cria responsável novo.
+
+        if not nome_responsavel:
+
+            return
+
+
+        if responsavel_id:
+
+            cursor.execute(
+                """
+                UPDATE entidades_responsaveis
+                SET
+                    nome = ?,
+                    cpf = ?,
+                    cargo = ?,
+                    data_inicio = ?,
+                    data_fim = ?,
+                    email = ?,
+                    telefone = ?
+                WHERE id = ?
+                """,
+                (
+                    nome_responsavel,
+
+                    dados["cpf"]
+                    if dados["cpf"]
+                    else None,
+
+                    dados["cargo"]
+                    if dados["cargo"]
+                    else None,
+
+                    dados["data_inicio"],
+
+                    dados["data_fim"],
+
+                    dados["email"]
+                    if dados["email"]
+                    else None,
+
+                    dados["telefone"]
+                    if dados["telefone"]
+                    else None,
+
+                    responsavel_id
+                )
+            )
+
+        else:
+
+            # =================================================
+            # SEGURANÇA
+            # INATIVA OUTRO RESPONSÁVEL DO MESMO TIPO
+            # =================================================
+
+            cursor.execute(
+                """
+                UPDATE entidades_responsaveis
+                SET
+                    ativo = FALSE,
+                    data_fim = COALESCE(
+                        data_fim,
+                        CURRENT_DATE
+                    )
+                WHERE entidade_id = ?
+                  AND tipo_responsavel = ?
+                  AND ativo = TRUE
+                """,
+                (
+                    entidade_id,
+                    dados["tipo"]
+                )
+            )
+
+
+            cursor.execute(
+                """
+                INSERT INTO entidades_responsaveis
+                (
+                    entidade_id,
+                    tipo_responsavel,
+                    nome,
+                    cpf,
+                    cargo,
+                    data_inicio,
+                    data_fim,
+                    email,
+                    telefone,
+                    ativo
+                )
+                VALUES
+                (
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    TRUE
+                )
+                """,
+                (
+                    entidade_id,
+
+                    dados["tipo"],
+
+                    nome_responsavel,
+
+                    dados["cpf"]
+                    if dados["cpf"]
+                    else None,
+
+                    dados["cargo"]
+                    if dados["cargo"]
+                    else None,
+
+                    dados["data_inicio"],
+
+                    dados["data_fim"],
+
+                    dados["email"]
+                    if dados["email"]
+                    else None,
+
+                    dados["telefone"]
+                    if dados["telefone"]
+                    else None
+                )
+            )
+
 
     # ========================================================
     # BUSCAR ENTIDADE
@@ -3110,7 +3417,38 @@ def entidade_alterar(
             nome,
             cnpj,
             tipo_entidade,
-            ativo
+            ativo,
+
+            codigo_orgao_sicom,
+            unidade_repasse,
+
+            endereco,
+            bairro,
+            cep,
+            telefone,
+            fax,
+            email,
+            numero_habitantes,
+
+            percentual_aquisicoes,
+            percentual_estabelecido,
+
+            orgao_padrao_id,
+            unidade_orcamentaria_padrao_id,
+
+            orgao_licitacao_id,
+            unidade_licitacao_id,
+
+            possui_assessoria_contabil,
+            fornecedor_assessoria,
+
+            conta_unica_tesouro,
+
+            art20_numero_norma,
+            art20_data_norma,
+            art20_data_publicacao,
+            art20_nome_arquivo
+
         FROM entidades
         WHERE id = ?
         """,
@@ -3135,7 +3473,38 @@ def entidade_alterar(
         nome_atual,
         cnpj_atual,
         tipo_atual,
-        ativo_atual
+        ativo_atual,
+
+        codigo_sicom_atual,
+        unidade_repasse_atual,
+
+        endereco_atual,
+        bairro_atual,
+        cep_atual,
+        telefone_atual,
+        fax_atual,
+        email_atual,
+        habitantes_atual,
+
+        percentual_aquisicoes_atual,
+        percentual_estabelecido_atual,
+
+        orgao_padrao_atual,
+        uo_padrao_atual,
+
+        orgao_licitacao_atual,
+        uo_licitacao_atual,
+
+        assessoria_atual,
+        fornecedor_assessoria_atual,
+
+        conta_unica_atual,
+
+        art20_numero_atual,
+        art20_data_atual,
+        art20_publicacao_atual,
+        art20_nome_arquivo_atual
+
     ) = entidade
 
 
@@ -3157,7 +3526,7 @@ def entidade_alterar(
 
 
     # ========================================================
-    # TIPOS
+    # TIPOS DE ENTIDADE
     # ========================================================
 
     tipos = [
@@ -3168,6 +3537,11 @@ def entidade_alterar(
         "Consórcio",
         "Outro"
     ]
+
+
+    if not tipo_atual:
+
+        tipo_atual = "Outro"
 
 
     if tipo_atual not in tipos:
@@ -3183,6 +3557,86 @@ def entidade_alterar(
 
 
     # ========================================================
+    # CARREGAR ÓRGÃOS
+    # ========================================================
+
+    orgaos = _sisget_fetch(
+        """
+        SELECT
+            id,
+            codigo,
+            nome
+        FROM orgaos
+        WHERE entidade_id = ?
+        ORDER BY codigo
+        """,
+        (
+            entidade_id,
+        )
+    )
+
+
+    opcoes_orgaos = {
+        None: "Não informado"
+    }
+
+
+    for orgao_id, codigo_orgao, nome_orgao in orgaos:
+
+        opcoes_orgaos[
+            orgao_id
+        ] = (
+            f"{codigo_orgao} - "
+            f"{nome_orgao}"
+        )
+
+
+    ids_orgaos = list(
+        opcoes_orgaos.keys()
+    )
+
+
+    # ========================================================
+    # CARREGAR UNIDADES ORÇAMENTÁRIAS
+    # ========================================================
+
+    unidades = _sisget_fetch(
+        """
+        SELECT
+            id,
+            codigo,
+            nome
+        FROM unidades_orcamentarias
+        WHERE entidade_id = ?
+        ORDER BY codigo
+        """,
+        (
+            entidade_id,
+        )
+    )
+
+
+    opcoes_unidades = {
+        None: "Não informada"
+    }
+
+
+    for uo_id, codigo_uo, nome_uo in unidades:
+
+        opcoes_unidades[
+            uo_id
+        ] = (
+            f"{codigo_uo} - "
+            f"{nome_uo}"
+        )
+
+
+    ids_unidades = list(
+        opcoes_unidades.keys()
+    )
+
+
+    # ========================================================
     # FORMULÁRIO
     # ========================================================
 
@@ -3190,75 +3644,631 @@ def entidade_alterar(
         f"form_entidade_alterar_{entidade_id}"
     ):
 
-        # ====================================================
-        # CÓDIGO
-        # ====================================================
+        abas = st.tabs([
 
-        st.text_input(
-            "Código",
-            value=codigo_atual or "",
-            disabled=True
-        )
+            "🏢 Dados da Entidade",
 
+            "👤 Gestor",
 
-        # ====================================================
-        # NOME
-        # ====================================================
+            "⚖️ Autoridade",
 
-        nome = st.text_input(
-            "Nome da Entidade *",
-            value=nome_atual or "",
-            max_chars=200
-        )
+            "📚 Contador",
+
+            "💰 Tesoureiro",
+
+            "✍️ Autorizador",
+
+            "🏦 Secretário de Finanças"
+
+        ])
 
 
         # ====================================================
-        # CNPJ / TIPO
+        # ABA 1
+        # DADOS DA ENTIDADE
         # ====================================================
 
-        col1, col2 = st.columns(2)
+        with abas[0]:
 
-
-        with col1:
-
-            cnpj = st.text_input(
-                "CNPJ",
-                value=cnpj_atual or "",
-                max_chars=18
+            st.markdown(
+                "### 🏢 Identificação"
             )
 
 
-        with col2:
+            col1, col2 = st.columns(2)
 
-            tipo_entidade = st.selectbox(
-                "Tipo de Entidade",
-                tipos,
-                index=indice_tipo
+
+            with col1:
+
+                st.text_input(
+                    "Código SISGET",
+                    value=codigo_atual or "",
+                    disabled=True
+                )
+
+
+            with col2:
+
+                codigo_orgao_sicom = (
+                    st.text_input(
+                        "Código do Órgão no Portal SICOM",
+                        value=(
+                            codigo_sicom_atual
+                            or ""
+                        ),
+                        max_chars=20
+                    )
+                )
+
+
+            nome = st.text_input(
+                "Nome da Entidade *",
+                value=nome_atual or "",
+                max_chars=200
             )
 
 
-        st.markdown("---")
+            col1, col2 = st.columns(2)
+
+
+            with col1:
+
+                cnpj = st.text_input(
+                    "CNPJ",
+                    value=cnpj_atual or "",
+                    max_chars=18,
+                    placeholder="00.000.000/0000-00"
+                )
+
+
+            with col2:
+
+                tipo_entidade = (
+                    st.selectbox(
+                        "Tipo de Entidade",
+                        tipos,
+                        index=indice_tipo
+                    )
+                )
+
+
+            unidade_repasse = st.text_input(
+                "Unidade de Repasse",
+                value=(
+                    unidade_repasse_atual
+                    or ""
+                ),
+                max_chars=30
+            )
+
+
+            st.markdown("---")
+
+
+            # =================================================
+            # ENDEREÇO
+            # =================================================
+
+            st.markdown(
+                "### 📍 Endereço e Contato"
+            )
+
+
+            endereco = st.text_input(
+                "Endereço",
+                value=endereco_atual or "",
+                max_chars=250
+            )
+
+
+            col1, col2, col3 = (
+                st.columns(
+                    [2, 1, 1]
+                )
+            )
+
+
+            with col1:
+
+                bairro = st.text_input(
+                    "Bairro",
+                    value=bairro_atual or "",
+                    max_chars=120
+                )
+
+
+            with col2:
+
+                cep = st.text_input(
+                    "CEP",
+                    value=cep_atual or "",
+                    max_chars=10,
+                    placeholder="00000-000"
+                )
+
+
+            with col3:
+
+                numero_habitantes = (
+                    st.number_input(
+                        "Habitantes",
+                        min_value=0,
+                        step=1,
+                        value=int(
+                            habitantes_atual
+                            or 0
+                        )
+                    )
+                )
+
+
+            col1, col2, col3 = (
+                st.columns(3)
+            )
+
+
+            with col1:
+
+                telefone = st.text_input(
+                    "Telefone",
+                    value=telefone_atual or "",
+                    max_chars=30
+                )
+
+
+            with col2:
+
+                fax = st.text_input(
+                    "Fax",
+                    value=fax_atual or "",
+                    max_chars=30
+                )
+
+
+            with col3:
+
+                email = st.text_input(
+                    "E-mail",
+                    value=email_atual or "",
+                    max_chars=200
+                )
+
+
+            st.markdown("---")
+
+
+            # =================================================
+            # PERCENTUAIS
+            # =================================================
+
+            st.markdown(
+                "### 📊 Percentuais"
+            )
+
+
+            col1, col2 = (
+                st.columns(2)
+            )
+
+
+            with col1:
+
+                percentual_aquisicoes = (
+                    st.number_input(
+                        (
+                            "Percentual das aquisições "
+                            "de bens/serviços licitáveis"
+                        ),
+                        min_value=0.0,
+                        max_value=100.0,
+                        step=0.01,
+                        value=float(
+                            percentual_aquisicoes_atual
+                            or 0
+                        )
+                    )
+                )
+
+
+            with col2:
+
+                percentual_estabelecido = (
+                    st.number_input(
+                        "Percentual estabelecido",
+                        min_value=0.0,
+                        max_value=100.0,
+                        step=0.01,
+                        value=float(
+                            percentual_estabelecido_atual
+                            or 0
+                        )
+                    )
+                )
+
+
+            st.markdown("---")
+
+
+            # =================================================
+            # PADRÕES
+            # =================================================
+
+            st.markdown(
+                "### 🏛️ Configuração Padrão"
+            )
+
+
+            if (
+                orgao_padrao_atual
+                in ids_orgaos
+            ):
+
+                indice = (
+                    ids_orgaos.index(
+                        orgao_padrao_atual
+                    )
+                )
+
+            else:
+
+                indice = 0
+
+
+            orgao_padrao_id = (
+                st.selectbox(
+                    "Órgão Padrão",
+                    ids_orgaos,
+                    index=indice,
+                    format_func=lambda x:
+                        opcoes_orgaos[x]
+                )
+            )
+
+
+            if (
+                uo_padrao_atual
+                in ids_unidades
+            ):
+
+                indice = (
+                    ids_unidades.index(
+                        uo_padrao_atual
+                    )
+                )
+
+            else:
+
+                indice = 0
+
+
+            unidade_orcamentaria_padrao_id = (
+                st.selectbox(
+                    "Unidade Orçamentária Padrão",
+                    ids_unidades,
+                    index=indice,
+                    format_func=lambda x:
+                        opcoes_unidades[x]
+                )
+            )
+
+
+            st.markdown("---")
+
+
+            # =================================================
+            # LICITAÇÃO
+            # =================================================
+
+            st.markdown(
+                "### 🛒 Responsável por Licitações"
+            )
+
+
+            if (
+                orgao_licitacao_atual
+                in ids_orgaos
+            ):
+
+                indice = (
+                    ids_orgaos.index(
+                        orgao_licitacao_atual
+                    )
+                )
+
+            else:
+
+                indice = 0
+
+
+            orgao_licitacao_id = (
+                st.selectbox(
+                    (
+                        "Órgão responsável "
+                        "pela Licitação"
+                    ),
+                    ids_orgaos,
+                    index=indice,
+                    format_func=lambda x:
+                        opcoes_orgaos[x]
+                )
+            )
+
+
+            if (
+                uo_licitacao_atual
+                in ids_unidades
+            ):
+
+                indice = (
+                    ids_unidades.index(
+                        uo_licitacao_atual
+                    )
+                )
+
+            else:
+
+                indice = 0
+
+
+            unidade_licitacao_id = (
+                st.selectbox(
+                    (
+                        "Unidade Orçamentária "
+                        "responsável pela Licitação"
+                    ),
+                    ids_unidades,
+                    index=indice,
+                    format_func=lambda x:
+                        opcoes_unidades[x]
+                )
+            )
+
+
+            st.markdown("---")
+
+
+            # =================================================
+            # ASSESSORIA
+            # =================================================
+
+            st.markdown(
+                "### 📚 Assessoria Contábil"
+            )
+
+
+            possui_assessoria = (
+                st.radio(
+                    "Possui Assessoria Contábil?",
+                    [
+                        True,
+                        False
+                    ],
+                    index=(
+                        0
+                        if assessoria_atual
+                        else 1
+                    ),
+                    format_func=lambda x:
+                        "Sim"
+                        if x
+                        else "Não",
+                    horizontal=True
+                )
+            )
+
+
+            fornecedor_assessoria = (
+                st.text_input(
+                    "Fornecedor da Assessoria",
+                    value=(
+                        fornecedor_assessoria_atual
+                        or ""
+                    ),
+                    max_chars=250,
+                    disabled=(
+                        not possui_assessoria
+                    )
+                )
+            )
+
+
+            st.markdown("---")
+
+
+            # =================================================
+            # CONTA ÚNICA
+            # =================================================
+
+            conta_unica = st.radio(
+                "Utiliza Conta Única do Tesouro?",
+                [
+                    True,
+                    False
+                ],
+                index=(
+                    0
+                    if conta_unica_atual
+                    else 1
+                ),
+                format_func=lambda x:
+                    "Sim"
+                    if x
+                    else "Não",
+                horizontal=True
+            )
+
+
+            st.markdown("---")
+
+
+            # =================================================
+            # ARTIGO 20
+            # =================================================
+
+            st.markdown(
+                "### ⚖️ Art. 20 - Lei 14.133/2021"
+            )
+
+
+            col1, col2, col3 = (
+                st.columns(3)
+            )
+
+
+            with col1:
+
+                art20_numero = (
+                    st.text_input(
+                        "Número da Norma",
+                        value=(
+                            art20_numero_atual
+                            or ""
+                        ),
+                        max_chars=50
+                    )
+                )
+
+
+            with col2:
+
+                art20_data = (
+                    st.date_input(
+                        "Data da Norma",
+                        value=art20_data_atual,
+                        format="DD/MM/YYYY"
+                    )
+                )
+
+
+            with col3:
+
+                art20_publicacao = (
+                    st.date_input(
+                        "Data da Publicação",
+                        value=(
+                            art20_publicacao_atual
+                        ),
+                        format="DD/MM/YYYY"
+                    )
+                )
+
+
+            if art20_nome_arquivo_atual:
+
+                st.info(
+                    (
+                        "📎 Arquivo atual: "
+                        f"{art20_nome_arquivo_atual}"
+                    )
+                )
+
+
+            arquivo_art20 = (
+                st.file_uploader(
+                    "Arquivo PDF da Norma",
+                    type=["pdf"],
+                    key=(
+                        "arquivo_art20_"
+                        f"{entidade_id}"
+                    )
+                )
+            )
+
+
+        # ====================================================
+        # ABA GESTOR
+        # ====================================================
+
+        with abas[1]:
+
+            gestor = campos_responsavel(
+                "GESTOR",
+                f"gestor_{entidade_id}"
+            )
+
+
+        # ====================================================
+        # ABA AUTORIDADE
+        # ====================================================
+
+        with abas[2]:
+
+            autoridade = campos_responsavel(
+                "AUTORIDADE",
+                f"autoridade_{entidade_id}"
+            )
+
+
+        # ====================================================
+        # ABA CONTADOR
+        # ====================================================
+
+        with abas[3]:
+
+            contador = campos_responsavel(
+                "CONTADOR",
+                f"contador_{entidade_id}"
+            )
+
+
+        # ====================================================
+        # ABA TESOUREIRO
+        # ====================================================
+
+        with abas[4]:
+
+            tesoureiro = campos_responsavel(
+                "TESOUREIRO",
+                f"tesoureiro_{entidade_id}"
+            )
+
+
+        # ====================================================
+        # ABA AUTORIZADOR
+        # ====================================================
+
+        with abas[5]:
+
+            autorizador = campos_responsavel(
+                "AUTORIZADOR_DESPESA",
+                f"autorizador_{entidade_id}"
+            )
+
+
+        # ====================================================
+        # ABA SECRETÁRIO
+        # ====================================================
+
+        with abas[6]:
+
+            secretario = campos_responsavel(
+                "SECRETARIO_FINANCAS",
+                f"secretario_{entidade_id}"
+            )
 
 
         # ====================================================
         # BOTÕES
         # ====================================================
 
-        col1, col2, col3, col4 = st.columns(4)
+        st.markdown("---")
+
+
+        col1, col2, col3, col4 = (
+            st.columns(4)
+        )
 
 
         with col1:
 
-            salvar = st.form_submit_button(
-                "💾 Salvar",
-                type="primary",
-                use_container_width=True
+            salvar = (
+                st.form_submit_button(
+                    "💾 Salvar",
+                    type="primary",
+                    use_container_width=True
+                )
             )
 
-
-        # ====================================================
-        # ATIVAR / INATIVAR
-        # ====================================================
 
         with col2:
 
@@ -3281,21 +4291,15 @@ def entidade_alterar(
                 )
 
 
-        # ====================================================
-        # EXCLUIR
-        # ====================================================
-
         with col3:
 
-            excluir = st.form_submit_button(
-                "🗑️ Excluir",
-                use_container_width=True
+            excluir = (
+                st.form_submit_button(
+                    "🗑️ Excluir",
+                    use_container_width=True
+                )
             )
 
-
-        # ====================================================
-        # CANCELAR
-        # ====================================================
 
         with col4:
 
@@ -3372,11 +4376,6 @@ def entidade_alterar(
             ] = "localizar"
 
 
-            st.success(
-                "✅ Entidade excluída com sucesso!"
-            )
-
-
             st.rerun()
 
 
@@ -3385,7 +4384,10 @@ def entidade_alterar(
             conn.rollback()
 
             st.error(
-                f"❌ Não foi possível excluir a entidade: {erro}"
+                (
+                    "❌ Não foi possível "
+                    f"excluir a entidade: {erro}"
+                )
             )
 
 
@@ -3393,7 +4395,7 @@ def entidade_alterar(
 
 
     # ========================================================
-    # SALVAR ALTERAÇÕES
+    # SALVAR
     # ========================================================
 
     if salvar:
@@ -3402,6 +4404,10 @@ def entidade_alterar(
 
         cnpj = cnpj.strip()
 
+
+        # ====================================================
+        # NOME
+        # ====================================================
 
         if not nome:
 
@@ -3412,25 +4418,275 @@ def entidade_alterar(
             return
 
 
-        sucesso = _sisget_salvar(
-            """
-            UPDATE entidades
-            SET
-                nome = ?,
-                cnpj = ?,
-                tipo_entidade = ?
-            WHERE id = ?
-            """,
-            (
-                nome,
-                cnpj if cnpj else None,
-                tipo_entidade,
-                entidade_id
+        # ====================================================
+        # NOME DUPLICADO
+        # ====================================================
+
+        nome_existente = (
+            _sisget_fetchone(
+                """
+                SELECT id
+                FROM entidades
+                WHERE LOWER(TRIM(nome))
+                    = LOWER(TRIM(?))
+                  AND id <> ?
+                """,
+                (
+                    nome,
+                    entidade_id
+                )
             )
         )
 
 
-        if sucesso:
+        if nome_existente:
+
+            st.warning(
+                (
+                    "⚠️ Já existe outra entidade "
+                    "com esse nome."
+                )
+            )
+
+            return
+
+
+        # ====================================================
+        # CNPJ
+        # ====================================================
+
+        if cnpj:
+
+            if not validar_cnpj(
+                cnpj
+            ):
+
+                st.warning(
+                    "⚠️ CNPJ inválido."
+                )
+
+                return
+
+
+            if cnpj_entidade_duplicado(
+                cnpj,
+                entidade_id
+            ):
+
+                st.warning(
+                    (
+                        "⚠️ Já existe outra entidade "
+                        "com esse CNPJ."
+                    )
+                )
+
+                return
+
+
+            cnpj = "".join(
+                caractere
+                for caractere in cnpj
+                if caractere.isdigit()
+            )
+
+
+        # ====================================================
+        # SALVAR TUDO
+        # ====================================================
+
+        try:
+
+            # =================================================
+            # DADOS DA ENTIDADE
+            # =================================================
+
+            cursor.execute(
+                """
+                UPDATE entidades
+
+                SET
+                    nome = ?,
+                    cnpj = ?,
+                    tipo_entidade = ?,
+
+                    codigo_orgao_sicom = ?,
+                    unidade_repasse = ?,
+
+                    endereco = ?,
+                    bairro = ?,
+                    cep = ?,
+                    telefone = ?,
+                    fax = ?,
+                    email = ?,
+
+                    numero_habitantes = ?,
+
+                    percentual_aquisicoes = ?,
+                    percentual_estabelecido = ?,
+
+                    orgao_padrao_id = ?,
+
+                    unidade_orcamentaria_padrao_id = ?,
+
+                    orgao_licitacao_id = ?,
+
+                    unidade_licitacao_id = ?,
+
+                    possui_assessoria_contabil = ?,
+
+                    fornecedor_assessoria = ?,
+
+                    conta_unica_tesouro = ?,
+
+                    art20_numero_norma = ?,
+
+                    art20_data_norma = ?,
+
+                    art20_data_publicacao = ?
+
+                WHERE id = ?
+                """,
+                (
+                    nome,
+
+                    cnpj
+                    if cnpj
+                    else None,
+
+                    tipo_entidade,
+
+                    codigo_orgao_sicom.strip()
+                    if codigo_orgao_sicom
+                    else None,
+
+                    unidade_repasse.strip()
+                    if unidade_repasse
+                    else None,
+
+                    endereco.strip()
+                    if endereco
+                    else None,
+
+                    bairro.strip()
+                    if bairro
+                    else None,
+
+                    cep.strip()
+                    if cep
+                    else None,
+
+                    telefone.strip()
+                    if telefone
+                    else None,
+
+                    fax.strip()
+                    if fax
+                    else None,
+
+                    email.strip()
+                    if email
+                    else None,
+
+                    numero_habitantes
+                    if numero_habitantes > 0
+                    else None,
+
+                    percentual_aquisicoes,
+
+                    percentual_estabelecido,
+
+                    orgao_padrao_id,
+
+                    unidade_orcamentaria_padrao_id,
+
+                    orgao_licitacao_id,
+
+                    unidade_licitacao_id,
+
+                    possui_assessoria,
+
+                    fornecedor_assessoria.strip()
+                    if (
+                        possui_assessoria
+                        and fornecedor_assessoria
+                    )
+                    else None,
+
+                    conta_unica,
+
+                    art20_numero.strip()
+                    if art20_numero
+                    else None,
+
+                    art20_data,
+
+                    art20_publicacao,
+
+                    entidade_id
+                )
+            )
+
+
+            # =================================================
+            # ARQUIVO ARTIGO 20
+            # =================================================
+
+            if arquivo_art20:
+
+                cursor.execute(
+                    """
+                    UPDATE entidades
+                    SET
+                        art20_arquivo = ?,
+                        art20_nome_arquivo = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        arquivo_art20.getvalue(),
+
+                        arquivo_art20.name,
+
+                        entidade_id
+                    )
+                )
+
+
+            # =================================================
+            # RESPONSÁVEIS
+            # =================================================
+
+            salvar_responsavel(
+                gestor
+            )
+
+            salvar_responsavel(
+                autoridade
+            )
+
+            salvar_responsavel(
+                contador
+            )
+
+            salvar_responsavel(
+                tesoureiro
+            )
+
+            salvar_responsavel(
+                autorizador
+            )
+
+            salvar_responsavel(
+                secretario
+            )
+
+
+            conn.commit()
+
+
+            st.success(
+                "✅ Entidade alterada com sucesso!"
+            )
+
 
             st.session_state[
                 "sisget_id_entidades"
@@ -3442,13 +4698,19 @@ def entidade_alterar(
             ] = "localizar"
 
 
-            st.success(
-                "✅ Entidade alterada com sucesso!"
-            )
-
-
             st.rerun()
 
+
+        except Exception as erro:
+
+            conn.rollback()
+
+            st.error(
+                (
+                    "❌ Não foi possível salvar "
+                    f"a entidade: {erro}"
+                )
+            )
 def entidade_imprimir():
 
     st.subheader(
