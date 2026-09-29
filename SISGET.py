@@ -2152,10 +2152,81 @@ def validar_cnpj(cnpj):
         int(cnpj[13]) == digito2
     )
 
+# ============================================================
+# VALIDAR CNPJ DUPLICADO
+# ============================================================
 
-# ============================================================
-# PRÓXIMO CÓDIGO DISPONÍVEL
-# ============================================================
+def cnpj_entidade_duplicado(
+    cnpj,
+    entidade_id=None
+):
+
+    # ========================================================
+    # REMOVER MÁSCARA
+    # ========================================================
+
+    cnpj_limpo = "".join(
+        caractere
+        for caractere in str(cnpj)
+        if caractere.isdigit()
+    )
+
+
+    if not cnpj_limpo:
+
+        return False
+
+
+    # ========================================================
+    # INCLUIR
+    # ========================================================
+
+    if entidade_id is None:
+
+        resultado = _sisget_fetchone(
+            """
+            SELECT id
+            FROM entidades
+            WHERE REGEXP_REPLACE(
+                COALESCE(cnpj, ''),
+                '[^0-9]',
+                '',
+                'g'
+            ) = ?
+            """,
+            (
+                cnpj_limpo,
+            )
+        )
+
+
+    # ========================================================
+    # ALTERAR
+    # IGNORA A PRÓPRIA ENTIDADE
+    # ========================================================
+
+    else:
+
+        resultado = _sisget_fetchone(
+            """
+            SELECT id
+            FROM entidades
+            WHERE REGEXP_REPLACE(
+                COALESCE(cnpj, ''),
+                '[^0-9]',
+                '',
+                'g'
+            ) = ?
+              AND id <> ?
+            """,
+            (
+                cnpj_limpo,
+                entidade_id
+            )
+        )
+
+
+    return resultado is not None
 
 def sisget_proximo_codigo_entidade():
 
@@ -2353,72 +2424,96 @@ def entidade_incluir():
 
             return
 
-        # ====================================================
-        # VALIDAR CNPJ
-        # ====================================================
+# ====================================================
+# VALIDAR CNPJ
+# ====================================================
 
-        if cnpj:
+if cnpj:
 
-            if not validar_cnpj(cnpj):
+    if not validar_cnpj(cnpj):
 
-                st.warning(
-                    "⚠️ CNPJ inválido."
-                )
-
-                return
-
-            cnpj = "".join(
-                caractere
-                for caractere in cnpj
-                if caractere.isdigit()
-            )
-
-        # ====================================================
-        # RECALCULAR CÓDIGO
-        # ====================================================
-
-        codigo = (
-            sisget_proximo_codigo_entidade()
+        st.warning(
+            "⚠️ CNPJ inválido."
         )
 
-        # ====================================================
-        # INSERT
-        # ====================================================
+        return
 
-        sucesso = _sisget_salvar(
-            """
-            INSERT INTO entidades
-            (
-                codigo,
-                nome,
-                cnpj,
-                tipo_entidade,
-                ativo
-            )
-            VALUES
-            (
-                ?,
-                ?,
-                ?,
-                ?,
-                ?
-            )
-            """,
-            (
-                codigo,
-                nome,
-                cnpj if cnpj else None,
-                tipo_entidade,
-                ativo
-            )
+
+    # =================================================
+    # VALIDAR CNPJ DUPLICADO
+    # =================================================
+
+    if cnpj_entidade_duplicado(cnpj):
+
+        st.warning(
+            "⚠️ Já existe uma entidade cadastrada com esse CNPJ."
         )
 
-        if sucesso:
+        return
 
-            st.success(
-                f"✅ Entidade cadastrada com sucesso! Código: {codigo}"
-            )
 
+    # =================================================
+    # LIMPAR CNPJ
+    # =================================================
+
+    cnpj = "".join(
+        caractere
+        for caractere in cnpj
+        if caractere.isdigit()
+    )
+
+
+# ====================================================
+# RECALCULAR CÓDIGO
+# ====================================================
+
+codigo = (
+    sisget_proximo_codigo_entidade()
+)
+
+
+# ====================================================
+# INSERT
+# ====================================================
+
+sucesso = _sisget_salvar(
+    """
+    INSERT INTO entidades
+    (
+        codigo,
+        nome,
+        cnpj,
+        tipo_entidade,
+        ativo
+    )
+    VALUES
+    (
+        ?,
+        ?,
+        ?,
+        ?,
+        ?
+    )
+    """,
+    (
+        codigo,
+        nome,
+        cnpj if cnpj else None,
+        tipo_entidade,
+        ativo
+    )
+)
+
+
+if sucesso:
+
+    st.success(
+        f"✅ Entidade cadastrada com sucesso! Código: {codigo}"
+    )
+
+# ============================================================
+# ENTIDADES - ALTERAR
+# ============================================================
 
 # ============================================================
 # ENTIDADES - ALTERAR
@@ -2449,6 +2544,7 @@ def entidade_alterar(
         )
     )
 
+
     if not entidade:
 
         st.error(
@@ -2456,6 +2552,7 @@ def entidade_alterar(
         )
 
         return
+
 
     (
         id_entidade,
@@ -2466,8 +2563,9 @@ def entidade_alterar(
         ativo_atual
     ) = entidade
 
+
     # ========================================================
-    # SITUAÇÃO
+    # SITUAÇÃO ATUAL
     # ========================================================
 
     if ativo_atual:
@@ -2482,8 +2580,9 @@ def entidade_alterar(
             "🔴 Situação: INATIVA"
         )
 
+
     # ========================================================
-    # TIPOS
+    # TIPOS DE ENTIDADE
     # ========================================================
 
     tipos = [
@@ -2495,15 +2594,18 @@ def entidade_alterar(
         "Outro"
     ]
 
+
     if tipo_atual not in tipos:
 
         tipos.append(
             tipo_atual
         )
 
+
     indice_tipo = tipos.index(
         tipo_atual
     )
+
 
     # ========================================================
     # FORMULÁRIO
@@ -2513,11 +2615,20 @@ def entidade_alterar(
         f"form_entidade_alterar_{entidade_id}"
     ):
 
+        # ====================================================
+        # CÓDIGO
+        # ====================================================
+
         st.text_input(
             "Código",
             value=codigo_atual or "",
             disabled=True
         )
+
+
+        # ====================================================
+        # NOME
+        # ====================================================
 
         nome = st.text_input(
             "Nome da Entidade *",
@@ -2525,7 +2636,13 @@ def entidade_alterar(
             max_chars=200
         )
 
+
+        # ====================================================
+        # CNPJ / TIPO
+        # ====================================================
+
         col1, col2 = st.columns(2)
+
 
         with col1:
 
@@ -2536,6 +2653,7 @@ def entidade_alterar(
                 placeholder="00.000.000/0000-00"
             )
 
+
         with col2:
 
             tipo_entidade = st.selectbox(
@@ -2544,13 +2662,16 @@ def entidade_alterar(
                 index=indice_tipo
             )
 
+
         st.markdown("---")
+
+
+        # ====================================================
+        # BOTÕES
+        # ====================================================
 
         col1, col2, col3, col4 = st.columns(4)
 
-        # ====================================================
-        # SALVAR
-        # ====================================================
 
         with col1:
 
@@ -2560,33 +2681,23 @@ def entidade_alterar(
                 use_container_width=True
             )
 
-        # ====================================================
-        # ATIVAR / INATIVAR
-        # ====================================================
 
         with col2:
 
             if ativo_atual:
 
-                alterar_status = (
-                    st.form_submit_button(
-                        "🚫 Inativar",
-                        use_container_width=True
-                    )
+                alterar_status = st.form_submit_button(
+                    "🚫 Inativar",
+                    use_container_width=True
                 )
 
             else:
 
-                alterar_status = (
-                    st.form_submit_button(
-                        "✅ Ativar",
-                        use_container_width=True
-                    )
+                alterar_status = st.form_submit_button(
+                    "✅ Ativar",
+                    use_container_width=True
                 )
 
-        # ====================================================
-        # EXCLUIR
-        # ====================================================
 
         with col3:
 
@@ -2595,9 +2706,6 @@ def entidade_alterar(
                 use_container_width=True
             )
 
-        # ====================================================
-        # CANCELAR
-        # ====================================================
 
         with col4:
 
@@ -2605,6 +2713,7 @@ def entidade_alterar(
                 "❌ Cancelar",
                 use_container_width=True
             )
+
 
     # ========================================================
     # CANCELAR
@@ -2622,6 +2731,7 @@ def entidade_alterar(
 
         st.rerun()
 
+
     # ========================================================
     # ATIVAR / INATIVAR
     # ========================================================
@@ -2634,6 +2744,7 @@ def entidade_alterar(
         )
 
         return
+
 
     # ========================================================
     # EXCLUIR
@@ -2655,19 +2766,23 @@ def entidade_alterar(
 
             conn.commit()
 
+
             st.session_state[
                 "sisget_id_entidades"
             ] = None
 
+
             st.session_state[
                 "sisget_tela_entidades"
             ] = "localizar"
+
 
             st.success(
                 "✅ Entidade excluída com sucesso!"
             )
 
             st.rerun()
+
 
         except Exception as erro:
 
@@ -2677,7 +2792,9 @@ def entidade_alterar(
                 f"❌ Não foi possível excluir a entidade: {erro}"
             )
 
+
         return
+
 
     # ========================================================
     # SALVAR ALTERAÇÕES
@@ -2688,6 +2805,7 @@ def entidade_alterar(
         nome = nome.strip()
 
         cnpj = cnpj.strip()
+
 
         # ====================================================
         # VALIDAR NOME
@@ -2701,9 +2819,10 @@ def entidade_alterar(
 
             return
 
+
         # ====================================================
         # VALIDAR NOME DUPLICADO
-        # IGNORA O PRÓPRIO REGISTRO
+        # IGNORA A PRÓPRIA ENTIDADE
         # ====================================================
 
         nome_existente = _sisget_fetchone(
@@ -2719,6 +2838,7 @@ def entidade_alterar(
             )
         )
 
+
         if nome_existente:
 
             st.warning(
@@ -2726,6 +2846,7 @@ def entidade_alterar(
             )
 
             return
+
 
         # ====================================================
         # VALIDAR CNPJ
@@ -2741,11 +2862,34 @@ def entidade_alterar(
 
                 return
 
+
+            # =================================================
+            # VALIDAR CNPJ DUPLICADO
+            # IGNORA A PRÓPRIA ENTIDADE
+            # =================================================
+
+            if cnpj_entidade_duplicado(
+                cnpj,
+                entidade_id
+            ):
+
+                st.warning(
+                    "⚠️ Já existe outra entidade cadastrada com esse CNPJ."
+                )
+
+                return
+
+
+            # =================================================
+            # LIMPAR CNPJ
+            # =================================================
+
             cnpj = "".join(
                 caractere
                 for caractere in cnpj
                 if caractere.isdigit()
             )
+
 
         # ====================================================
         # UPDATE
@@ -2770,22 +2914,24 @@ def entidade_alterar(
             )
         )
 
+
         if sucesso:
 
             st.session_state[
                 "sisget_id_entidades"
             ] = None
 
+
             st.session_state[
                 "sisget_tela_entidades"
             ] = "localizar"
+
 
             st.success(
                 "✅ Entidade alterada com sucesso!"
             )
 
             st.rerun()
-
 def entidade_localizar():
 
     st.subheader(
