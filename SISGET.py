@@ -6224,7 +6224,571 @@ def cadastro_unidades_orcamentarias():
         icone="💼"
     )
 
+# ============================================================
+# UNIDADE ORÇAMENTÁRIA - IMPRIMIR
+# ============================================================
 
+def unidade_orcamentaria_imprimir():
+
+    st.subheader(
+        "🖨️ Relatório de Unidades Orçamentárias"
+    )
+
+    # ========================================================
+    # ENTIDADES PARA FILTRO
+    # ========================================================
+
+    entidades = _sisget_fetch(
+        """
+        SELECT
+            e.id,
+            e.codigo,
+            e.nome,
+            o.codigo,
+            o.nome
+
+        FROM entidades e
+
+        INNER JOIN orgaos o
+            ON o.id = e.orgao_id
+
+        ORDER BY
+            o.codigo,
+            e.codigo
+        """
+    )
+
+    opcoes_entidades = {
+        "Todas as Entidades": None
+    }
+
+    for (
+        entidade_id,
+        codigo_entidade,
+        nome_entidade,
+        codigo_orgao,
+        nome_orgao
+    ) in entidades:
+
+        descricao = (
+            f"{codigo_orgao} - {nome_orgao}"
+            f" → "
+            f"{codigo_entidade} - {nome_entidade}"
+        )
+
+        opcoes_entidades[
+            descricao
+        ] = entidade_id
+
+    # ========================================================
+    # FILTROS
+    # ========================================================
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        entidade_selecionada = st.selectbox(
+            "Entidade",
+            list(
+                opcoes_entidades.keys()
+            ),
+            key="uo_imprimir_entidade"
+        )
+
+    with col2:
+
+        situacao = st.selectbox(
+            "Situação",
+            [
+                "Todas",
+                "Ativas",
+                "Inativas"
+            ],
+            key="uo_imprimir_situacao"
+        )
+
+    entidade_id = (
+        opcoes_entidades[
+            entidade_selecionada
+        ]
+    )
+
+    # ========================================================
+    # SQL
+    # ========================================================
+
+    sql = """
+        SELECT
+            o.codigo,
+            o.nome,
+
+            e.codigo,
+            e.nome,
+
+            u.codigo,
+            u.nome,
+
+            COALESCE(
+                u.codigo_tce,
+                ''
+            ),
+
+            COALESCE(
+                u.identificador_fundo,
+                0
+            ),
+
+            u.data_envio_tce,
+
+            u.ativo
+
+        FROM unidades_orcamentarias u
+
+        INNER JOIN entidades e
+            ON e.id = u.entidade_id
+
+        INNER JOIN orgaos o
+            ON o.id = u.orgao_id
+
+        WHERE 1 = 1
+    """
+
+    parametros = []
+
+    # ========================================================
+    # FILTRO ENTIDADE
+    # ========================================================
+
+    if entidade_id is not None:
+
+        sql += """
+            AND u.entidade_id = ?
+        """
+
+        parametros.append(
+            entidade_id
+        )
+
+    # ========================================================
+    # FILTRO SITUAÇÃO
+    # ========================================================
+
+    if situacao == "Ativas":
+
+        sql += """
+            AND u.ativo = TRUE
+        """
+
+    elif situacao == "Inativas":
+
+        sql += """
+            AND u.ativo = FALSE
+        """
+
+    # ========================================================
+    # ORDENAÇÃO
+    # ========================================================
+
+    sql += """
+        ORDER BY
+            o.codigo,
+            e.codigo,
+            u.codigo
+    """
+
+    dados = _sisget_fetch(
+        sql,
+        tuple(parametros)
+    )
+
+    if not dados:
+
+        st.info(
+            "Nenhuma Unidade Orçamentária encontrada."
+        )
+
+        return
+
+    # ========================================================
+    # VISUALIZAÇÃO
+    # ========================================================
+
+    visualizacao = []
+
+    for registro in dados:
+
+        data_envio = ""
+
+        if registro[8]:
+
+            try:
+
+                data_envio = (
+                    registro[8].strftime(
+                        "%d/%m/%Y"
+                    )
+                )
+
+            except Exception:
+
+                data_envio = str(
+                    registro[8]
+                )
+
+        visualizacao.append({
+
+            "Órgão":
+                f"{registro[0]} - {registro[1]}",
+
+            "Entidade":
+                f"{registro[2]} - {registro[3]}",
+
+            "Código":
+                registro[4],
+
+            "Unidade Orçamentária":
+                registro[5],
+
+            "Código TCE":
+                registro[6],
+
+            "Identificador":
+                registro[7],
+
+            "Envio TCE":
+                data_envio,
+
+            "Situação":
+                (
+                    "Ativa"
+                    if registro[9]
+                    else "Inativa"
+                )
+        })
+
+    df = pd.DataFrame(
+        visualizacao
+    )
+
+    st.dataframe(
+        df,
+        use_container_width=True,
+        hide_index=True
+    )
+
+    st.caption(
+        f"Total de Unidades Orçamentárias: {len(df)}"
+    )
+
+    # ========================================================
+    # GERAR PDF
+    # ========================================================
+
+    if st.button(
+        "📄 Gerar PDF",
+        type="primary",
+        use_container_width=True,
+        key="gerar_pdf_unidades_orcamentarias"
+    ):
+
+        buffer = BytesIO()
+
+        documento = SimpleDocTemplate(
+            buffer,
+            pagesize=A4,
+            rightMargin=0.8 * cm,
+            leftMargin=0.8 * cm,
+            topMargin=1.0 * cm,
+            bottomMargin=1.0 * cm
+        )
+
+        estilos = (
+            getSampleStyleSheet()
+        )
+
+        titulo_style = ParagraphStyle(
+            "TituloUO",
+            parent=estilos["Heading1"],
+            alignment=1,
+            fontSize=15,
+            spaceAfter=8
+        )
+
+        subtitulo_style = ParagraphStyle(
+            "SubtituloUO",
+            parent=estilos["Normal"],
+            alignment=1,
+            fontSize=9,
+            spaceAfter=12
+        )
+
+        texto_tabela = ParagraphStyle(
+            "TextoTabelaUO",
+            parent=estilos["Normal"],
+            fontSize=7,
+            leading=8
+        )
+
+        elementos = []
+
+        # ====================================================
+        # TÍTULO
+        # ====================================================
+
+        elementos.append(
+            Paragraph(
+                "SISGET - Sistema Integrado de Gestão Pública",
+                titulo_style
+            )
+        )
+
+        elementos.append(
+            Paragraph(
+                "Relatório de Unidades Orçamentárias",
+                estilos["Heading2"]
+            )
+        )
+
+        filtros_relatorio = (
+            f"Entidade: {entidade_selecionada}"
+            f" | Situação: {situacao}"
+        )
+
+        elementos.append(
+            Paragraph(
+                filtros_relatorio,
+                subtitulo_style
+            )
+        )
+
+        elementos.append(
+            Spacer(
+                1,
+                0.3 * cm
+            )
+        )
+
+        # ====================================================
+        # TABELA
+        # ====================================================
+
+        tabela_dados = [[
+            "Órgão",
+            "Entidade",
+            "Código",
+            "Unidade Orçamentária",
+            "Cód. TCE",
+            "Ident.",
+            "Envio TCE",
+            "Situação"
+        ]]
+
+        for registro in dados:
+
+            data_envio = ""
+
+            if registro[8]:
+
+                try:
+
+                    data_envio = (
+                        registro[8].strftime(
+                            "%d/%m/%Y"
+                        )
+                    )
+
+                except Exception:
+
+                    data_envio = str(
+                        registro[8]
+                    )
+
+            tabela_dados.append([
+
+                Paragraph(
+                    f"{registro[0]} - {registro[1]}",
+                    texto_tabela
+                ),
+
+                Paragraph(
+                    f"{registro[2]} - {registro[3]}",
+                    texto_tabela
+                ),
+
+                str(
+                    registro[4] or ""
+                ),
+
+                Paragraph(
+                    str(
+                        registro[5] or ""
+                    ),
+                    texto_tabela
+                ),
+
+                str(
+                    registro[6] or ""
+                ),
+
+                str(
+                    registro[7]
+                    if registro[7] is not None
+                    else ""
+                ),
+
+                data_envio,
+
+                (
+                    "Ativa"
+                    if registro[9]
+                    else "Inativa"
+                )
+            ])
+
+        tabela = Table(
+            tabela_dados,
+            colWidths=[
+                2.5 * cm,
+                2.7 * cm,
+                2.0 * cm,
+                4.0 * cm,
+                1.5 * cm,
+                1.1 * cm,
+                1.8 * cm,
+                1.4 * cm
+            ],
+            repeatRows=1
+        )
+
+        tabela.setStyle(
+            TableStyle([
+
+                (
+                    "BACKGROUND",
+                    (0, 0),
+                    (-1, 0),
+                    colors.lightgrey
+                ),
+
+                (
+                    "FONTNAME",
+                    (0, 0),
+                    (-1, 0),
+                    "Helvetica-Bold"
+                ),
+
+                (
+                    "FONTSIZE",
+                    (0, 0),
+                    (-1, 0),
+                    7
+                ),
+
+                (
+                    "FONTSIZE",
+                    (0, 1),
+                    (-1, -1),
+                    7
+                ),
+
+                (
+                    "GRID",
+                    (0, 0),
+                    (-1, -1),
+                    0.5,
+                    colors.grey
+                ),
+
+                (
+                    "VALIGN",
+                    (0, 0),
+                    (-1, -1),
+                    "MIDDLE"
+                ),
+
+                (
+                    "LEFTPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    3
+                ),
+
+                (
+                    "RIGHTPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    3
+                ),
+
+                (
+                    "TOPPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    3
+                ),
+
+                (
+                    "BOTTOMPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    3
+                )
+            ])
+        )
+
+        elementos.append(
+            tabela
+        )
+
+        elementos.append(
+            Spacer(
+                1,
+                0.5 * cm
+            )
+        )
+
+        # ====================================================
+        # RODAPÉ
+        # ====================================================
+
+        elementos.append(
+            Paragraph(
+                f"Total de registros: {len(dados)}",
+                estilos["Normal"]
+            )
+        )
+
+        elementos.append(
+            Paragraph(
+                (
+                    "Emitido em: "
+                    + datetime.now().strftime(
+                        "%d/%m/%Y %H:%M"
+                    )
+                ),
+                estilos["Normal"]
+            )
+        )
+
+        # ====================================================
+        # CONSTRUIR PDF
+        # ====================================================
+
+        documento.build(
+            elementos
+        )
+
+        buffer.seek(0)
+
+        st.download_button(
+            label="⬇️ Baixar Relatório em PDF",
+            data=buffer,
+            file_name="relatorio_unidades_orcamentarias.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+            key="baixar_pdf_unidades_orcamentarias"
+        )
 def sisget_proximo_codigo_unidade_orcamentaria(
     entidade_id
 ):
