@@ -6207,13 +6207,1136 @@ def orgao_imprimir():
         )
 
 
+# ============================================================
+# CADASTRO DE UNIDADES ORÇAMENTÁRIAS
+# ============================================================
+
 def cadastro_unidades_orcamentarias():
 
-    modulo_em_desenvolvimento(
-        "Unidades Orçamentárias",
-        "💼"
+    sisget_tela_principal(
+        titulo="Unidades Orçamentárias",
+        chave="unidades_orcamentarias",
+        func_incluir=unidade_orcamentaria_incluir,
+        func_localizar=unidade_orcamentaria_localizar,
+        func_alterar=unidade_orcamentaria_alterar,
+        func_excluir=unidade_orcamentaria_excluir,
+        func_imprimir=None,
+        icone="💼"
     )
 
+
+# ============================================================
+# PRÓXIMO CÓDIGO DA UNIDADE ORÇAMENTÁRIA
+#
+# ENTIDADE 001.001
+#
+# 001.001.001
+# 001.001.002
+# 001.001.003
+#
+# REUTILIZA PRIMEIRO CÓDIGO LIVRE
+# ============================================================
+
+def sisget_proximo_codigo_unidade_orcamentaria(
+    entidade_id
+):
+
+    # ========================================================
+    # BUSCAR ENTIDADE
+    # ========================================================
+
+    entidade = _sisget_fetchone(
+        """
+        SELECT
+            codigo
+        FROM entidades
+        WHERE id = ?
+        """,
+        (
+            entidade_id,
+        )
+    )
+
+    if not entidade:
+
+        return None
+
+    codigo_entidade = str(
+        entidade[0] or ""
+    ).strip()
+
+    # ========================================================
+    # BUSCAR CÓDIGOS UTILIZADOS NESSA ENTIDADE
+    # ========================================================
+
+    dados = _sisget_fetch(
+        """
+        SELECT
+            codigo
+        FROM unidades_orcamentarias
+        WHERE entidade_id = ?
+        ORDER BY codigo
+        """,
+        (
+            entidade_id,
+        )
+    )
+
+    numeros_usados = set()
+
+    for registro in dados:
+
+        codigo = str(
+            registro[0] or ""
+        ).strip()
+
+        try:
+
+            parte = (
+                codigo.split(".")[-1]
+            )
+
+            numeros_usados.add(
+                int(parte)
+            )
+
+        except (
+            ValueError,
+            TypeError
+        ):
+
+            pass
+
+    # ========================================================
+    # PRIMEIRO NÚMERO LIVRE
+    # ========================================================
+
+    proximo = 1
+
+    while proximo in numeros_usados:
+
+        proximo += 1
+
+    numero_uo = str(
+        proximo
+    ).zfill(3)
+
+    return (
+        f"{codigo_entidade}.{numero_uo}"
+    )
+
+
+# ============================================================
+# VALIDAR NOME DUPLICADO
+# ============================================================
+
+def unidade_orcamentaria_nome_duplicado(
+    entidade_id,
+    nome,
+    unidade_id=None
+):
+
+    nome = nome.strip()
+
+    if unidade_id is None:
+
+        resultado = _sisget_fetchone(
+            """
+            SELECT id
+            FROM unidades_orcamentarias
+            WHERE entidade_id = ?
+              AND LOWER(TRIM(nome)) = LOWER(TRIM(?))
+            """,
+            (
+                entidade_id,
+                nome
+            )
+        )
+
+    else:
+
+        resultado = _sisget_fetchone(
+            """
+            SELECT id
+            FROM unidades_orcamentarias
+            WHERE entidade_id = ?
+              AND LOWER(TRIM(nome)) = LOWER(TRIM(?))
+              AND id <> ?
+            """,
+            (
+                entidade_id,
+                nome,
+                unidade_id
+            )
+        )
+
+    return resultado is not None
+
+
+# ============================================================
+# UNIDADE ORÇAMENTÁRIA - INCLUIR
+# ============================================================
+
+def unidade_orcamentaria_incluir():
+
+    st.subheader(
+        "💼 Dados da Unidade Orçamentária"
+    )
+
+    # ========================================================
+    # ENTIDADES ATIVAS
+    # COM SEU ÓRGÃO PAI
+    # ========================================================
+
+    entidades = _sisget_fetch(
+        """
+        SELECT
+            e.id,
+            e.codigo,
+            e.nome,
+            o.id,
+            o.codigo,
+            o.nome
+
+        FROM entidades e
+
+        INNER JOIN orgaos o
+            ON o.id = e.orgao_id
+
+        WHERE e.ativo = TRUE
+          AND o.ativo = TRUE
+
+        ORDER BY
+            o.codigo,
+            e.codigo
+        """
+    )
+
+    if not entidades:
+
+        st.warning(
+            "⚠️ Nenhuma entidade ativa vinculada a um órgão."
+        )
+
+        st.info(
+            "Cadastre primeiro o órgão e depois a entidade."
+        )
+
+        return
+
+    # ========================================================
+    # OPÇÕES
+    # ========================================================
+
+    opcoes = {}
+
+    for (
+        entidade_id,
+        codigo_entidade,
+        nome_entidade,
+        orgao_id,
+        codigo_orgao,
+        nome_orgao
+    ) in entidades:
+
+        descricao = (
+            f"{codigo_orgao} - {nome_orgao}"
+            f" → "
+            f"{codigo_entidade} - {nome_entidade}"
+        )
+
+        opcoes[
+            descricao
+        ] = (
+            entidade_id,
+            orgao_id
+        )
+
+    entidade_selecionada = st.selectbox(
+        "Entidade *",
+        list(
+            opcoes.keys()
+        ),
+        key="uo_incluir_entidade"
+    )
+
+    (
+        entidade_id,
+        orgao_id
+    ) = opcoes[
+        entidade_selecionada
+    ]
+
+    # ========================================================
+    # CÓDIGO AUTOMÁTICO
+    # ========================================================
+
+    codigo = (
+        sisget_proximo_codigo_unidade_orcamentaria(
+            entidade_id
+        )
+    )
+
+    st.info(
+        f"🔢 Código automático: {codigo}"
+    )
+
+    # ========================================================
+    # FORMULÁRIO
+    # ========================================================
+
+    with st.form(
+        "form_unidade_orcamentaria_incluir",
+        clear_on_submit=True
+    ):
+
+        nome = st.text_input(
+            "Nome da Unidade Orçamentária *",
+            max_chars=200
+        )
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+
+            codigo_tce = st.text_input(
+                "Código TCE",
+                max_chars=20
+            )
+
+        with col2:
+
+            identificador_fundo = st.selectbox(
+                "Identificador",
+                [
+                    0,
+                    1,
+                    2,
+                    3,
+                    4,
+                    99
+                ],
+                index=0
+            )
+
+        data_envio_tce = st.date_input(
+            "Data de envio ao TCE",
+            value=None
+        )
+
+        ativo = st.checkbox(
+            "Unidade Orçamentária ativa",
+            value=True
+        )
+
+        st.markdown("---")
+
+        salvar = st.form_submit_button(
+            "💾 Salvar",
+            type="primary",
+            use_container_width=True
+        )
+
+    # ========================================================
+    # SALVAR
+    # ========================================================
+
+    if salvar:
+
+        nome = nome.strip()
+        codigo_tce = codigo_tce.strip()
+
+        if not nome:
+
+            st.warning(
+                "⚠️ Informe o nome da Unidade Orçamentária."
+            )
+
+            return
+
+        # ====================================================
+        # NOME DUPLICADO
+        # ====================================================
+
+        if unidade_orcamentaria_nome_duplicado(
+            entidade_id,
+            nome
+        ):
+
+            st.warning(
+                "⚠️ Já existe uma Unidade Orçamentária "
+                "com esse nome nesta entidade."
+            )
+
+            return
+
+        # ====================================================
+        # CÓDIGO TCE DUPLICADO
+        # ====================================================
+
+        if codigo_tce:
+
+            codigo_tce_existente = _sisget_fetchone(
+                """
+                SELECT id
+                FROM unidades_orcamentarias
+                WHERE entidade_id = ?
+                  AND codigo_tce = ?
+                """,
+                (
+                    entidade_id,
+                    codigo_tce
+                )
+            )
+
+            if codigo_tce_existente:
+
+                st.warning(
+                    "⚠️ Esse Código TCE já está cadastrado "
+                    "nesta entidade."
+                )
+
+                return
+
+        # ====================================================
+        # RECALCULAR CÓDIGO
+        # ====================================================
+
+        codigo = (
+            sisget_proximo_codigo_unidade_orcamentaria(
+                entidade_id
+            )
+        )
+
+        if not codigo:
+
+            st.error(
+                "❌ Não foi possível gerar o código."
+            )
+
+            return
+
+        # ====================================================
+        # INSERT
+        # ====================================================
+
+        sucesso = _sisget_salvar(
+            """
+            INSERT INTO unidades_orcamentarias
+            (
+                entidade_id,
+                orgao_id,
+                codigo,
+                nome,
+                ativo,
+                codigo_tce,
+                identificador_fundo,
+                data_envio_tce
+            )
+            VALUES
+            (
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?
+            )
+            """,
+            (
+                entidade_id,
+                orgao_id,
+                codigo,
+                nome,
+                ativo,
+                codigo_tce if codigo_tce else None,
+                identificador_fundo,
+                data_envio_tce
+            )
+        )
+
+        if sucesso:
+
+            st.success(
+                "✅ Unidade Orçamentária cadastrada "
+                f"com sucesso! Código: {codigo}"
+            )
+
+
+# ============================================================
+# UNIDADE ORÇAMENTÁRIA - LOCALIZAR
+# ============================================================
+
+def unidade_orcamentaria_localizar():
+
+    st.subheader(
+        "🔎 Localizar Unidades Orçamentárias"
+    )
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        filtro_nome = st.text_input(
+            "Nome",
+            key="uo_localizar_nome"
+        )
+
+    with col2:
+
+        filtro_situacao = st.selectbox(
+            "Situação",
+            [
+                "Todas",
+                "Ativas",
+                "Inativas"
+            ],
+            key="uo_localizar_situacao"
+        )
+
+    sql = """
+        SELECT
+            u.id,
+
+            o.codigo || ' - ' || o.nome
+                AS "Órgão",
+
+            e.codigo || ' - ' || e.nome
+                AS "Entidade",
+
+            u.codigo
+                AS "Código",
+
+            u.nome
+                AS "Unidade Orçamentária",
+
+            COALESCE(
+                u.codigo_tce,
+                ''
+            ) AS "Código TCE",
+
+            u.identificador_fundo
+                AS "Identificador",
+
+            u.data_envio_tce
+                AS "Envio TCE",
+
+            CASE
+                WHEN u.ativo = TRUE
+                    THEN 'Ativa'
+                ELSE 'Inativa'
+            END AS "Situação"
+
+        FROM unidades_orcamentarias u
+
+        INNER JOIN entidades e
+            ON e.id = u.entidade_id
+
+        INNER JOIN orgaos o
+            ON o.id = u.orgao_id
+
+        WHERE 1 = 1
+    """
+
+    parametros = []
+
+    if filtro_nome.strip():
+
+        sql += """
+            AND u.nome ILIKE ?
+        """
+
+        parametros.append(
+            f"%{filtro_nome.strip()}%"
+        )
+
+    if filtro_situacao == "Ativas":
+
+        sql += """
+            AND u.ativo = TRUE
+        """
+
+    elif filtro_situacao == "Inativas":
+
+        sql += """
+            AND u.ativo = FALSE
+        """
+
+    sql += """
+        ORDER BY
+            o.codigo,
+            e.codigo,
+            u.codigo
+    """
+
+    df = _sisget_dataframe(
+        sql,
+        tuple(parametros)
+    )
+
+    if df.empty:
+
+        st.info(
+            "Nenhuma Unidade Orçamentária encontrada."
+        )
+
+        return None
+
+    st.caption(
+        f"Registros encontrados: {len(df)}"
+    )
+
+    return sisget_grid_localizar(
+        df=df,
+        chave="unidades_orcamentarias",
+        coluna_id="id",
+        altura=420
+    )
+
+
+# ============================================================
+# UNIDADE ORÇAMENTÁRIA - ALTERAR
+# ============================================================
+
+def unidade_orcamentaria_alterar(
+    unidade_id
+):
+
+    registro = _sisget_fetchone(
+        """
+        SELECT
+            u.id,
+            u.entidade_id,
+            u.orgao_id,
+            u.codigo,
+            u.nome,
+            u.ativo,
+            u.codigo_tce,
+            u.identificador_fundo,
+            u.data_envio_tce,
+            e.codigo,
+            e.nome,
+            o.codigo,
+            o.nome
+
+        FROM unidades_orcamentarias u
+
+        INNER JOIN entidades e
+            ON e.id = u.entidade_id
+
+        INNER JOIN orgaos o
+            ON o.id = u.orgao_id
+
+        WHERE u.id = ?
+        """,
+        (
+            unidade_id,
+        )
+    )
+
+    if not registro:
+
+        st.error(
+            "❌ Unidade Orçamentária não encontrada."
+        )
+
+        return
+
+    (
+        id_unidade,
+        entidade_id,
+        orgao_id,
+        codigo_atual,
+        nome_atual,
+        ativo_atual,
+        codigo_tce_atual,
+        identificador_atual,
+        data_envio_atual,
+        codigo_entidade,
+        nome_entidade,
+        codigo_orgao,
+        nome_orgao
+    ) = registro
+
+    # ========================================================
+    # SITUAÇÃO
+    # ========================================================
+
+    if ativo_atual:
+
+        st.success(
+            "🟢 Situação: ATIVA"
+        )
+
+    else:
+
+        st.warning(
+            "🔴 Situação: INATIVA"
+        )
+
+    st.text_input(
+        "Órgão",
+        value=(
+            f"{codigo_orgao} - {nome_orgao}"
+        ),
+        disabled=True
+    )
+
+    st.text_input(
+        "Entidade",
+        value=(
+            f"{codigo_entidade} - {nome_entidade}"
+        ),
+        disabled=True
+    )
+
+    # ========================================================
+    # FORMULÁRIO
+    # ========================================================
+
+    with st.form(
+        f"form_uo_alterar_{unidade_id}"
+    ):
+
+        st.text_input(
+            "Código",
+            value=codigo_atual or "",
+            disabled=True
+        )
+
+        nome = st.text_input(
+            "Nome da Unidade Orçamentária *",
+            value=nome_atual or "",
+            max_chars=200
+        )
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+
+            codigo_tce = st.text_input(
+                "Código TCE",
+                value=codigo_tce_atual or "",
+                max_chars=20
+            )
+
+        identificadores = [
+            0,
+            1,
+            2,
+            3,
+            4,
+            99
+        ]
+
+        try:
+
+            indice_identificador = (
+                identificadores.index(
+                    int(
+                        identificador_atual
+                        if identificador_atual is not None
+                        else 0
+                    )
+                )
+            )
+
+        except (
+            ValueError,
+            TypeError
+        ):
+
+            indice_identificador = 0
+
+        with col2:
+
+            identificador_fundo = st.selectbox(
+                "Identificador",
+                identificadores,
+                index=indice_identificador
+            )
+
+        data_envio_tce = st.date_input(
+            "Data de envio ao TCE",
+            value=data_envio_atual
+        )
+
+        st.markdown("---")
+
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+
+            salvar = st.form_submit_button(
+                "💾 Salvar",
+                type="primary",
+                use_container_width=True
+            )
+
+        with col2:
+
+            if ativo_atual:
+
+                alterar_status = st.form_submit_button(
+                    "🚫 Inativar",
+                    use_container_width=True
+                )
+
+            else:
+
+                alterar_status = st.form_submit_button(
+                    "✅ Ativar",
+                    use_container_width=True
+                )
+
+        with col3:
+
+            excluir = st.form_submit_button(
+                "🗑️ Excluir",
+                use_container_width=True
+            )
+
+        with col4:
+
+            cancelar = st.form_submit_button(
+                "❌ Cancelar",
+                use_container_width=True
+            )
+
+    # ========================================================
+    # CANCELAR
+    # ========================================================
+
+    if cancelar:
+
+        st.session_state[
+            "sisget_id_unidades_orcamentarias"
+        ] = None
+
+        st.session_state[
+            "sisget_tela_unidades_orcamentarias"
+        ] = "localizar"
+
+        st.rerun()
+
+    # ========================================================
+    # ATIVAR / INATIVAR
+    # ========================================================
+
+    if alterar_status:
+
+        sucesso = _sisget_salvar(
+            """
+            UPDATE unidades_orcamentarias
+            SET ativo = ?
+            WHERE id = ?
+            """,
+            (
+                not ativo_atual,
+                unidade_id
+            )
+        )
+
+        if sucesso:
+
+            st.session_state[
+                "sisget_id_unidades_orcamentarias"
+            ] = None
+
+            st.session_state[
+                "sisget_tela_unidades_orcamentarias"
+            ] = "localizar"
+
+            st.rerun()
+
+        return
+
+    # ========================================================
+    # EXCLUIR
+    # ========================================================
+
+    if excluir:
+
+        try:
+
+            cursor.execute(
+                """
+                DELETE FROM unidades_orcamentarias
+                WHERE id = ?
+                """,
+                (
+                    unidade_id,
+                )
+            )
+
+            conn.commit()
+
+            st.session_state[
+                "sisget_id_unidades_orcamentarias"
+            ] = None
+
+            st.session_state[
+                "sisget_tela_unidades_orcamentarias"
+            ] = "localizar"
+
+            st.rerun()
+
+        except Exception as erro:
+
+            conn.rollback()
+
+            st.error(
+                "❌ Não foi possível excluir a Unidade "
+                f"Orçamentária: {erro}"
+            )
+
+        return
+
+    # ========================================================
+    # SALVAR
+    # ========================================================
+
+    if salvar:
+
+        nome = nome.strip()
+        codigo_tce = codigo_tce.strip()
+
+        if not nome:
+
+            st.warning(
+                "⚠️ Informe o nome da Unidade Orçamentária."
+            )
+
+            return
+
+        if unidade_orcamentaria_nome_duplicado(
+            entidade_id,
+            nome,
+            unidade_id
+        ):
+
+            st.warning(
+                "⚠️ Já existe outra Unidade Orçamentária "
+                "com esse nome nesta entidade."
+            )
+
+            return
+
+        if codigo_tce:
+
+            codigo_tce_existente = _sisget_fetchone(
+                """
+                SELECT id
+                FROM unidades_orcamentarias
+                WHERE entidade_id = ?
+                  AND codigo_tce = ?
+                  AND id <> ?
+                """,
+                (
+                    entidade_id,
+                    codigo_tce,
+                    unidade_id
+                )
+            )
+
+            if codigo_tce_existente:
+
+                st.warning(
+                    "⚠️ Esse Código TCE já está cadastrado "
+                    "nesta entidade."
+                )
+
+                return
+
+        sucesso = _sisget_salvar(
+            """
+            UPDATE unidades_orcamentarias
+            SET
+                nome = ?,
+                codigo_tce = ?,
+                identificador_fundo = ?,
+                data_envio_tce = ?
+            WHERE id = ?
+            """,
+            (
+                nome,
+                codigo_tce if codigo_tce else None,
+                identificador_fundo,
+                data_envio_tce,
+                unidade_id
+            )
+        )
+
+        if sucesso:
+
+            st.session_state[
+                "sisget_id_unidades_orcamentarias"
+            ] = None
+
+            st.session_state[
+                "sisget_tela_unidades_orcamentarias"
+            ] = "localizar"
+
+            st.rerun()
+
+
+# ============================================================
+# UNIDADE ORÇAMENTÁRIA - EXCLUIR
+# ============================================================
+
+def unidade_orcamentaria_excluir():
+
+    st.subheader(
+        "🗑️ Excluir Unidade Orçamentária"
+    )
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            u.id,
+
+            o.codigo || ' - ' || o.nome
+                AS "Órgão",
+
+            e.codigo || ' - ' || e.nome
+                AS "Entidade",
+
+            u.codigo
+                AS "Código",
+
+            u.nome
+                AS "Unidade Orçamentária",
+
+            CASE
+                WHEN u.ativo = TRUE
+                    THEN 'Ativa'
+                ELSE 'Inativa'
+            END AS "Situação"
+
+        FROM unidades_orcamentarias u
+
+        INNER JOIN entidades e
+            ON e.id = u.entidade_id
+
+        INNER JOIN orgaos o
+            ON o.id = u.orgao_id
+
+        ORDER BY
+            o.codigo,
+            e.codigo,
+            u.codigo
+        """
+    )
+
+    if df.empty:
+
+        st.info(
+            "Nenhuma Unidade Orçamentária cadastrada."
+        )
+
+        return
+
+    registro_id = sisget_grid_localizar(
+        df=df,
+        chave="excluir_unidades_orcamentarias",
+        coluna_id="id",
+        altura=420
+    )
+
+    if not registro_id:
+
+        st.caption(
+            "Dê duplo clique na Unidade Orçamentária "
+            "que deseja excluir."
+        )
+
+        return
+
+    unidade = _sisget_fetchone(
+        """
+        SELECT
+            codigo,
+            nome
+        FROM unidades_orcamentarias
+        WHERE id = ?
+        """,
+        (
+            registro_id,
+        )
+    )
+
+    if not unidade:
+
+        return
+
+    codigo = unidade[0]
+    nome = unidade[1]
+
+    st.markdown("---")
+
+    st.error(
+        f"⚠️ Você está prestes a excluir "
+        f"**{codigo} - {nome}**."
+    )
+
+    confirmar = st.checkbox(
+        "Confirmo que desejo excluir esta Unidade Orçamentária.",
+        key=f"confirmar_exclusao_uo_{registro_id}"
+    )
+
+    if st.button(
+        "🗑️ Confirmar Exclusão",
+        type="primary",
+        use_container_width=True,
+        key=f"btn_excluir_uo_{registro_id}"
+    ):
+
+        if not confirmar:
+
+            st.warning(
+                "⚠️ Marque a confirmação antes de excluir."
+            )
+
+            return
+
+        try:
+
+            cursor.execute(
+                """
+                DELETE FROM unidades_orcamentarias
+                WHERE id = ?
+                """,
+                (
+                    registro_id,
+                )
+            )
+
+            conn.commit()
+
+            st.success(
+                "✅ Unidade Orçamentária excluída com sucesso!"
+            )
+
+            st.session_state[
+                "sisget_tela_unidades_orcamentarias"
+            ] = "principal"
+
+            st.session_state[
+                "sisget_id_unidades_orcamentarias"
+            ] = None
+
+            st.rerun()
+
+        except Exception as erro:
+
+            conn.rollback()
+
+            st.error(
+                "❌ Não foi possível excluir a Unidade "
+                f"Orçamentária: {erro}"
+            )
 
 def cadastro_unidades_administrativas():
 
