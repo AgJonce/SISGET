@@ -2144,6 +2144,10 @@ def sisget_proximo_codigo_entidade(
 # ENTIDADES - INCLUIR
 # ============================================================
 
+# ============================================================
+# ENTIDADES - INCLUIR
+# ============================================================
+
 def entidade_incluir():
 
     st.subheader(
@@ -2179,7 +2183,7 @@ def entidade_incluir():
         return
 
     # ========================================================
-    # OPÇÕES
+    # OPÇÕES DE ÓRGÃOS
     # ========================================================
 
     opcoes_orgaos = {
@@ -2205,7 +2209,7 @@ def entidade_incluir():
     )
 
     # ========================================================
-    # CÓDIGO AUTOMÁTICO
+    # GERAR CÓDIGO
     # ========================================================
 
     codigo = (
@@ -2279,7 +2283,7 @@ def entidade_incluir():
         cnpj = cnpj.strip()
 
         # ====================================================
-        # NOME
+        # NOME OBRIGATÓRIO
         # ====================================================
 
         if not nome:
@@ -2291,7 +2295,7 @@ def entidade_incluir():
             return
 
         # ====================================================
-        # NOME DUPLICADO
+        # NOME DUPLICADO NO MESMO ÓRGÃO
         # ====================================================
 
         nome_existente = _sisget_fetchone(
@@ -2366,7 +2370,7 @@ def entidade_incluir():
             return
 
         # ====================================================
-        # VERIFICAR CÓDIGO
+        # CÓDIGO DUPLICADO
         # ====================================================
 
         codigo_existente = _sisget_fetchone(
@@ -2392,7 +2396,46 @@ def entidade_incluir():
         # INSERT
         # ====================================================
 
-        sucesso = _
+        sucesso = _sisget_salvar(
+            """
+            INSERT INTO entidades
+            (
+                orgao_id,
+                codigo,
+                nome,
+                cnpj,
+                tipo_entidade,
+                ativo
+            )
+            VALUES
+            (
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?
+            )
+            """,
+            (
+                orgao_id,
+                codigo,
+                nome,
+                cnpj if cnpj else None,
+                tipo_entidade,
+                ativo
+            )
+        )
+
+        # ====================================================
+        # SUCESSO
+        # ====================================================
+
+        if sucesso:
+
+            st.success(
+                f"✅ Entidade cadastrada com sucesso! Código: {codigo}"
+            )
 def validar_cnpj(cnpj):
 
     cnpj = "".join(
