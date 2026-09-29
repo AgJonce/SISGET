@@ -9416,13 +9416,1490 @@ def unidade_administrativa_imprimir():
         )
 
 
+# ============================================================
+# CADASTRO DE SETORES
+# ============================================================
+
 def cadastro_setores():
 
-    modulo_em_desenvolvimento(
-        "Cadastro de Setores",
-        "🧩"
+    sisget_tela_principal(
+        titulo="Cadastro de Setores",
+        chave="setores",
+        func_incluir=setor_incluir,
+        func_localizar=setor_localizar,
+        func_alterar=setor_alterar,
+        func_excluir=setor_excluir,
+        func_imprimir=setor_imprimir,
+        icone="🧩"
     )
 
+
+# ============================================================
+# PRÓXIMO CÓDIGO DO SETOR
+#
+# UA:
+# 001.001.001.001
+#
+# SETOR:
+# 001.001.001.001.001
+# 001.001.001.001.002
+#
+# ============================================================
+
+def sisget_proximo_codigo_setor(
+    unidade_administrativa_id
+):
+
+    unidade = _sisget_fetchone(
+        """
+        SELECT codigo
+        FROM unidades_administrativas
+        WHERE id = ?
+        """,
+        (
+            unidade_administrativa_id,
+        )
+    )
+
+    if not unidade:
+
+        return None
+
+    codigo_unidade = str(
+        unidade[0] or ""
+    ).strip()
+
+    dados = _sisget_fetch(
+        """
+        SELECT codigo
+        FROM setores
+        WHERE unidade_administrativa_id = ?
+        ORDER BY codigo
+        """,
+        (
+            unidade_administrativa_id,
+        )
+    )
+
+    numeros_usados = set()
+
+    for registro in dados:
+
+        codigo = str(
+            registro[0] or ""
+        ).strip()
+
+        try:
+
+            parte = (
+                codigo.split(".")[-1]
+            )
+
+            numeros_usados.add(
+                int(parte)
+            )
+
+        except (
+            ValueError,
+            TypeError
+        ):
+
+            pass
+
+    proximo = 1
+
+    while proximo in numeros_usados:
+
+        proximo += 1
+
+    numero_setor = str(
+        proximo
+    ).zfill(3)
+
+    return (
+        f"{codigo_unidade}.{numero_setor}"
+    )
+
+
+# ============================================================
+# VALIDAR NOME DUPLICADO
+# ============================================================
+
+def setor_nome_duplicado(
+    unidade_administrativa_id,
+    nome,
+    setor_id=None
+):
+
+    nome = nome.strip()
+
+    if setor_id is None:
+
+        resultado = _sisget_fetchone(
+            """
+            SELECT id
+            FROM setores
+            WHERE unidade_administrativa_id = ?
+              AND LOWER(TRIM(nome)) = LOWER(TRIM(?))
+            """,
+            (
+                unidade_administrativa_id,
+                nome
+            )
+        )
+
+    else:
+
+        resultado = _sisget_fetchone(
+            """
+            SELECT id
+            FROM setores
+            WHERE unidade_administrativa_id = ?
+              AND LOWER(TRIM(nome)) = LOWER(TRIM(?))
+              AND id <> ?
+            """,
+            (
+                unidade_administrativa_id,
+                nome,
+                setor_id
+            )
+        )
+
+    return resultado is not None
+
+
+# ============================================================
+# SETOR - INCLUIR
+# ============================================================
+
+def setor_incluir():
+
+    st.subheader(
+        "🧩 Dados do Setor"
+    )
+
+    unidades = _sisget_fetch(
+        """
+        SELECT
+            a.id,
+            a.codigo,
+            a.nome,
+
+            e.id,
+            e.codigo,
+            e.nome,
+
+            o.codigo,
+            o.nome
+
+        FROM unidades_administrativas a
+
+        INNER JOIN entidades e
+            ON e.id = a.entidade_id
+
+        INNER JOIN orgaos o
+            ON o.id = a.orgao_id
+
+        WHERE a.ativo = TRUE
+          AND e.ativo = TRUE
+          AND o.ativo = TRUE
+
+        ORDER BY
+            o.codigo,
+            e.codigo,
+            a.codigo
+        """
+    )
+
+    if not unidades:
+
+        st.warning(
+            "⚠️ Nenhuma Unidade Administrativa ativa cadastrada."
+        )
+
+        return
+
+    opcoes = {}
+
+    for (
+        ua_id,
+        codigo_ua,
+        nome_ua,
+        entidade_id,
+        codigo_entidade,
+        nome_entidade,
+        codigo_orgao,
+        nome_orgao
+    ) in unidades:
+
+        descricao = (
+            f"{codigo_orgao} - {nome_orgao}"
+            f" → "
+            f"{codigo_entidade} - {nome_entidade}"
+            f" → "
+            f"{codigo_ua} - {nome_ua}"
+        )
+
+        opcoes[
+            descricao
+        ] = (
+            ua_id,
+            entidade_id
+        )
+
+    unidade_selecionada = st.selectbox(
+        "Unidade Administrativa *",
+        list(
+            opcoes.keys()
+        ),
+        key="setor_incluir_ua"
+    )
+
+    (
+        unidade_administrativa_id,
+        entidade_id
+    ) = opcoes[
+        unidade_selecionada
+    ]
+
+    codigo = (
+        sisget_proximo_codigo_setor(
+            unidade_administrativa_id
+        )
+    )
+
+    st.info(
+        f"🔢 Código automático: {codigo}"
+    )
+
+    # ========================================================
+    # SETORES SUPERIORES
+    # ========================================================
+
+    setores_superiores = _sisget_fetch(
+        """
+        SELECT
+            id,
+            codigo,
+            nome
+        FROM setores
+        WHERE unidade_administrativa_id = ?
+          AND ativo = TRUE
+        ORDER BY codigo
+        """,
+        (
+            unidade_administrativa_id,
+        )
+    )
+
+    opcoes_superiores = {
+        "Sem setor superior": None
+    }
+
+    for setor_id, codigo_setor, nome_setor in setores_superiores:
+
+        opcoes_superiores[
+            f"{codigo_setor} - {nome_setor}"
+        ] = setor_id
+
+    # ========================================================
+    # FORMULÁRIO
+    # ========================================================
+
+    with st.form(
+        "form_setor_incluir",
+        clear_on_submit=True
+    ):
+
+        setor_superior = st.selectbox(
+            "Setor superior",
+            list(
+                opcoes_superiores.keys()
+            )
+        )
+
+        nome = st.text_input(
+            "Nome do Setor *",
+            max_chars=200
+        )
+
+        sigla = st.text_input(
+            "Sigla",
+            max_chars=30
+        )
+
+        ativo = st.checkbox(
+            "Setor ativo",
+            value=True
+        )
+
+        st.markdown("---")
+
+        salvar = st.form_submit_button(
+            "💾 Salvar",
+            type="primary",
+            use_container_width=True
+        )
+
+    if salvar:
+
+        nome = nome.strip()
+        sigla = sigla.strip()
+
+        if not nome:
+
+            st.warning(
+                "⚠️ Informe o nome do setor."
+            )
+
+            return
+
+        if setor_nome_duplicado(
+            unidade_administrativa_id,
+            nome
+        ):
+
+            st.warning(
+                "⚠️ Já existe um setor com esse nome "
+                "nesta Unidade Administrativa."
+            )
+
+            return
+
+        codigo = (
+            sisget_proximo_codigo_setor(
+                unidade_administrativa_id
+            )
+        )
+
+        if not codigo:
+
+            st.error(
+                "❌ Não foi possível gerar o código do setor."
+            )
+
+            return
+
+        setor_pai_id = (
+            opcoes_superiores[
+                setor_superior
+            ]
+        )
+
+        sucesso = _sisget_salvar(
+            """
+            INSERT INTO setores
+            (
+                entidade_id,
+                unidade_administrativa_id,
+                setor_pai_id,
+                codigo,
+                nome,
+                sigla,
+                ativo
+            )
+            VALUES
+            (
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?
+            )
+            """,
+            (
+                entidade_id,
+                unidade_administrativa_id,
+                setor_pai_id,
+                codigo,
+                nome,
+                sigla if sigla else None,
+                ativo
+            )
+        )
+
+        if sucesso:
+
+            st.success(
+                f"✅ Setor cadastrado com sucesso! Código: {codigo}"
+            )
+
+
+# ============================================================
+# SETOR - LOCALIZAR
+# ============================================================
+
+def setor_localizar():
+
+    st.subheader(
+        "🔎 Localizar Setores"
+    )
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        filtro_nome = st.text_input(
+            "Nome do Setor",
+            key="setor_localizar_nome"
+        )
+
+    with col2:
+
+        filtro_situacao = st.selectbox(
+            "Situação",
+            [
+                "Todos",
+                "Ativos",
+                "Inativos"
+            ],
+            key="setor_localizar_situacao"
+        )
+
+    sql = """
+        SELECT
+            s.id,
+
+            e.codigo || ' - ' || e.nome
+                AS "Entidade",
+
+            a.codigo || ' - ' || a.nome
+                AS "Unidade Administrativa",
+
+            COALESCE(
+                p.codigo || ' - ' || p.nome,
+                ''
+            ) AS "Setor Superior",
+
+            s.codigo
+                AS "Código",
+
+            s.nome
+                AS "Setor",
+
+            COALESCE(
+                s.sigla,
+                ''
+            ) AS "Sigla",
+
+            CASE
+                WHEN s.ativo = TRUE
+                    THEN 'Ativo'
+                ELSE 'Inativo'
+            END AS "Situação"
+
+        FROM setores s
+
+        INNER JOIN entidades e
+            ON e.id = s.entidade_id
+
+        INNER JOIN unidades_administrativas a
+            ON a.id = s.unidade_administrativa_id
+
+        LEFT JOIN setores p
+            ON p.id = s.setor_pai_id
+
+        WHERE 1 = 1
+    """
+
+    parametros = []
+
+    if filtro_nome.strip():
+
+        sql += """
+            AND s.nome ILIKE ?
+        """
+
+        parametros.append(
+            f"%{filtro_nome.strip()}%"
+        )
+
+    if filtro_situacao == "Ativos":
+
+        sql += """
+            AND s.ativo = TRUE
+        """
+
+    elif filtro_situacao == "Inativos":
+
+        sql += """
+            AND s.ativo = FALSE
+        """
+
+    sql += """
+        ORDER BY
+            e.codigo,
+            a.codigo,
+            s.codigo
+    """
+
+    df = _sisget_dataframe(
+        sql,
+        tuple(parametros)
+    )
+
+    if df.empty:
+
+        st.info(
+            "Nenhum setor encontrado."
+        )
+
+        return None
+
+    st.caption(
+        f"Registros encontrados: {len(df)}"
+    )
+
+    return sisget_grid_localizar(
+        df=df,
+        chave="setores",
+        coluna_id="id",
+        altura=420
+    )
+
+
+# ============================================================
+# SETOR - ALTERAR
+# ============================================================
+
+def setor_alterar(
+    setor_id
+):
+
+    registro = _sisget_fetchone(
+        """
+        SELECT
+            s.id,
+            s.entidade_id,
+            s.unidade_administrativa_id,
+            s.setor_pai_id,
+            s.codigo,
+            s.nome,
+            s.sigla,
+            s.ativo,
+
+            a.codigo,
+            a.nome,
+
+            e.codigo,
+            e.nome
+
+        FROM setores s
+
+        INNER JOIN entidades e
+            ON e.id = s.entidade_id
+
+        INNER JOIN unidades_administrativas a
+            ON a.id = s.unidade_administrativa_id
+
+        WHERE s.id = ?
+        """,
+        (
+            setor_id,
+        )
+    )
+
+    if not registro:
+
+        st.error(
+            "❌ Setor não encontrado."
+        )
+
+        return
+
+    (
+        id_setor,
+        entidade_id,
+        unidade_administrativa_id,
+        setor_pai_id,
+        codigo_atual,
+        nome_atual,
+        sigla_atual,
+        ativo_atual,
+        codigo_ua,
+        nome_ua,
+        codigo_entidade,
+        nome_entidade
+    ) = registro
+
+    if ativo_atual:
+
+        st.success(
+            "🟢 Situação: ATIVO"
+        )
+
+    else:
+
+        st.warning(
+            "🔴 Situação: INATIVO"
+        )
+
+    st.text_input(
+        "Entidade",
+        value=(
+            f"{codigo_entidade} - {nome_entidade}"
+        ),
+        disabled=True
+    )
+
+    st.text_input(
+        "Unidade Administrativa",
+        value=(
+            f"{codigo_ua} - {nome_ua}"
+        ),
+        disabled=True
+    )
+
+    setores_superiores = _sisget_fetch(
+        """
+        SELECT
+            id,
+            codigo,
+            nome
+        FROM setores
+        WHERE unidade_administrativa_id = ?
+          AND id <> ?
+        ORDER BY codigo
+        """,
+        (
+            unidade_administrativa_id,
+            setor_id
+        )
+    )
+
+    opcoes_superiores = {
+        "Sem setor superior": None
+    }
+
+    indice_atual = 0
+
+    for sid, codigo, nome in setores_superiores:
+
+        descricao = (
+            f"{codigo} - {nome}"
+        )
+
+        opcoes_superiores[
+            descricao
+        ] = sid
+
+    lista_superiores = list(
+        opcoes_superiores.keys()
+    )
+
+    if setor_pai_id is not None:
+
+        for i, descricao in enumerate(
+            lista_superiores
+        ):
+
+            if (
+                opcoes_superiores[
+                    descricao
+                ] == setor_pai_id
+            ):
+
+                indice_atual = i
+
+                break
+
+    with st.form(
+        f"form_setor_alterar_{setor_id}"
+    ):
+
+        st.text_input(
+            "Código",
+            value=codigo_atual or "",
+            disabled=True
+        )
+
+        setor_superior = st.selectbox(
+            "Setor superior",
+            lista_superiores,
+            index=indice_atual
+        )
+
+        nome = st.text_input(
+            "Nome do Setor *",
+            value=nome_atual or "",
+            max_chars=200
+        )
+
+        sigla = st.text_input(
+            "Sigla",
+            value=sigla_atual or "",
+            max_chars=30
+        )
+
+        st.markdown("---")
+
+        col1, col2, col3, col4 = (
+            st.columns(4)
+        )
+
+        with col1:
+
+            salvar = st.form_submit_button(
+                "💾 Salvar",
+                type="primary",
+                use_container_width=True
+            )
+
+        with col2:
+
+            if ativo_atual:
+
+                alterar_status = st.form_submit_button(
+                    "🚫 Inativar",
+                    use_container_width=True
+                )
+
+            else:
+
+                alterar_status = st.form_submit_button(
+                    "✅ Ativar",
+                    use_container_width=True
+                )
+
+        with col3:
+
+            excluir = st.form_submit_button(
+                "🗑️ Excluir",
+                use_container_width=True
+            )
+
+        with col4:
+
+            cancelar = st.form_submit_button(
+                "❌ Cancelar",
+                use_container_width=True
+            )
+
+    if cancelar:
+
+        st.session_state[
+            "sisget_id_setores"
+        ] = None
+
+        st.session_state[
+            "sisget_tela_setores"
+        ] = "localizar"
+
+        st.rerun()
+
+    if alterar_status:
+
+        sucesso = _sisget_salvar(
+            """
+            UPDATE setores
+            SET ativo = ?
+            WHERE id = ?
+            """,
+            (
+                not ativo_atual,
+                setor_id
+            )
+        )
+
+        if sucesso:
+
+            st.session_state[
+                "sisget_id_setores"
+            ] = None
+
+            st.session_state[
+                "sisget_tela_setores"
+            ] = "localizar"
+
+            st.rerun()
+
+        return
+
+    if excluir:
+
+        filhos = _sisget_fetchone(
+            """
+            SELECT COUNT(*)
+            FROM setores
+            WHERE setor_pai_id = ?
+            """,
+            (
+                setor_id,
+            )
+        )
+
+        quantidade_filhos = (
+            filhos[0]
+            if filhos
+            else 0
+        )
+
+        if quantidade_filhos > 0:
+
+            st.error(
+                "❌ Não é possível excluir este setor porque "
+                f"existem {quantidade_filhos} subsetor(es) vinculados."
+            )
+
+            return
+
+        try:
+
+            cursor.execute(
+                """
+                DELETE FROM setores
+                WHERE id = ?
+                """,
+                (
+                    setor_id,
+                )
+            )
+
+            conn.commit()
+
+            st.session_state[
+                "sisget_id_setores"
+            ] = None
+
+            st.session_state[
+                "sisget_tela_setores"
+            ] = "localizar"
+
+            st.rerun()
+
+        except Exception as erro:
+
+            conn.rollback()
+
+            st.error(
+                f"❌ Não foi possível excluir o setor: {erro}"
+            )
+
+        return
+
+    if salvar:
+
+        nome = nome.strip()
+        sigla = sigla.strip()
+
+        if not nome:
+
+            st.warning(
+                "⚠️ Informe o nome do setor."
+            )
+
+            return
+
+        if setor_nome_duplicado(
+            unidade_administrativa_id,
+            nome,
+            setor_id
+        ):
+
+            st.warning(
+                "⚠️ Já existe outro setor com esse nome "
+                "nesta Unidade Administrativa."
+            )
+
+            return
+
+        novo_setor_pai_id = (
+            opcoes_superiores[
+                setor_superior
+            ]
+        )
+
+        sucesso = _sisget_salvar(
+            """
+            UPDATE setores
+            SET
+                setor_pai_id = ?,
+                nome = ?,
+                sigla = ?
+            WHERE id = ?
+            """,
+            (
+                novo_setor_pai_id,
+                nome,
+                sigla if sigla else None,
+                setor_id
+            )
+        )
+
+        if sucesso:
+
+            st.session_state[
+                "sisget_id_setores"
+            ] = None
+
+            st.session_state[
+                "sisget_tela_setores"
+            ] = "localizar"
+
+            st.rerun()
+
+
+# ============================================================
+# SETOR - EXCLUIR
+# ============================================================
+
+def setor_excluir():
+
+    st.subheader(
+        "🗑️ Excluir Setor"
+    )
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            s.id,
+
+            e.codigo || ' - ' || e.nome
+                AS "Entidade",
+
+            a.codigo || ' - ' || a.nome
+                AS "Unidade Administrativa",
+
+            s.codigo
+                AS "Código",
+
+            s.nome
+                AS "Setor",
+
+            COALESCE(
+                s.sigla,
+                ''
+            ) AS "Sigla",
+
+            CASE
+                WHEN s.ativo = TRUE
+                    THEN 'Ativo'
+                ELSE 'Inativo'
+            END AS "Situação"
+
+        FROM setores s
+
+        INNER JOIN entidades e
+            ON e.id = s.entidade_id
+
+        INNER JOIN unidades_administrativas a
+            ON a.id = s.unidade_administrativa_id
+
+        ORDER BY
+            e.codigo,
+            a.codigo,
+            s.codigo
+        """
+    )
+
+    if df.empty:
+
+        st.info(
+            "Nenhum setor cadastrado."
+        )
+
+        return
+
+    registro_id = sisget_grid_localizar(
+        df=df,
+        chave="excluir_setores",
+        coluna_id="id",
+        altura=420
+    )
+
+    if not registro_id:
+
+        st.caption(
+            "Dê duplo clique no setor que deseja excluir."
+        )
+
+        return
+
+    setor = _sisget_fetchone(
+        """
+        SELECT
+            codigo,
+            nome
+        FROM setores
+        WHERE id = ?
+        """,
+        (
+            registro_id,
+        )
+    )
+
+    if not setor:
+
+        return
+
+    codigo = setor[0]
+    nome = setor[1]
+
+    filhos = _sisget_fetchone(
+        """
+        SELECT COUNT(*)
+        FROM setores
+        WHERE setor_pai_id = ?
+        """,
+        (
+            registro_id,
+        )
+    )
+
+    quantidade_filhos = (
+        filhos[0]
+        if filhos
+        else 0
+    )
+
+    st.markdown("---")
+
+    st.error(
+        f"⚠️ Você está prestes a excluir "
+        f"**{codigo} - {nome}**."
+    )
+
+    if quantidade_filhos > 0:
+
+        st.warning(
+            "⚠️ Este setor possui "
+            f"{quantidade_filhos} subsetor(es) vinculado(s)."
+        )
+
+        return
+
+    confirmar = st.checkbox(
+        "Confirmo que desejo excluir este setor.",
+        key=f"confirmar_setor_{registro_id}"
+    )
+
+    if st.button(
+        "🗑️ Confirmar Exclusão",
+        type="primary",
+        use_container_width=True,
+        key=f"btn_excluir_setor_{registro_id}"
+    ):
+
+        if not confirmar:
+
+            st.warning(
+                "⚠️ Marque a confirmação antes de excluir."
+            )
+
+            return
+
+        try:
+
+            cursor.execute(
+                """
+                DELETE FROM setores
+                WHERE id = ?
+                """,
+                (
+                    registro_id,
+                )
+            )
+
+            conn.commit()
+
+            st.success(
+                "✅ Setor excluído com sucesso!"
+            )
+
+            st.session_state[
+                "sisget_tela_setores"
+            ] = "principal"
+
+            st.session_state[
+                "sisget_id_setores"
+            ] = None
+
+            st.rerun()
+
+        except Exception as erro:
+
+            conn.rollback()
+
+            st.error(
+                f"❌ Não foi possível excluir o setor: {erro}"
+            )
+
+
+# ============================================================
+# SETOR - IMPRIMIR
+# ============================================================
+
+def setor_imprimir():
+
+    st.subheader(
+        "🖨️ Relatório de Setores"
+    )
+
+    situacao = st.selectbox(
+        "Situação",
+        [
+            "Todos",
+            "Ativos",
+            "Inativos"
+        ],
+        key="setor_imprimir_situacao"
+    )
+
+    sql = """
+        SELECT
+            e.codigo,
+            e.nome,
+
+            a.codigo,
+            a.nome,
+
+            s.codigo,
+            s.nome,
+
+            COALESCE(
+                s.sigla,
+                ''
+            ),
+
+            COALESCE(
+                p.codigo || ' - ' || p.nome,
+                ''
+            ),
+
+            s.ativo
+
+        FROM setores s
+
+        INNER JOIN entidades e
+            ON e.id = s.entidade_id
+
+        INNER JOIN unidades_administrativas a
+            ON a.id = s.unidade_administrativa_id
+
+        LEFT JOIN setores p
+            ON p.id = s.setor_pai_id
+
+        WHERE 1 = 1
+    """
+
+    if situacao == "Ativos":
+
+        sql += """
+            AND s.ativo = TRUE
+        """
+
+    elif situacao == "Inativos":
+
+        sql += """
+            AND s.ativo = FALSE
+        """
+
+    sql += """
+        ORDER BY
+            e.codigo,
+            a.codigo,
+            s.codigo
+    """
+
+    dados = _sisget_fetch(
+        sql
+    )
+
+    if not dados:
+
+        st.info(
+            "Nenhum setor encontrado."
+        )
+
+        return
+
+    visualizacao = []
+
+    for registro in dados:
+
+        visualizacao.append({
+
+            "Entidade":
+                f"{registro[0]} - {registro[1]}",
+
+            "Unidade Administrativa":
+                f"{registro[2]} - {registro[3]}",
+
+            "Código":
+                registro[4],
+
+            "Setor":
+                registro[5],
+
+            "Sigla":
+                registro[6],
+
+            "Setor Superior":
+                registro[7],
+
+            "Situação":
+                (
+                    "Ativo"
+                    if registro[8]
+                    else "Inativo"
+                )
+        })
+
+    df = pd.DataFrame(
+        visualizacao
+    )
+
+    st.dataframe(
+        df,
+        use_container_width=True,
+        hide_index=True
+    )
+
+    st.caption(
+        f"Total de setores: {len(df)}"
+    )
+
+    if st.button(
+        "📄 Gerar PDF",
+        type="primary",
+        use_container_width=True,
+        key="gerar_pdf_setores"
+    ):
+
+        buffer = BytesIO()
+
+        documento = SimpleDocTemplate(
+            buffer,
+            pagesize=A4,
+            rightMargin=0.8 * cm,
+            leftMargin=0.8 * cm,
+            topMargin=1.0 * cm,
+            bottomMargin=1.0 * cm
+        )
+
+        estilos = (
+            getSampleStyleSheet()
+        )
+
+        texto_tabela = ParagraphStyle(
+            "TextoTabelaSetores",
+            parent=estilos["Normal"],
+            fontSize=7,
+            leading=8
+        )
+
+        elementos = []
+
+        elementos.append(
+            Paragraph(
+                "SISGET - Sistema Integrado de Gestão Pública",
+                estilos["Heading1"]
+            )
+        )
+
+        elementos.append(
+            Paragraph(
+                "Relatório de Setores",
+                estilos["Heading2"]
+            )
+        )
+
+        elementos.append(
+            Paragraph(
+                f"Situação: {situacao}",
+                estilos["Normal"]
+            )
+        )
+
+        elementos.append(
+            Spacer(
+                1,
+                0.4 * cm
+            )
+        )
+
+        tabela_dados = [[
+            "Entidade",
+            "Unidade",
+            "Código",
+            "Setor",
+            "Sigla",
+            "Superior",
+            "Situação"
+        ]]
+
+        for registro in dados:
+
+            tabela_dados.append([
+
+                Paragraph(
+                    f"{registro[0]} - {registro[1]}",
+                    texto_tabela
+                ),
+
+                Paragraph(
+                    f"{registro[2]} - {registro[3]}",
+                    texto_tabela
+                ),
+
+                str(
+                    registro[4] or ""
+                ),
+
+                Paragraph(
+                    str(
+                        registro[5] or ""
+                    ),
+                    texto_tabela
+                ),
+
+                str(
+                    registro[6] or ""
+                ),
+
+                Paragraph(
+                    str(
+                        registro[7] or ""
+                    ),
+                    texto_tabela
+                ),
+
+                (
+                    "Ativo"
+                    if registro[8]
+                    else "Inativo"
+                )
+            ])
+
+        tabela = Table(
+            tabela_dados,
+            colWidths=[
+                2.7 * cm,
+                3.0 * cm,
+                2.4 * cm,
+                3.5 * cm,
+                1.3 * cm,
+                3.0 * cm,
+                1.5 * cm
+            ],
+            repeatRows=1
+        )
+
+        tabela.setStyle(
+            TableStyle([
+
+                (
+                    "BACKGROUND",
+                    (0, 0),
+                    (-1, 0),
+                    colors.lightgrey
+                ),
+
+                (
+                    "FONTNAME",
+                    (0, 0),
+                    (-1, 0),
+                    "Helvetica-Bold"
+                ),
+
+                (
+                    "GRID",
+                    (0, 0),
+                    (-1, -1),
+                    0.5,
+                    colors.grey
+                ),
+
+                (
+                    "VALIGN",
+                    (0, 0),
+                    (-1, -1),
+                    "MIDDLE"
+                ),
+
+                (
+                    "FONTSIZE",
+                    (0, 0),
+                    (-1, -1),
+                    7
+                ),
+
+                (
+                    "LEFTPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    3
+                ),
+
+                (
+                    "RIGHTPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    3
+                ),
+
+                (
+                    "TOPPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    3
+                ),
+
+                (
+                    "BOTTOMPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    3
+                )
+            ])
+        )
+
+        elementos.append(
+            tabela
+        )
+
+        elementos.append(
+            Spacer(
+                1,
+                0.5 * cm
+            )
+        )
+
+        elementos.append(
+            Paragraph(
+                f"Total de registros: {len(dados)}",
+                estilos["Normal"]
+            )
+        )
+
+        elementos.append(
+            Paragraph(
+                (
+                    "Emitido em: "
+                    + datetime.now().strftime(
+                        "%d/%m/%Y %H:%M"
+                    )
+                ),
+                estilos["Normal"]
+            )
+        )
+
+        documento.build(
+            elementos
+        )
+
+        buffer.seek(0)
+
+        st.download_button(
+            label="⬇️ Baixar Relatório em PDF",
+            data=buffer,
+            file_name="relatorio_setores.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+            key="baixar_pdf_setores"
+        )
 
 def cadastro_exercicios():
 
