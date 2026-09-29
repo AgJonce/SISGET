@@ -1695,50 +1695,26 @@ def entidade_excluir():
                     f"❌ Não foi possível excluir a entidade: {erro}"
                 )
 
+# ============================================================
+# ENTIDADES - INCLUIR
+# CÓDIGO AUTOMÁTICO E REUTILIZÁVEL
+# ============================================================
+
 def entidade_incluir():
 
     st.subheader(
         "🏢 Dados da Entidade"
     )
 
+
     # ========================================================
-    # GERAR PRÓXIMO CÓDIGO
+    # CÓDIGO AUTOMÁTICO
     # ========================================================
 
-    ultimo_codigo = _sisget_fetchone(
-        """
-        SELECT
-            COALESCE(
-                MAX(
-                    CAST(codigo AS INTEGER)
-                ),
-                0
-            )
-        FROM entidades
-        WHERE codigo ~ '^[0-9]+$'
-        """
+    codigo = (
+        sisget_proximo_codigo_entidade()
     )
 
-
-    if ultimo_codigo:
-
-        proximo_codigo = (
-            int(ultimo_codigo[0]) + 1
-        )
-
-    else:
-
-        proximo_codigo = 1
-
-
-    codigo = str(
-        proximo_codigo
-    ).zfill(3)
-
-
-    # ========================================================
-    # MOSTRAR CÓDIGO
-    # ========================================================
 
     st.info(
         f"🔢 Código automático: {codigo}"
@@ -1824,44 +1800,13 @@ def entidade_incluir():
 
 
         # ====================================================
-        # RECALCULAR CÓDIGO ANTES DO INSERT
-        # EVITA PEGAR CÓDIGO ANTIGO
+        # RECALCULAR CÓDIGO NA HORA DO INSERT
         # ====================================================
 
-        ultimo_codigo = _sisget_fetchone(
-            """
-            SELECT
-                COALESCE(
-                    MAX(
-                        CAST(codigo AS INTEGER)
-                    ),
-                    0
-                )
-            FROM entidades
-            WHERE codigo ~ '^[0-9]+$'
-            """
+        codigo = (
+            sisget_proximo_codigo_entidade()
         )
 
-
-        if ultimo_codigo:
-
-            proximo_codigo = (
-                int(ultimo_codigo[0]) + 1
-            )
-
-        else:
-
-            proximo_codigo = 1
-
-
-        codigo = str(
-            proximo_codigo
-        ).zfill(3)
-
-
-        # ====================================================
-        # INSERT
-        # ====================================================
 
         sucesso = _sisget_salvar(
             """
@@ -2062,8 +2007,65 @@ def entidade_localizar():
 
 
 # ============================================================
-# ENTIDADES - ALTERAR
+# ATIVAR / INATIVAR ENTIDADE
 # ============================================================
+
+def entidade_alterar_situacao(
+    entidade_id,
+    novo_status
+):
+
+    try:
+
+        cursor.execute(
+            """
+            UPDATE entidades
+            SET ativo = ?
+            WHERE id = ?
+            """,
+            (
+                novo_status,
+                entidade_id
+            )
+        )
+
+
+        conn.commit()
+
+
+        if novo_status:
+
+            st.success(
+                "✅ Entidade ativada com sucesso!"
+            )
+
+        else:
+
+            st.success(
+                "✅ Entidade inativada com sucesso!"
+            )
+
+
+        st.session_state[
+            "sisget_id_entidades"
+        ] = None
+
+
+        st.session_state[
+            "sisget_tela_entidades"
+        ] = "localizar"
+
+
+        st.rerun()
+
+
+    except Exception as erro:
+
+        conn.rollback()
+
+        st.error(
+            f"❌ Não foi possível alterar a situação da entidade: {erro}"
+        )
 
 # ============================================================
 # ENTIDADES - ALTERAR
@@ -2115,12 +2117,20 @@ def entidade_alterar(
 
 
     # ========================================================
-    # TÍTULO
+    # SITUAÇÃO
     # ========================================================
 
-    st.subheader(
-        f"🏢 Alterar Entidade - Código {codigo_atual}"
-    )
+    if ativo_atual:
+
+        st.success(
+            "🟢 Situação: ATIVA"
+        )
+
+    else:
+
+        st.warning(
+            "🔴 Situação: INATIVA"
+        )
 
 
     # ========================================================
@@ -2158,11 +2168,10 @@ def entidade_alterar(
     ):
 
         # ====================================================
-        # CÓDIGO AUTOMÁTICO
-        # NÃO PODE SER ALTERADO
+        # CÓDIGO
         # ====================================================
 
-        codigo = st.text_input(
+        st.text_input(
             "Código",
             value=codigo_atual or "",
             disabled=True
@@ -2205,18 +2214,6 @@ def entidade_alterar(
             )
 
 
-        # ====================================================
-        # ATIVO
-        # ====================================================
-
-        ativo = st.checkbox(
-            "Entidade ativa",
-            value=bool(
-                ativo_atual
-            )
-        )
-
-
         st.markdown("---")
 
 
@@ -2224,19 +2221,48 @@ def entidade_alterar(
         # BOTÕES
         # ====================================================
 
-        col_salvar, col_excluir, col_cancelar = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
 
 
-        with col_salvar:
+        with col1:
 
             salvar = st.form_submit_button(
-                "💾 Salvar Alterações",
+                "💾 Salvar",
                 type="primary",
                 use_container_width=True
             )
 
 
-        with col_excluir:
+        # ====================================================
+        # ATIVAR / INATIVAR
+        # ====================================================
+
+        with col2:
+
+            if ativo_atual:
+
+                alterar_status = (
+                    st.form_submit_button(
+                        "🚫 Inativar",
+                        use_container_width=True
+                    )
+                )
+
+            else:
+
+                alterar_status = (
+                    st.form_submit_button(
+                        "✅ Ativar",
+                        use_container_width=True
+                    )
+                )
+
+
+        # ====================================================
+        # EXCLUIR
+        # ====================================================
+
+        with col3:
 
             excluir = st.form_submit_button(
                 "🗑️ Excluir",
@@ -2244,11 +2270,17 @@ def entidade_alterar(
             )
 
 
-        with col_cancelar:
+        # ====================================================
+        # CANCELAR
+        # ====================================================
 
-            cancelar = st.form_submit_button(
-                "❌ Cancelar",
-                use_container_width=True
+        with col4:
+
+            cancelar = (
+                st.form_submit_button(
+                    "❌ Cancelar",
+                    use_container_width=True
+                )
             )
 
 
@@ -2262,11 +2294,27 @@ def entidade_alterar(
             "sisget_id_entidades"
         ] = None
 
+
         st.session_state[
             "sisget_tela_entidades"
         ] = "localizar"
 
+
         st.rerun()
+
+
+    # ========================================================
+    # ATIVAR / INATIVAR
+    # ========================================================
+
+    if alterar_status:
+
+        entidade_alterar_situacao(
+            entidade_id,
+            not ativo_atual
+        )
+
+        return
 
 
     # ========================================================
@@ -2317,11 +2365,12 @@ def entidade_alterar(
                 f"❌ Não foi possível excluir a entidade: {erro}"
             )
 
+
         return
 
 
     # ========================================================
-    # SALVAR ALTERAÇÃO
+    # SALVAR ALTERAÇÕES
     # ========================================================
 
     if salvar:
@@ -2343,20 +2392,16 @@ def entidade_alterar(
         sucesso = _sisget_salvar(
             """
             UPDATE entidades
-
             SET
                 nome = ?,
                 cnpj = ?,
-                tipo_entidade = ?,
-                ativo = ?
-
+                tipo_entidade = ?
             WHERE id = ?
             """,
             (
                 nome,
                 cnpj if cnpj else None,
                 tipo_entidade,
-                ativo,
                 entidade_id
             )
         )
