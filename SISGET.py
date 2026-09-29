@@ -11196,12 +11196,701 @@ def cadastro_exercicios():
     )
 
 
+# ============================================================
+# ORGANOGRAMA DO SISGET
+# ============================================================
+
 def organograma_sisget():
 
-    modulo_em_desenvolvimento(
-        "Organograma",
-        "🌳"
+    st.title(
+        "🌳 Organograma"
     )
+
+    st.caption(
+        "Visualização da estrutura administrativa cadastrada no SISGET."
+    )
+
+    st.markdown("---")
+
+    # ========================================================
+    # FILTROS
+    # ========================================================
+
+    col1, col2 = st.columns(
+        [3, 1]
+    )
+
+    # ========================================================
+    # BUSCAR ÓRGÃOS
+    # ========================================================
+
+    orgaos_filtro = _sisget_fetch(
+        """
+        SELECT
+            id,
+            codigo,
+            nome
+        FROM orgaos
+        ORDER BY codigo, nome
+        """
+    )
+
+    opcoes_orgaos = {
+        "Todos os Órgãos": None
+    }
+
+    for (
+        orgao_id,
+        codigo_orgao,
+        nome_orgao
+    ) in orgaos_filtro:
+
+        opcoes_orgaos[
+            f"{codigo_orgao} - {nome_orgao}"
+        ] = orgao_id
+
+    with col1:
+
+        orgao_selecionado = st.selectbox(
+            "Órgão",
+            list(
+                opcoes_orgaos.keys()
+            ),
+            key="organograma_filtro_orgao"
+        )
+
+    with col2:
+
+        exibir_inativos = st.checkbox(
+            "Exibir inativos",
+            value=False,
+            key="organograma_exibir_inativos"
+        )
+
+    orgao_id_filtro = (
+        opcoes_orgaos[
+            orgao_selecionado
+        ]
+    )
+
+    st.markdown("---")
+
+    # ========================================================
+    # SQL DOS ÓRGÃOS
+    # ========================================================
+
+    sql_orgaos = """
+        SELECT
+            id,
+            codigo,
+            nome,
+            COALESCE(
+                sigla,
+                ''
+            ),
+            ativo
+
+        FROM orgaos
+
+        WHERE 1 = 1
+    """
+
+    parametros_orgaos = []
+
+    if orgao_id_filtro is not None:
+
+        sql_orgaos += """
+            AND id = ?
+        """
+
+        parametros_orgaos.append(
+            orgao_id_filtro
+        )
+
+    if not exibir_inativos:
+
+        sql_orgaos += """
+            AND ativo = TRUE
+        """
+
+    sql_orgaos += """
+        ORDER BY
+            codigo,
+            nome
+    """
+
+    orgaos = _sisget_fetch(
+        sql_orgaos,
+        tuple(
+            parametros_orgaos
+        )
+    )
+
+    if not orgaos:
+
+        st.info(
+            "Nenhum órgão encontrado."
+        )
+
+        return
+
+    # ========================================================
+    # CONTADORES
+    # ========================================================
+
+    total_orgaos = 0
+    total_entidades = 0
+    total_uos = 0
+    total_uas = 0
+    total_setores = 0
+    total_subsetores = 0
+
+    # ========================================================
+    # FUNÇÃO INTERNA PARA EXIBIR SETORES / SUBSETORES
+    # ========================================================
+
+    def mostrar_setores(
+        setores,
+        setor_pai_id=None,
+        nivel=0
+    ):
+
+        nonlocal total_setores
+        nonlocal total_subsetores
+
+        encontrados = [
+            registro
+            for registro in setores
+            if registro[1] == setor_pai_id
+        ]
+
+        for (
+            setor_id,
+            pai_id,
+            codigo_setor,
+            nome_setor,
+            sigla_setor,
+            ativo_setor
+        ) in encontrados:
+
+            # =================================================
+            # IDENTIFICAR PRINCIPAL / SUBSETOR
+            # =================================================
+
+            if pai_id is None:
+
+                total_setores += 1
+
+                icone = "🧩"
+
+                tipo = "Setor"
+
+            else:
+
+                total_subsetores += 1
+
+                icone = "↳"
+
+                tipo = "Subsetor"
+
+            # =================================================
+            # SITUAÇÃO
+            # =================================================
+
+            situacao = (
+                ""
+                if ativo_setor
+                else " 🔴"
+            )
+
+            sigla_texto = (
+                f" ({sigla_setor})"
+                if sigla_setor
+                else ""
+            )
+
+            # =================================================
+            # INDENTAÇÃO
+            # =================================================
+
+            margem = (
+                32
+                + (
+                    nivel * 28
+                )
+            )
+
+            st.markdown(
+                f"""
+                <div style="
+                    margin-left:{margem}px;
+                    padding:6px 10px;
+                    margin-top:3px;
+                    border-left:2px solid #d0d0d0;
+                ">
+                    {icone}
+                    <b>{codigo_setor} - {nome_setor}</b>
+                    {sigla_texto}
+                    {situacao}
+                    <span style="
+                        font-size:11px;
+                        color:#777;
+                        margin-left:8px;
+                    ">
+                        {tipo}
+                    </span>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+            # =================================================
+            # RECURSÃO
+            # =================================================
+
+            mostrar_setores(
+                setores,
+                setor_pai_id=setor_id,
+                nivel=nivel + 1
+            )
+
+    # ========================================================
+    # PERCORRER ÓRGÃOS
+    # ========================================================
+
+    for (
+        orgao_id,
+        codigo_orgao,
+        nome_orgao,
+        sigla_orgao,
+        ativo_orgao
+    ) in orgaos:
+
+        total_orgaos += 1
+
+        situacao_orgao = (
+            ""
+            if ativo_orgao
+            else " 🔴 INATIVO"
+        )
+
+        sigla_orgao_texto = (
+            f" ({sigla_orgao})"
+            if sigla_orgao
+            else ""
+        )
+
+        # ====================================================
+        # ENTIDADES DO ÓRGÃO
+        # ====================================================
+
+        sql_entidades = """
+            SELECT
+                id,
+                codigo,
+                nome,
+                ativo
+
+            FROM entidades
+
+            WHERE orgao_id = ?
+        """
+
+        parametros_entidades = [
+            orgao_id
+        ]
+
+        if not exibir_inativos:
+
+            sql_entidades += """
+                AND ativo = TRUE
+            """
+
+        sql_entidades += """
+            ORDER BY
+                codigo,
+                nome
+        """
+
+        entidades = _sisget_fetch(
+            sql_entidades,
+            tuple(
+                parametros_entidades
+            )
+        )
+
+        # ====================================================
+        # EXPANDER DO ÓRGÃO
+        # ====================================================
+
+        with st.expander(
+            (
+                f"🏛️ {codigo_orgao} - "
+                f"{nome_orgao}"
+                f"{sigla_orgao_texto}"
+                f"{situacao_orgao}"
+            ),
+            expanded=True
+        ):
+
+            if not entidades:
+
+                st.caption(
+                    "Nenhuma entidade vinculada a este órgão."
+                )
+
+                continue
+
+            # =================================================
+            # ENTIDADES
+            # =================================================
+
+            for (
+                entidade_id,
+                codigo_entidade,
+                nome_entidade,
+                ativo_entidade
+            ) in entidades:
+
+                total_entidades += 1
+
+                situacao_entidade = (
+                    ""
+                    if ativo_entidade
+                    else " 🔴"
+                )
+
+                st.markdown(
+                    f"""
+                    <div style="
+                        margin-left:10px;
+                        padding:8px 10px;
+                        margin-top:5px;
+                        font-size:16px;
+                    ">
+                        🏢 <b>
+                        {codigo_entidade} - {nome_entidade}
+                        </b>
+                        {situacao_entidade}
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+                # =============================================
+                # UNIDADES ORÇAMENTÁRIAS
+                # =============================================
+
+                sql_uos = """
+                    SELECT
+                        id,
+                        codigo,
+                        nome,
+                        ativo
+
+                    FROM unidades_orcamentarias
+
+                    WHERE entidade_id = ?
+                """
+
+                parametros_uos = [
+                    entidade_id
+                ]
+
+                if not exibir_inativos:
+
+                    sql_uos += """
+                        AND ativo = TRUE
+                    """
+
+                sql_uos += """
+                    ORDER BY
+                        codigo,
+                        nome
+                """
+
+                unidades_orcamentarias = _sisget_fetch(
+                    sql_uos,
+                    tuple(
+                        parametros_uos
+                    )
+                )
+
+                if not unidades_orcamentarias:
+
+                    st.markdown(
+                        """
+                        <div style="
+                            margin-left:35px;
+                            color:#888;
+                            font-size:13px;
+                        ">
+                            Nenhuma Unidade Orçamentária cadastrada.
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+
+                    continue
+
+                # =============================================
+                # PERCORRER UOs
+                # =============================================
+
+                for (
+                    uo_id,
+                    codigo_uo,
+                    nome_uo,
+                    ativo_uo
+                ) in unidades_orcamentarias:
+
+                    total_uos += 1
+
+                    situacao_uo = (
+                        ""
+                        if ativo_uo
+                        else " 🔴"
+                    )
+
+                    st.markdown(
+                        f"""
+                        <div style="
+                            margin-left:35px;
+                            padding:6px 10px;
+                            margin-top:3px;
+                        ">
+                            💼 <b>
+                            {codigo_uo} - {nome_uo}
+                            </b>
+                            {situacao_uo}
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+
+                    # =========================================
+                    # UNIDADES ADMINISTRATIVAS
+                    # =========================================
+
+                    sql_uas = """
+                        SELECT
+                            id,
+                            codigo,
+                            nome,
+                            COALESCE(
+                                sigla,
+                                ''
+                            ),
+                            ativo
+
+                        FROM unidades_administrativas
+
+                        WHERE unidade_orcamentaria_id = ?
+                    """
+
+                    parametros_uas = [
+                        uo_id
+                    ]
+
+                    if not exibir_inativos:
+
+                        sql_uas += """
+                            AND ativo = TRUE
+                        """
+
+                    sql_uas += """
+                        ORDER BY
+                            codigo,
+                            nome
+                    """
+
+                    unidades_administrativas = (
+                        _sisget_fetch(
+                            sql_uas,
+                            tuple(
+                                parametros_uas
+                            )
+                        )
+                    )
+
+                    if not unidades_administrativas:
+
+                        st.markdown(
+                            """
+                            <div style="
+                                margin-left:60px;
+                                color:#888;
+                                font-size:13px;
+                            ">
+                                Nenhuma Unidade Administrativa cadastrada.
+                            </div>
+                            """,
+                            unsafe_allow_html=True
+                        )
+
+                        continue
+
+                    # =========================================
+                    # PERCORRER UAs
+                    # =========================================
+
+                    for (
+                        ua_id,
+                        codigo_ua,
+                        nome_ua,
+                        sigla_ua,
+                        ativo_ua
+                    ) in unidades_administrativas:
+
+                        total_uas += 1
+
+                        situacao_ua = (
+                            ""
+                            if ativo_ua
+                            else " 🔴"
+                        )
+
+                        sigla_ua_texto = (
+                            f" ({sigla_ua})"
+                            if sigla_ua
+                            else ""
+                        )
+
+                        st.markdown(
+                            f"""
+                            <div style="
+                                margin-left:60px;
+                                padding:6px 10px;
+                                margin-top:3px;
+                            ">
+                                🏬 <b>
+                                {codigo_ua} - {nome_ua}
+                                </b>
+                                {sigla_ua_texto}
+                                {situacao_ua}
+                            </div>
+                            """,
+                            unsafe_allow_html=True
+                        )
+
+                        # =====================================
+                        # SETORES
+                        # =====================================
+
+                        sql_setores = """
+                            SELECT
+                                id,
+                                setor_pai_id,
+                                codigo,
+                                nome,
+                                COALESCE(
+                                    sigla,
+                                    ''
+                                ),
+                                ativo
+
+                            FROM setores
+
+                            WHERE unidade_administrativa_id = ?
+                        """
+
+                        parametros_setores = [
+                            ua_id
+                        ]
+
+                        if not exibir_inativos:
+
+                            sql_setores += """
+                                AND ativo = TRUE
+                            """
+
+                        sql_setores += """
+                            ORDER BY
+                                codigo,
+                                nome
+                        """
+
+                        setores = _sisget_fetch(
+                            sql_setores,
+                            tuple(
+                                parametros_setores
+                            )
+                        )
+
+                        if not setores:
+
+                            st.markdown(
+                                """
+                                <div style="
+                                    margin-left:85px;
+                                    color:#888;
+                                    font-size:13px;
+                                ">
+                                    Nenhum setor cadastrado.
+                                </div>
+                                """,
+                                unsafe_allow_html=True
+                            )
+
+                            continue
+
+                        # =====================================
+                        # MOSTRAR SETORES E SUBSETORES
+                        # =====================================
+
+                        mostrar_setores(
+                            setores,
+                            setor_pai_id=None,
+                            nivel=2
+                        )
+
+            st.markdown("---")
+
+    # ========================================================
+    # RESUMO
+    # ========================================================
+
+    st.subheader(
+        "📊 Resumo da Estrutura"
+    )
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+
+        st.metric(
+            "🏛️ Órgãos",
+            total_orgaos
+        )
+
+        st.metric(
+            "🏢 Entidades",
+            total_entidades
+        )
+
+    with col2:
+
+        st.metric(
+            "💼 Unidades Orçamentárias",
+            total_uos
+        )
+
+        st.metric(
+            "🏬 Unidades Administrativas",
+            total_uas
+        )
+
+    with col3:
+
+        st.metric(
+            "🧩 Setores",
+            total_setores
+        )
+
+        st.metric(
+            "↳ Subsetores",
+            total_subsetores
+        )
 
 
 # ============================================================
