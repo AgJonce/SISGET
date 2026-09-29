@@ -4,7 +4,7 @@
 
 import os
 import psycopg2
-import plotly.express as px
+import plotly.express as pxDEF
 import plotly.graph_objects as go
 import sqlite3
 import streamlit as st
@@ -792,6 +792,17 @@ def sisget_grid_localizar(
 # DUPLO CLIQUE EM LOCALIZAR -> ALTERAR
 # ============================================================
 
+# ============================================================
+# DEF PRINCIPAL PADRÃO
+#
+# INCLUIR
+# LOCALIZAR
+# EXCLUIR
+# IMPRIMIR
+#
+# DUPLO CLIQUE EM LOCALIZAR -> ALTERAR
+# ============================================================
+
 def sisget_tela_principal(
 
     titulo,
@@ -803,6 +814,8 @@ def sisget_tela_principal(
     func_localizar,
 
     func_alterar,
+
+    func_excluir=None,
 
     func_imprimir=None,
 
@@ -823,29 +836,23 @@ def sisget_tela_principal(
     # INICIALIZAR
     # ========================================================
 
-    if chave_tela not in (
-        st.session_state
-    ):
+    if chave_tela not in st.session_state:
 
         st.session_state[
             chave_tela
         ] = "principal"
 
 
-    if chave_id not in (
-        st.session_state
-    ):
+    if chave_id not in st.session_state:
 
         st.session_state[
             chave_id
         ] = None
 
 
-    tela = (
-        st.session_state[
-            chave_tela
-        ]
-    )
+    tela = st.session_state[
+        chave_tela
+    ]
 
 
     # ========================================================
@@ -858,7 +865,7 @@ def sisget_tela_principal(
 
 
     # ========================================================
-    # PRINCIPAL
+    # TELA PRINCIPAL
     # ========================================================
 
     if tela == "principal":
@@ -866,9 +873,7 @@ def sisget_tela_principal(
         st.markdown("---")
 
 
-        col1, col2, col3 = (
-            st.columns(3)
-        )
+        col1, col2, col3, col4 = st.columns(4)
 
 
         # ====================================================
@@ -878,13 +883,9 @@ def sisget_tela_principal(
         with col1:
 
             if st.button(
-
                 "➕ Incluir",
-
                 key=f"incluir_{chave}",
-
                 use_container_width=True,
-
                 type="primary"
             ):
 
@@ -892,11 +893,9 @@ def sisget_tela_principal(
                     chave_id
                 ] = None
 
-
                 st.session_state[
                     chave_tela
                 ] = "incluir"
-
 
                 st.rerun()
 
@@ -908,11 +907,8 @@ def sisget_tela_principal(
         with col2:
 
             if st.button(
-
                 "🔎 Localizar",
-
                 key=f"localizar_{chave}",
-
                 use_container_width=True
             ):
 
@@ -920,11 +916,32 @@ def sisget_tela_principal(
                     chave_id
                 ] = None
 
-
                 st.session_state[
                     chave_tela
                 ] = "localizar"
 
+                st.rerun()
+
+
+        # ====================================================
+        # EXCLUIR
+        # ====================================================
+
+        with col3:
+
+            if st.button(
+                "🗑️ Excluir",
+                key=f"excluir_{chave}",
+                use_container_width=True
+            ):
+
+                st.session_state[
+                    chave_id
+                ] = None
+
+                st.session_state[
+                    chave_tela
+                ] = "excluir"
 
                 st.rerun()
 
@@ -933,14 +950,11 @@ def sisget_tela_principal(
         # IMPRIMIR
         # ====================================================
 
-        with col3:
+        with col4:
 
             if st.button(
-
                 "🖨️ Imprimir",
-
                 key=f"imprimir_{chave}",
-
                 use_container_width=True
             ):
 
@@ -948,11 +962,9 @@ def sisget_tela_principal(
                     chave_id
                 ] = None
 
-
                 st.session_state[
                     chave_tela
                 ] = "imprimir"
-
 
                 st.rerun()
 
@@ -967,15 +979,11 @@ def sisget_tela_principal(
     elif tela == "incluir":
 
         sisget_cabecalho_tela(
-
             "➕ Incluir",
-
-            voltar=lambda:
-                sisget_voltar_principal(
-                    chave
-                )
+            voltar=lambda: sisget_voltar_principal(
+                chave
+            )
         )
-
 
         func_incluir()
 
@@ -987,24 +995,18 @@ def sisget_tela_principal(
     elif tela == "localizar":
 
         sisget_cabecalho_tela(
-
             "🔎 Localizar",
-
-            voltar=lambda:
-                sisget_voltar_principal(
-                    chave
-                )
+            voltar=lambda: sisget_voltar_principal(
+                chave
+            )
         )
-
 
         st.caption(
             "Dê duplo clique em um registro para alterar."
         )
 
 
-        registro_id = (
-            func_localizar()
-        )
+        registro_id = func_localizar()
 
 
         if registro_id:
@@ -1013,11 +1015,9 @@ def sisget_tela_principal(
                 chave_id
             ] = registro_id
 
-
             st.session_state[
                 chave_tela
             ] = "alterar"
-
 
             st.rerun()
 
@@ -1028,10 +1028,8 @@ def sisget_tela_principal(
 
     elif tela == "alterar":
 
-        registro_id = (
-            st.session_state.get(
-                chave_id
-            )
+        registro_id = st.session_state.get(
+            chave_id
         )
 
 
@@ -1045,13 +1043,10 @@ def sisget_tela_principal(
 
 
         sisget_cabecalho_tela(
-
             "✏️ Alterar",
-
-            voltar=lambda:
-                sisget_voltar_localizar(
-                    chave
-                )
+            voltar=lambda: sisget_voltar_localizar(
+                chave
+            )
         )
 
 
@@ -1061,19 +1056,41 @@ def sisget_tela_principal(
 
 
     # ========================================================
+    # EXCLUIR
+    # ========================================================
+
+    elif tela == "excluir":
+
+        sisget_cabecalho_tela(
+            "🗑️ Excluir",
+            voltar=lambda: sisget_voltar_principal(
+                chave
+            )
+        )
+
+
+        if func_excluir:
+
+            func_excluir()
+
+        else:
+
+            st.info(
+                "Nenhuma rotina de exclusão configurada."
+            )
+
+
+    # ========================================================
     # IMPRIMIR
     # ========================================================
 
     elif tela == "imprimir":
 
         sisget_cabecalho_tela(
-
             "🖨️ Imprimir",
-
-            voltar=lambda:
-                sisget_voltar_principal(
-                    chave
-                )
+            voltar=lambda: sisget_voltar_principal(
+                chave
+            )
         )
 
 
@@ -1086,12 +1103,6 @@ def sisget_tela_principal(
             st.info(
                 "Nenhum relatório configurado."
             )
-
-
-# ============================================================
-# MÓDULO AINDA NÃO DESENVOLVIDO
-# ============================================================
-
 def modulo_em_desenvolvimento(
     nome,
     icone="🚧"
@@ -1897,12 +1908,16 @@ def entidade_localizar():
 # ENTIDADES - ALTERAR
 # ============================================================
 
+# ============================================================
+# ENTIDADES - ALTERAR
+# ============================================================
+
 def entidade_alterar(
     entidade_id
 ):
 
     # ========================================================
-    # LOCALIZAR REGISTRO
+    # BUSCAR ENTIDADE
     # ========================================================
 
     entidade = _sisget_fetchone(
@@ -1942,8 +1957,12 @@ def entidade_alterar(
     ) = entidade
 
 
+    # ========================================================
+    # TÍTULO
+    # ========================================================
+
     st.subheader(
-        f"🏢 Entidade #{id_entidade}"
+        f"🏢 Alterar Entidade - Código {codigo_atual}"
     )
 
 
@@ -1974,40 +1993,44 @@ def entidade_alterar(
 
 
     # ========================================================
-    # FORM
+    # FORMULÁRIO
     # ========================================================
 
     with st.form(
         f"form_entidade_alterar_{entidade_id}"
     ):
 
-        col1, col2 = st.columns(
-            [1, 3]
+        # ====================================================
+        # CÓDIGO AUTOMÁTICO
+        # NÃO PODE SER ALTERADO
+        # ====================================================
+
+        codigo = st.text_input(
+            "Código",
+            value=codigo_atual or "",
+            disabled=True
         )
 
 
+        # ====================================================
+        # NOME
+        # ====================================================
+
+        nome = st.text_input(
+            "Nome da Entidade *",
+            value=nome_atual or "",
+            max_chars=200
+        )
+
+
+        # ====================================================
+        # CNPJ / TIPO
+        # ====================================================
+
+        col1, col2 = st.columns(2)
+
+
         with col1:
-
-            codigo = st.text_input(
-                "Código *",
-                value=codigo_atual or "",
-                max_chars=20
-            )
-
-
-        with col2:
-
-            nome = st.text_input(
-                "Nome da Entidade *",
-                value=nome_atual or "",
-                max_chars=200
-            )
-
-
-        col3, col4 = st.columns(2)
-
-
-        with col3:
 
             cnpj = st.text_input(
                 "CNPJ",
@@ -2016,7 +2039,7 @@ def entidade_alterar(
             )
 
 
-        with col4:
+        with col2:
 
             tipo_entidade = st.selectbox(
                 "Tipo de Entidade",
@@ -2024,6 +2047,10 @@ def entidade_alterar(
                 index=indice_tipo
             )
 
+
+        # ====================================================
+        # ATIVO
+        # ====================================================
 
         ativo = st.checkbox(
             "Entidade ativa",
@@ -2036,7 +2063,11 @@ def entidade_alterar(
         st.markdown("---")
 
 
-        col_salvar, col_cancelar = st.columns(2)
+        # ====================================================
+        # BOTÕES
+        # ====================================================
+
+        col_salvar, col_excluir, col_cancelar = st.columns(3)
 
 
         with col_salvar:
@@ -2044,6 +2075,14 @@ def entidade_alterar(
             salvar = st.form_submit_button(
                 "💾 Salvar Alterações",
                 type="primary",
+                use_container_width=True
+            )
+
+
+        with col_excluir:
+
+            excluir = st.form_submit_button(
+                "🗑️ Excluir",
                 use_container_width=True
             )
 
@@ -2062,9 +2101,66 @@ def entidade_alterar(
 
     if cancelar:
 
-        sisget_voltar_localizar(
-            "entidades"
-        )
+        st.session_state[
+            "sisget_id_entidades"
+        ] = None
+
+        st.session_state[
+            "sisget_tela_entidades"
+        ] = "localizar"
+
+        st.rerun()
+
+
+    # ========================================================
+    # EXCLUIR
+    # ========================================================
+
+    if excluir:
+
+        try:
+
+            cursor.execute(
+                """
+                DELETE FROM entidades
+                WHERE id = ?
+                """,
+                (
+                    entidade_id,
+                )
+            )
+
+
+            conn.commit()
+
+
+            st.session_state[
+                "sisget_id_entidades"
+            ] = None
+
+
+            st.session_state[
+                "sisget_tela_entidades"
+            ] = "localizar"
+
+
+            st.success(
+                "✅ Entidade excluída com sucesso!"
+            )
+
+
+            st.rerun()
+
+
+        except Exception as erro:
+
+            conn.rollback()
+
+            st.error(
+                f"❌ Não foi possível excluir a entidade: {erro}"
+            )
+
+        return
 
 
     # ========================================================
@@ -2073,20 +2169,9 @@ def entidade_alterar(
 
     if salvar:
 
-        codigo = codigo.strip()
-
         nome = nome.strip()
 
         cnpj = cnpj.strip()
-
-
-        if not codigo:
-
-            st.warning(
-                "⚠️ Informe o código da entidade."
-            )
-
-            return
 
 
         if not nome:
@@ -2098,43 +2183,11 @@ def entidade_alterar(
             return
 
 
-        # ====================================================
-        # VERIFICAR CÓDIGO DUPLICADO
-        # ====================================================
-
-        duplicado = _sisget_fetchone(
-            """
-            SELECT id
-            FROM entidades
-            WHERE codigo = ?
-              AND id <> ?
-            """,
-            (
-                codigo,
-                entidade_id
-            )
-        )
-
-
-        if duplicado:
-
-            st.warning(
-                "⚠️ Já existe outra entidade com esse código."
-            )
-
-            return
-
-
-        # ====================================================
-        # UPDATE
-        # ====================================================
-
         sucesso = _sisget_salvar(
             """
             UPDATE entidades
 
             SET
-                codigo = ?,
                 nome = ?,
                 cnpj = ?,
                 tipo_entidade = ?,
@@ -2143,7 +2196,6 @@ def entidade_alterar(
             WHERE id = ?
             """,
             (
-                codigo,
                 nome,
                 cnpj if cnpj else None,
                 tipo_entidade,
@@ -2155,9 +2207,9 @@ def entidade_alterar(
 
         if sucesso:
 
-            st.success(
-                "✅ Entidade alterada com sucesso!"
-            )
+            st.session_state[
+                "sisget_id_entidades"
+            ] = None
 
 
             st.session_state[
@@ -2165,17 +2217,12 @@ def entidade_alterar(
             ] = "localizar"
 
 
-            st.session_state[
-                "sisget_id_entidades"
-            ] = None
+            st.success(
+                "✅ Entidade alterada com sucesso!"
+            )
 
 
             st.rerun()
-
-
-# ============================================================
-# ENTIDADES - IMPRIMIR
-# ============================================================
 
 def entidade_imprimir():
 
