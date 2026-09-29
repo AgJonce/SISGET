@@ -9576,6 +9576,10 @@ def setor_nome_duplicado(
 # SETOR - INCLUIR
 # ============================================================
 
+# ============================================================
+# SETOR - INCLUIR
+# ============================================================
+
 def setor_incluir():
 
     st.subheader(
@@ -9632,10 +9636,10 @@ def setor_incluir():
         return
 
     # ========================================================
-    # MONTAR OPÇÕES DAS UNIDADES ADMINISTRATIVAS
+    # OPÇÕES DAS UNIDADES ADMINISTRATIVAS
     # ========================================================
 
-    opcoes = {}
+    opcoes_unidades = {}
 
     for (
         ua_id,
@@ -9656,7 +9660,7 @@ def setor_incluir():
             f"{codigo_ua} - {nome_ua}"
         )
 
-        opcoes[
+        opcoes_unidades[
             descricao
         ] = (
             ua_id,
@@ -9664,13 +9668,13 @@ def setor_incluir():
         )
 
     # ========================================================
-    # SELECIONAR UNIDADE ADMINISTRATIVA
+    # UNIDADE ADMINISTRATIVA
     # ========================================================
 
     unidade_selecionada = st.selectbox(
         "Unidade Administrativa *",
         list(
-            opcoes.keys()
+            opcoes_unidades.keys()
         ),
         key="setor_incluir_ua"
     )
@@ -9678,12 +9682,12 @@ def setor_incluir():
     (
         unidade_administrativa_id,
         entidade_id
-    ) = opcoes[
+    ) = opcoes_unidades[
         unidade_selecionada
     ]
 
     # ========================================================
-    # GERAR CÓDIGO
+    # GERAR CÓDIGO AUTOMÁTICO
     # ========================================================
 
     codigo = (
@@ -9697,36 +9701,182 @@ def setor_incluir():
     )
 
     # ========================================================
-    # BUSCAR SETORES EXISTENTES DA UNIDADE
+    # TIPO DE ESTRUTURA
     # ========================================================
 
-    setores_superiores = _sisget_fetch(
-        """
-        SELECT
-            id,
-            codigo,
-            nome
-        FROM setores
-        WHERE unidade_administrativa_id = ?
-          AND ativo = TRUE
-        ORDER BY codigo
-        """,
-        (
-            unidade_administrativa_id,
-        )
+    st.markdown(
+        "### 🏗️ Tipo de Estrutura"
     )
 
-    opcoes_superiores = {}
+    chave_tipo = (
+        "setor_incluir_tipo_estrutura"
+    )
 
-    for (
-        setor_id,
-        codigo_setor,
-        nome_setor
-    ) in setores_superiores:
+    if chave_tipo not in st.session_state:
 
-        opcoes_superiores[
-            f"{codigo_setor} - {nome_setor}"
-        ] = setor_id
+        st.session_state[
+            chave_tipo
+        ] = "principal"
+
+    col1, col2 = st.columns(2)
+
+    # ========================================================
+    # BOTÃO SETOR PRINCIPAL
+    # ========================================================
+
+    with col1:
+
+        if st.button(
+            "🏢 Setor Principal",
+            use_container_width=True,
+            type=(
+                "primary"
+                if st.session_state[
+                    chave_tipo
+                ] == "principal"
+                else "secondary"
+            ),
+            key="btn_setor_principal"
+        ):
+
+            st.session_state[
+                chave_tipo
+            ] = "principal"
+
+            st.rerun()
+
+    # ========================================================
+    # BOTÃO SUBSETOR
+    # ========================================================
+
+    with col2:
+
+        if st.button(
+            "↳ Subsetor",
+            use_container_width=True,
+            type=(
+                "primary"
+                if st.session_state[
+                    chave_tipo
+                ] == "subsetor"
+                else "secondary"
+            ),
+            key="btn_setor_subsetor"
+        ):
+
+            st.session_state[
+                chave_tipo
+            ] = "subsetor"
+
+            st.rerun()
+
+    tipo_estrutura = (
+        st.session_state[
+            chave_tipo
+        ]
+    )
+
+    # ========================================================
+    # DEFINIR SETOR PAI
+    # ========================================================
+
+    setor_pai_id = None
+    setor_superior = None
+    opcoes_setores_principais = {}
+
+    # ========================================================
+    # SE FOR SUBSETOR
+    # ========================================================
+
+    if tipo_estrutura == "subsetor":
+
+        st.markdown("---")
+
+        st.markdown(
+            "### ↳ Vincular ao Setor Principal"
+        )
+
+        # ====================================================
+        # BUSCAR SOMENTE SETORES PRINCIPAIS
+        # ====================================================
+
+        setores_principais = _sisget_fetch(
+            """
+            SELECT
+                id,
+                codigo,
+                nome
+
+            FROM setores
+
+            WHERE unidade_administrativa_id = ?
+              AND setor_pai_id IS NULL
+              AND ativo = TRUE
+
+            ORDER BY
+                codigo,
+                nome
+            """,
+            (
+                unidade_administrativa_id,
+            )
+        )
+
+        if not setores_principais:
+
+            st.warning(
+                "⚠️ Nenhum setor principal cadastrado "
+                "nesta Unidade Administrativa."
+            )
+
+            st.info(
+                "Cadastre primeiro um Setor Principal "
+                "para depois cadastrar um Subsetor."
+            )
+
+        else:
+
+            for (
+                setor_id,
+                codigo_setor,
+                nome_setor
+            ) in setores_principais:
+
+                opcoes_setores_principais[
+                    f"{codigo_setor} - {nome_setor}"
+                ] = setor_id
+
+            setor_superior = st.selectbox(
+                "Setor Principal *",
+                list(
+                    opcoes_setores_principais.keys()
+                ),
+                key="setor_incluir_setor_superior"
+            )
+
+            setor_pai_id = (
+                opcoes_setores_principais[
+                    setor_superior
+                ]
+            )
+
+    # ========================================================
+    # IDENTIFICAÇÃO VISUAL
+    # ========================================================
+
+    st.markdown("---")
+
+    if tipo_estrutura == "principal":
+
+        st.success(
+            "🏢 Você está cadastrando um Setor Principal."
+        )
+
+    else:
+
+        st.info(
+            "↳ Você está cadastrando um Subsetor."
+        )
 
     # ========================================================
     # FORMULÁRIO
@@ -9737,68 +9887,61 @@ def setor_incluir():
         clear_on_submit=True
     ):
 
-        tipo_setor = st.radio(
-            "Tipo de estrutura *",
-            [
-                "Setor principal",
-                "Subsetor"
-            ],
-            horizontal=True
-        )
-
-        setor_superior = None
-
         # ====================================================
-        # SUBSETOR
+        # NOME
         # ====================================================
 
-        if tipo_setor == "Subsetor":
+        if tipo_estrutura == "principal":
 
-            if not opcoes_superiores:
+            nome = st.text_input(
+                "Nome do Setor *",
+                max_chars=200,
+                placeholder="Ex.: Departamento de Compras"
+            )
 
-                st.warning(
-                    "⚠️ Ainda não existe nenhum setor "
-                    "nesta Unidade Administrativa."
-                )
+        else:
 
-                st.caption(
-                    "Cadastre primeiro um setor principal."
-                )
-
-            else:
-
-                setor_superior = st.selectbox(
-                    "Setor ao qual este subsetor pertence *",
-                    list(
-                        opcoes_superiores.keys()
-                    )
-                )
-
-        st.markdown("---")
+            nome = st.text_input(
+                "Nome do Subsetor *",
+                max_chars=200,
+                placeholder="Ex.: Licitações"
+            )
 
         # ====================================================
-        # DADOS DO SETOR
+        # SIGLA
         # ====================================================
-
-        nome = st.text_input(
-            "Nome do Setor *",
-            max_chars=200
-        )
 
         sigla = st.text_input(
             "Sigla",
-            max_chars=30
+            max_chars=30,
+            placeholder="Ex.: COMPRAS"
         )
 
+        # ====================================================
+        # SITUAÇÃO
+        # ====================================================
+
         ativo = st.checkbox(
-            "Setor ativo",
+            (
+                "Setor ativo"
+                if tipo_estrutura == "principal"
+                else "Subsetor ativo"
+            ),
             value=True
         )
 
         st.markdown("---")
 
+        # ====================================================
+        # SALVAR
+        # ====================================================
+
         salvar = st.form_submit_button(
-            "💾 Salvar",
+            (
+                "💾 Salvar Setor"
+                if tipo_estrutura == "principal"
+                else "💾 Salvar Subsetor"
+            ),
             type="primary",
             use_container_width=True
         )
@@ -9813,14 +9956,22 @@ def setor_incluir():
         sigla = sigla.strip()
 
         # ====================================================
-        # NOME OBRIGATÓRIO
+        # VALIDAR NOME
         # ====================================================
 
         if not nome:
 
-            st.warning(
-                "⚠️ Informe o nome do setor."
-            )
+            if tipo_estrutura == "principal":
+
+                st.warning(
+                    "⚠️ Informe o nome do setor."
+                )
+
+            else:
+
+                st.warning(
+                    "⚠️ Informe o nome do subsetor."
+                )
 
             return
 
@@ -9828,37 +9979,31 @@ def setor_incluir():
         # VALIDAR SUBSETOR
         # ====================================================
 
-        if tipo_setor == "Subsetor":
+        if tipo_estrutura == "subsetor":
 
-            if not opcoes_superiores:
+            if not opcoes_setores_principais:
 
                 st.warning(
-                    "⚠️ Para cadastrar um subsetor, "
-                    "cadastre primeiro um setor principal."
+                    "⚠️ Não existe Setor Principal disponível."
                 )
 
                 return
 
-            if not setor_superior:
+            if setor_pai_id is None:
 
                 st.warning(
-                    "⚠️ Selecione o setor superior."
+                    "⚠️ Selecione o Setor Principal "
+                    "ao qual o Subsetor pertence."
                 )
 
                 return
-
-            setor_pai_id = (
-                opcoes_superiores[
-                    setor_superior
-                ]
-            )
 
         else:
 
             setor_pai_id = None
 
         # ====================================================
-        # NOME DUPLICADO
+        # VALIDAR NOME DUPLICADO
         # ====================================================
 
         if setor_nome_duplicado(
@@ -9911,7 +10056,7 @@ def setor_incluir():
         if codigo_existente:
 
             st.warning(
-                "⚠️ Esse código de setor já está cadastrado."
+                "⚠️ Esse código já está cadastrado."
             )
 
             return
@@ -9960,10 +10105,10 @@ def setor_incluir():
 
         if sucesso:
 
-            if setor_pai_id is None:
+            if tipo_estrutura == "principal":
 
                 st.success(
-                    f"✅ Setor cadastrado com sucesso! "
+                    f"✅ Setor Principal cadastrado com sucesso! "
                     f"Código: {codigo}"
                 )
 
@@ -9973,7 +10118,6 @@ def setor_incluir():
                     f"✅ Subsetor cadastrado com sucesso! "
                     f"Código: {codigo}"
                 )
-
 def setor_localizar():
 
     st.subheader(
