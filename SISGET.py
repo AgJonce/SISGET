@@ -1524,19 +1524,176 @@ def cadastro_entidades():
         func_incluir=entidade_incluir,
         func_localizar=entidade_localizar,
         func_alterar=entidade_alterar,
+        func_excluir=entidade_excluir,
         func_imprimir=entidade_imprimir,
         icone="🏢"
     )
 
 
 # ============================================================
-# ENTIDADES - INCLUIR
+# ENTIDADES - EXCLUIR
 # ============================================================
 
-# ============================================================
-# ENTIDADES - INCLUIR
-# CÓDIGO AUTOMÁTICO
-# ============================================================
+def entidade_excluir():
+
+    st.subheader(
+        "🗑️ Excluir Entidade"
+    )
+
+    st.warning(
+        "Selecione a entidade que deseja excluir."
+    )
+
+
+    # ========================================================
+    # CARREGAR ENTIDADES
+    # ========================================================
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            id,
+            codigo AS "Código",
+            nome AS "Nome",
+            cnpj AS "CNPJ",
+            tipo_entidade AS "Tipo",
+            CASE
+                WHEN ativo = TRUE
+                    THEN 'Ativo'
+                ELSE 'Inativo'
+            END AS "Situação"
+        FROM entidades
+        ORDER BY nome
+        """
+    )
+
+
+    if df.empty:
+
+        st.info(
+            "Nenhuma entidade cadastrada."
+        )
+
+        return
+
+
+    # ========================================================
+    # GRID
+    # ========================================================
+
+    registro_id = sisget_grid_localizar(
+        df=df,
+        chave="excluir_entidades",
+        coluna_id="id",
+        altura=420
+    )
+
+
+    # ========================================================
+    # REGISTRO SELECIONADO
+    # ========================================================
+
+    if registro_id:
+
+        entidade = _sisget_fetchone(
+            """
+            SELECT
+                codigo,
+                nome
+            FROM entidades
+            WHERE id = ?
+            """,
+            (
+                registro_id,
+            )
+        )
+
+
+        if not entidade:
+
+            st.error(
+                "❌ Entidade não encontrada."
+            )
+
+            return
+
+
+        codigo = entidade[0]
+        nome = entidade[1]
+
+
+        st.markdown("---")
+
+
+        st.error(
+            f"⚠️ Você está prestes a excluir: "
+            f"**{codigo} - {nome}**"
+        )
+
+
+        confirmar = st.checkbox(
+            "Confirmo que desejo excluir esta entidade.",
+            key=f"confirmar_exclusao_entidade_{registro_id}"
+        )
+
+
+        if st.button(
+            "🗑️ Confirmar Exclusão",
+            type="primary",
+            use_container_width=True,
+            key=f"confirmar_excluir_entidade_{registro_id}"
+        ):
+
+            if not confirmar:
+
+                st.warning(
+                    "⚠️ Marque a confirmação antes de excluir."
+                )
+
+                return
+
+
+            try:
+
+                cursor.execute(
+                    """
+                    DELETE FROM entidades
+                    WHERE id = ?
+                    """,
+                    (
+                        registro_id,
+                    )
+                )
+
+
+                conn.commit()
+
+
+                st.success(
+                    "✅ Entidade excluída com sucesso!"
+                )
+
+
+                st.session_state[
+                    "sisget_tela_entidades"
+                ] = "principal"
+
+
+                st.session_state[
+                    "sisget_id_entidades"
+                ] = None
+
+
+                st.rerun()
+
+
+            except Exception as erro:
+
+                conn.rollback()
+
+                st.error(
+                    f"❌ Não foi possível excluir a entidade: {erro}"
+                )
 
 def entidade_incluir():
 
