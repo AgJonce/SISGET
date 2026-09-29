@@ -2205,12 +2205,23 @@ def cnpj_entidade_duplicado(
 # PRÓXIMO CÓDIGO DISPONÍVEL
 # ============================================================
 
-def sisget_proximo_codigo_entidade():
+# ============================================================
+# PRÓXIMO CÓDIGO DO ÓRGÃO
+#
+# 001
+# 002
+# 003
+#
+# SE EXCLUIR 002:
+# PRÓXIMO VOLTA A SER 002
+# ============================================================
+
+def sisget_proximo_codigo_orgao():
 
     dados = _sisget_fetch(
         """
         SELECT codigo
-        FROM entidades
+        FROM orgaos
         WHERE codigo ~ '^[0-9]+$'
         ORDER BY CAST(codigo AS INTEGER)
         """
@@ -2240,8 +2251,164 @@ def sisget_proximo_codigo_entidade():
 
 
 # ============================================================
-# ALTERAR SITUAÇÃO DA ENTIDADE
+# ÓRGÃOS - INCLUIR
 # ============================================================
+
+def orgao_incluir():
+
+    st.subheader(
+        "🏛️ Dados do Órgão"
+    )
+
+    # ========================================================
+    # GERAR CÓDIGO
+    # ========================================================
+
+    codigo = (
+        sisget_proximo_codigo_orgao()
+    )
+
+    st.info(
+        f"🔢 Código automático do órgão: {codigo}"
+    )
+
+    # ========================================================
+    # FORMULÁRIO
+    # ========================================================
+
+    with st.form(
+        "form_orgao_incluir",
+        clear_on_submit=True
+    ):
+
+        nome = st.text_input(
+            "Nome do Órgão *",
+            max_chars=200
+        )
+
+        sigla = st.text_input(
+            "Sigla",
+            max_chars=30
+        )
+
+        ativo = st.checkbox(
+            "Órgão ativo",
+            value=True
+        )
+
+        st.markdown("---")
+
+        salvar = st.form_submit_button(
+            "💾 Salvar",
+            type="primary",
+            use_container_width=True
+        )
+
+    # ========================================================
+    # SALVAR
+    # ========================================================
+
+    if salvar:
+
+        nome = nome.strip()
+        sigla = sigla.strip()
+
+        # ====================================================
+        # NOME OBRIGATÓRIO
+        # ====================================================
+
+        if not nome:
+
+            st.warning(
+                "⚠️ Informe o nome do órgão."
+            )
+
+            return
+
+        # ====================================================
+        # NOME DUPLICADO
+        # ====================================================
+
+        nome_existente = _sisget_fetchone(
+            """
+            SELECT id
+            FROM orgaos
+            WHERE LOWER(TRIM(nome)) = LOWER(TRIM(?))
+            """,
+            (
+                nome,
+            )
+        )
+
+        if nome_existente:
+
+            st.warning(
+                "⚠️ Já existe um órgão cadastrado com esse nome."
+            )
+
+            return
+
+        # ====================================================
+        # RECALCULAR CÓDIGO
+        # ====================================================
+
+        codigo = (
+            sisget_proximo_codigo_orgao()
+        )
+
+        # ====================================================
+        # CÓDIGO DUPLICADO
+        # ====================================================
+
+        if orgao_codigo_duplicado(
+            codigo
+        ):
+
+            st.warning(
+                "⚠️ Esse código de órgão já está cadastrado."
+            )
+
+            return
+
+        # ====================================================
+        # INSERT
+        #
+        # entidade_id agora fica NULL
+        # porque o órgão é o nível pai
+        # ====================================================
+
+        sucesso = _sisget_salvar(
+            """
+            INSERT INTO orgaos
+            (
+                entidade_id,
+                codigo,
+                nome,
+                sigla,
+                ativo
+            )
+            VALUES
+            (
+                NULL,
+                ?,
+                ?,
+                ?,
+                ?
+            )
+            """,
+            (
+                codigo,
+                nome,
+                sigla if sigla else None,
+                ativo
+            )
+        )
+
+        if sucesso:
+
+            st.success(
+                f"✅ Órgão cadastrado com sucesso! Código: {codigo}"
+            )
 
 def entidade_alterar_situacao(
     entidade_id,
