@@ -3896,12 +3896,1642 @@ def entidade_imprimir():
             key="download_pdf_entidades"
         )
 
+# ============================================================
+# CADASTRO DE ÓRGÃOS
+# ============================================================
+
 def cadastro_orgaos():
 
-    modulo_em_desenvolvimento(
-        "Cadastro de Órgãos",
-        "🏛️"
+    sisget_tela_principal(
+        titulo="Cadastro de Órgãos",
+        chave="orgaos",
+        func_incluir=orgao_incluir,
+        func_localizar=orgao_localizar,
+        func_alterar=orgao_alterar,
+        func_excluir=orgao_excluir,
+        func_imprimir=orgao_imprimir,
+        icone="🏛️"
     )
+
+
+# ============================================================
+# PRÓXIMO CÓDIGO DO ÓRGÃO
+#
+# ENTIDADE 001:
+# 001.001
+# 001.002
+# 001.003
+#
+# SE EXCLUIR 001.002:
+# PRÓXIMO VOLTA A SER 001.002
+# ============================================================
+
+def sisget_proximo_codigo_orgao(
+    entidade_id
+):
+
+    # ========================================================
+    # BUSCAR CÓDIGO DA ENTIDADE
+    # ========================================================
+
+    entidade = _sisget_fetchone(
+        """
+        SELECT codigo
+        FROM entidades
+        WHERE id = ?
+        """,
+        (
+            entidade_id,
+        )
+    )
+
+
+    if not entidade:
+
+        return None
+
+
+    codigo_entidade = str(
+        entidade[0]
+    ).strip()
+
+
+    # ========================================================
+    # GARANTIR 3 DÍGITOS NA ENTIDADE
+    # ========================================================
+
+    if codigo_entidade.isdigit():
+
+        codigo_entidade = (
+            codigo_entidade.zfill(3)
+        )
+
+
+    # ========================================================
+    # BUSCAR CÓDIGOS JÁ UTILIZADOS
+    # ========================================================
+
+    dados = _sisget_fetch(
+        """
+        SELECT codigo
+        FROM orgaos
+        WHERE entidade_id = ?
+        ORDER BY codigo
+        """,
+        (
+            entidade_id,
+        )
+    )
+
+
+    numeros_usados = set()
+
+
+    for registro in dados:
+
+        codigo = str(
+            registro[0] or ""
+        ).strip()
+
+
+        try:
+
+            # Exemplo:
+            # 001.003 -> pega 003
+
+            parte_numerica = (
+                codigo.split(".")[-1]
+            )
+
+
+            numeros_usados.add(
+                int(parte_numerica)
+            )
+
+
+        except (ValueError, TypeError):
+
+            pass
+
+
+    # ========================================================
+    # PROCURAR PRIMEIRO NÚMERO LIVRE
+    # ========================================================
+
+    proximo = 1
+
+
+    while proximo in numeros_usados:
+
+        proximo += 1
+
+
+    numero_orgao = str(
+        proximo
+    ).zfill(3)
+
+
+    return (
+        f"{codigo_entidade}.{numero_orgao}"
+    )
+
+
+# ============================================================
+# VALIDAR NOME DUPLICADO DO ÓRGÃO
+# ============================================================
+
+def orgao_nome_duplicado(
+    entidade_id,
+    nome,
+    orgao_id=None
+):
+
+    nome = nome.strip()
+
+
+    if orgao_id is None:
+
+        resultado = _sisget_fetchone(
+            """
+            SELECT id
+            FROM orgaos
+            WHERE entidade_id = ?
+              AND LOWER(TRIM(nome)) = LOWER(TRIM(?))
+            """,
+            (
+                entidade_id,
+                nome
+            )
+        )
+
+
+    else:
+
+        resultado = _sisget_fetchone(
+            """
+            SELECT id
+            FROM orgaos
+            WHERE entidade_id = ?
+              AND LOWER(TRIM(nome)) = LOWER(TRIM(?))
+              AND id <> ?
+            """,
+            (
+                entidade_id,
+                nome,
+                orgao_id
+            )
+        )
+
+
+    return resultado is not None
+
+
+# ============================================================
+# VALIDAR CÓDIGO DUPLICADO
+# ============================================================
+
+def orgao_codigo_duplicado(
+    codigo,
+    orgao_id=None
+):
+
+    if orgao_id is None:
+
+        resultado = _sisget_fetchone(
+            """
+            SELECT id
+            FROM orgaos
+            WHERE codigo = ?
+            """,
+            (
+                codigo,
+            )
+        )
+
+
+    else:
+
+        resultado = _sisget_fetchone(
+            """
+            SELECT id
+            FROM orgaos
+            WHERE codigo = ?
+              AND id <> ?
+            """,
+            (
+                codigo,
+                orgao_id
+            )
+        )
+
+
+    return resultado is not None
+
+
+# ============================================================
+# ALTERAR SITUAÇÃO DO ÓRGÃO
+# ============================================================
+
+def orgao_alterar_situacao(
+    orgao_id,
+    novo_status
+):
+
+    try:
+
+        cursor.execute(
+            """
+            UPDATE orgaos
+            SET ativo = ?
+            WHERE id = ?
+            """,
+            (
+                novo_status,
+                orgao_id
+            )
+        )
+
+
+        conn.commit()
+
+
+        st.session_state[
+            "sisget_id_orgaos"
+        ] = None
+
+
+        st.session_state[
+            "sisget_tela_orgaos"
+        ] = "localizar"
+
+
+        st.rerun()
+
+
+    except Exception as erro:
+
+        conn.rollback()
+
+        st.error(
+            f"❌ Não foi possível alterar a situação do órgão: {erro}"
+        )
+
+
+# ============================================================
+# ÓRGÃOS - INCLUIR
+# ============================================================
+
+def orgao_incluir():
+
+    st.subheader(
+        "🏛️ Dados do Órgão"
+    )
+
+
+    # ========================================================
+    # ENTIDADES ATIVAS
+    # ========================================================
+
+    entidades = _sisget_fetch(
+        """
+        SELECT
+            id,
+            codigo,
+            nome
+        FROM entidades
+        WHERE ativo = TRUE
+        ORDER BY codigo, nome
+        """
+    )
+
+
+    if not entidades:
+
+        st.warning(
+            "⚠️ Nenhuma entidade ativa cadastrada."
+        )
+
+        st.info(
+            "Cadastre uma entidade antes de cadastrar órgãos."
+        )
+
+        return
+
+
+    # ========================================================
+    # OPÇÕES DAS ENTIDADES
+    # ========================================================
+
+    opcoes_entidades = {
+
+        f"{codigo} - {nome}": entidade_id
+
+        for entidade_id, codigo, nome
+        in entidades
+    }
+
+
+    entidade_selecionada = st.selectbox(
+        "Entidade *",
+        list(
+            opcoes_entidades.keys()
+        ),
+        key="orgao_incluir_entidade"
+    )
+
+
+    entidade_id = (
+        opcoes_entidades[
+            entidade_selecionada
+        ]
+    )
+
+
+    # ========================================================
+    # GERAR CÓDIGO
+    # ========================================================
+
+    codigo = (
+        sisget_proximo_codigo_orgao(
+            entidade_id
+        )
+    )
+
+
+    st.info(
+        f"🔢 Código automático do órgão: {codigo}"
+    )
+
+
+    # ========================================================
+    # FORMULÁRIO
+    # ========================================================
+
+    with st.form(
+        "form_orgao_incluir",
+        clear_on_submit=True
+    ):
+
+        nome = st.text_input(
+            "Nome do Órgão *",
+            max_chars=200
+        )
+
+
+        sigla = st.text_input(
+            "Sigla",
+            max_chars=30
+        )
+
+
+        ativo = st.checkbox(
+            "Órgão ativo",
+            value=True
+        )
+
+
+        st.markdown("---")
+
+
+        salvar = st.form_submit_button(
+            "💾 Salvar",
+            type="primary",
+            use_container_width=True
+        )
+
+
+    # ========================================================
+    # SALVAR
+    # ========================================================
+
+    if salvar:
+
+        nome = nome.strip()
+        sigla = sigla.strip()
+
+
+        # ====================================================
+        # NOME OBRIGATÓRIO
+        # ====================================================
+
+        if not nome:
+
+            st.warning(
+                "⚠️ Informe o nome do órgão."
+            )
+
+            return
+
+
+        # ====================================================
+        # NOME DUPLICADO
+        # ====================================================
+
+        if orgao_nome_duplicado(
+            entidade_id,
+            nome
+        ):
+
+            st.warning(
+                "⚠️ Já existe um órgão com esse nome nesta entidade."
+            )
+
+            return
+
+
+        # ====================================================
+        # RECALCULAR CÓDIGO
+        # ====================================================
+
+        codigo = (
+            sisget_proximo_codigo_orgao(
+                entidade_id
+            )
+        )
+
+
+        if not codigo:
+
+            st.error(
+                "❌ Não foi possível gerar o código do órgão."
+            )
+
+            return
+
+
+        # ====================================================
+        # CÓDIGO DUPLICADO
+        # ====================================================
+
+        if orgao_codigo_duplicado(
+            codigo
+        ):
+
+            st.warning(
+                "⚠️ Esse código de órgão já está cadastrado."
+            )
+
+            return
+
+
+        # ====================================================
+        # INSERT
+        # ====================================================
+
+        sucesso = _sisget_salvar(
+            """
+            INSERT INTO orgaos
+            (
+                entidade_id,
+                codigo,
+                nome,
+                sigla,
+                ativo
+            )
+            VALUES
+            (
+                ?,
+                ?,
+                ?,
+                ?,
+                ?
+            )
+            """,
+            (
+                entidade_id,
+                codigo,
+                nome,
+                sigla if sigla else None,
+                ativo
+            )
+        )
+
+
+        if sucesso:
+
+            st.success(
+                f"✅ Órgão cadastrado com sucesso! Código: {codigo}"
+            )
+
+
+# ============================================================
+# ÓRGÃOS - LOCALIZAR
+# ============================================================
+
+def orgao_localizar():
+
+    st.subheader(
+        "🔎 Localizar Órgãos"
+    )
+
+
+    # ========================================================
+    # FILTROS
+    # ========================================================
+
+    entidades = _sisget_fetch(
+        """
+        SELECT
+            id,
+            codigo,
+            nome
+        FROM entidades
+        ORDER BY codigo, nome
+        """
+    )
+
+
+    entidade_opcoes = {
+        "Todas": None
+    }
+
+
+    for entidade_id, codigo, nome in entidades:
+
+        entidade_opcoes[
+            f"{codigo} - {nome}"
+        ] = entidade_id
+
+
+    col1, col2, col3 = st.columns(3)
+
+
+    with col1:
+
+        filtro_entidade = st.selectbox(
+            "Entidade",
+            list(
+                entidade_opcoes.keys()
+            ),
+            key="orgao_localizar_entidade"
+        )
+
+
+    with col2:
+
+        filtro_nome = st.text_input(
+            "Nome do Órgão",
+            key="orgao_localizar_nome"
+        )
+
+
+    with col3:
+
+        filtro_situacao = st.selectbox(
+            "Situação",
+            [
+                "Todos",
+                "Ativos",
+                "Inativos"
+            ],
+            key="orgao_localizar_situacao"
+        )
+
+
+    # ========================================================
+    # SQL
+    # ========================================================
+
+    sql = """
+        SELECT
+            o.id,
+
+            e.codigo AS "Entidade",
+
+            o.codigo AS "Código",
+
+            o.nome AS "Órgão",
+
+            COALESCE(
+                o.sigla,
+                ''
+            ) AS "Sigla",
+
+            CASE
+                WHEN o.ativo = TRUE
+                    THEN 'Ativo'
+                ELSE 'Inativo'
+            END AS "Situação"
+
+        FROM orgaos o
+
+        INNER JOIN entidades e
+            ON e.id = o.entidade_id
+
+        WHERE 1 = 1
+    """
+
+
+    parametros = []
+
+
+    # ========================================================
+    # ENTIDADE
+    # ========================================================
+
+    entidade_id = (
+        entidade_opcoes[
+            filtro_entidade
+        ]
+    )
+
+
+    if entidade_id is not None:
+
+        sql += """
+            AND o.entidade_id = ?
+        """
+
+        parametros.append(
+            entidade_id
+        )
+
+
+    # ========================================================
+    # NOME
+    # ========================================================
+
+    if filtro_nome.strip():
+
+        sql += """
+            AND o.nome ILIKE ?
+        """
+
+        parametros.append(
+            f"%{filtro_nome.strip()}%"
+        )
+
+
+    # ========================================================
+    # SITUAÇÃO
+    # ========================================================
+
+    if filtro_situacao == "Ativos":
+
+        sql += """
+            AND o.ativo = TRUE
+        """
+
+
+    elif filtro_situacao == "Inativos":
+
+        sql += """
+            AND o.ativo = FALSE
+        """
+
+
+    sql += """
+        ORDER BY
+            e.codigo,
+            o.codigo
+    """
+
+
+    df = _sisget_dataframe(
+        sql,
+        tuple(parametros)
+    )
+
+
+    if df.empty:
+
+        st.info(
+            "Nenhum órgão encontrado."
+        )
+
+        return None
+
+
+    st.caption(
+        f"Registros encontrados: {len(df)}"
+    )
+
+
+    # ========================================================
+    # DUPLO CLIQUE -> ALTERAR
+    # ========================================================
+
+    return sisget_grid_localizar(
+        df=df,
+        chave="orgaos",
+        coluna_id="id",
+        altura=420
+    )
+
+
+# ============================================================
+# ÓRGÃOS - ALTERAR
+# ============================================================
+
+def orgao_alterar(
+    orgao_id
+):
+
+    # ========================================================
+    # BUSCAR ÓRGÃO
+    # ========================================================
+
+    orgao = _sisget_fetchone(
+        """
+        SELECT
+            o.id,
+            o.entidade_id,
+            e.codigo,
+            e.nome,
+            o.codigo,
+            o.nome,
+            o.sigla,
+            o.ativo
+
+        FROM orgaos o
+
+        INNER JOIN entidades e
+            ON e.id = o.entidade_id
+
+        WHERE o.id = ?
+        """,
+        (
+            orgao_id,
+        )
+    )
+
+
+    if not orgao:
+
+        st.error(
+            "❌ Órgão não encontrado."
+        )
+
+        return
+
+
+    (
+        id_orgao,
+        entidade_id,
+        codigo_entidade,
+        nome_entidade,
+        codigo_atual,
+        nome_atual,
+        sigla_atual,
+        ativo_atual
+    ) = orgao
+
+
+    # ========================================================
+    # SITUAÇÃO
+    # ========================================================
+
+    if ativo_atual:
+
+        st.success(
+            "🟢 Situação: ATIVO"
+        )
+
+    else:
+
+        st.warning(
+            "🔴 Situação: INATIVO"
+        )
+
+
+    # ========================================================
+    # ENTIDADE
+    # ========================================================
+
+    st.text_input(
+        "Entidade",
+        value=(
+            f"{codigo_entidade} - "
+            f"{nome_entidade}"
+        ),
+        disabled=True
+    )
+
+
+    # ========================================================
+    # FORM
+    # ========================================================
+
+    with st.form(
+        f"form_orgao_alterar_{orgao_id}"
+    ):
+
+        st.text_input(
+            "Código",
+            value=codigo_atual or "",
+            disabled=True
+        )
+
+
+        nome = st.text_input(
+            "Nome do Órgão *",
+            value=nome_atual or "",
+            max_chars=200
+        )
+
+
+        sigla = st.text_input(
+            "Sigla",
+            value=sigla_atual or "",
+            max_chars=30
+        )
+
+
+        st.markdown("---")
+
+
+        col1, col2, col3, col4 = (
+            st.columns(4)
+        )
+
+
+        with col1:
+
+            salvar = (
+                st.form_submit_button(
+                    "💾 Salvar",
+                    type="primary",
+                    use_container_width=True
+                )
+            )
+
+
+        with col2:
+
+            if ativo_atual:
+
+                alterar_status = (
+                    st.form_submit_button(
+                        "🚫 Inativar",
+                        use_container_width=True
+                    )
+                )
+
+            else:
+
+                alterar_status = (
+                    st.form_submit_button(
+                        "✅ Ativar",
+                        use_container_width=True
+                    )
+                )
+
+
+        with col3:
+
+            excluir = (
+                st.form_submit_button(
+                    "🗑️ Excluir",
+                    use_container_width=True
+                )
+            )
+
+
+        with col4:
+
+            cancelar = (
+                st.form_submit_button(
+                    "❌ Cancelar",
+                    use_container_width=True
+                )
+            )
+
+
+    # ========================================================
+    # CANCELAR
+    # ========================================================
+
+    if cancelar:
+
+        st.session_state[
+            "sisget_id_orgaos"
+        ] = None
+
+
+        st.session_state[
+            "sisget_tela_orgaos"
+        ] = "localizar"
+
+
+        st.rerun()
+
+
+    # ========================================================
+    # ATIVAR / INATIVAR
+    # ========================================================
+
+    if alterar_status:
+
+        orgao_alterar_situacao(
+            orgao_id,
+            not ativo_atual
+        )
+
+        return
+
+
+    # ========================================================
+    # EXCLUIR
+    # ========================================================
+
+    if excluir:
+
+        try:
+
+            cursor.execute(
+                """
+                DELETE FROM orgaos
+                WHERE id = ?
+                """,
+                (
+                    orgao_id,
+                )
+            )
+
+
+            conn.commit()
+
+
+            st.session_state[
+                "sisget_id_orgaos"
+            ] = None
+
+
+            st.session_state[
+                "sisget_tela_orgaos"
+            ] = "localizar"
+
+
+            st.rerun()
+
+
+        except Exception as erro:
+
+            conn.rollback()
+
+            st.error(
+                f"❌ Não foi possível excluir o órgão: {erro}"
+            )
+
+
+        return
+
+
+    # ========================================================
+    # SALVAR
+    # ========================================================
+
+    if salvar:
+
+        nome = nome.strip()
+        sigla = sigla.strip()
+
+
+        if not nome:
+
+            st.warning(
+                "⚠️ Informe o nome do órgão."
+            )
+
+            return
+
+
+        # ====================================================
+        # NOME DUPLICADO
+        # ====================================================
+
+        if orgao_nome_duplicado(
+            entidade_id,
+            nome,
+            orgao_id
+        ):
+
+            st.warning(
+                "⚠️ Já existe outro órgão com esse nome nesta entidade."
+            )
+
+            return
+
+
+        # ====================================================
+        # UPDATE
+        # ====================================================
+
+        sucesso = _sisget_salvar(
+            """
+            UPDATE orgaos
+            SET
+                nome = ?,
+                sigla = ?
+            WHERE id = ?
+            """,
+            (
+                nome,
+                sigla if sigla else None,
+                orgao_id
+            )
+        )
+
+
+        if sucesso:
+
+            st.session_state[
+                "sisget_id_orgaos"
+            ] = None
+
+
+            st.session_state[
+                "sisget_tela_orgaos"
+            ] = "localizar"
+
+
+            st.rerun()
+
+
+# ============================================================
+# ÓRGÃOS - EXCLUIR
+# ============================================================
+
+def orgao_excluir():
+
+    st.subheader(
+        "🗑️ Excluir Órgão"
+    )
+
+
+    # ========================================================
+    # FILTRO POR ENTIDADE
+    # ========================================================
+
+    entidades = _sisget_fetch(
+        """
+        SELECT
+            id,
+            codigo,
+            nome
+        FROM entidades
+        ORDER BY codigo, nome
+        """
+    )
+
+
+    if not entidades:
+
+        st.info(
+            "Nenhuma entidade cadastrada."
+        )
+
+        return
+
+
+    opcoes = {
+
+        f"{codigo} - {nome}": entidade_id
+
+        for entidade_id, codigo, nome
+        in entidades
+    }
+
+
+    entidade_selecionada = st.selectbox(
+        "Entidade",
+        list(
+            opcoes.keys()
+        ),
+        key="excluir_orgao_entidade"
+    )
+
+
+    entidade_id = (
+        opcoes[
+            entidade_selecionada
+        ]
+    )
+
+
+    # ========================================================
+    # CARREGAR ÓRGÃOS
+    # ========================================================
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            id,
+            codigo AS "Código",
+            nome AS "Órgão",
+            COALESCE(
+                sigla,
+                ''
+            ) AS "Sigla",
+
+            CASE
+                WHEN ativo = TRUE
+                    THEN 'Ativo'
+                ELSE 'Inativo'
+            END AS "Situação"
+
+        FROM orgaos
+
+        WHERE entidade_id = ?
+
+        ORDER BY codigo
+        """,
+        (
+            entidade_id,
+        )
+    )
+
+
+    if df.empty:
+
+        st.info(
+            "Nenhum órgão cadastrado nesta entidade."
+        )
+
+        return
+
+
+    # ========================================================
+    # GRID
+    # ========================================================
+
+    registro_id = (
+        sisget_grid_localizar(
+            df=df,
+            chave="excluir_orgaos",
+            coluna_id="id",
+            altura=420
+        )
+    )
+
+
+    if not registro_id:
+
+        st.caption(
+            "Dê duplo clique no órgão que deseja excluir."
+        )
+
+        return
+
+
+    # ========================================================
+    # ÓRGÃO SELECIONADO
+    # ========================================================
+
+    orgao = _sisget_fetchone(
+        """
+        SELECT
+            codigo,
+            nome
+        FROM orgaos
+        WHERE id = ?
+        """,
+        (
+            registro_id,
+        )
+    )
+
+
+    if not orgao:
+
+        return
+
+
+    codigo = orgao[0]
+    nome = orgao[1]
+
+
+    st.markdown("---")
+
+
+    st.error(
+        f"⚠️ Você está prestes a excluir "
+        f"**{codigo} - {nome}**."
+    )
+
+
+    confirmar = st.checkbox(
+        "Confirmo que desejo excluir este órgão.",
+        key=f"confirmar_orgao_{registro_id}"
+    )
+
+
+    if st.button(
+        "🗑️ Confirmar Exclusão",
+        type="primary",
+        use_container_width=True,
+        key=f"btn_excluir_orgao_{registro_id}"
+    ):
+
+        if not confirmar:
+
+            st.warning(
+                "⚠️ Marque a confirmação antes de excluir."
+            )
+
+            return
+
+
+        try:
+
+            cursor.execute(
+                """
+                DELETE FROM orgaos
+                WHERE id = ?
+                """,
+                (
+                    registro_id,
+                )
+            )
+
+
+            conn.commit()
+
+
+            st.success(
+                "✅ Órgão excluído com sucesso!"
+            )
+
+
+            st.session_state[
+                "sisget_tela_orgaos"
+            ] = "principal"
+
+
+            st.session_state[
+                "sisget_id_orgaos"
+            ] = None
+
+
+            st.rerun()
+
+
+        except Exception as erro:
+
+            conn.rollback()
+
+            st.error(
+                f"❌ Não foi possível excluir o órgão: {erro}"
+            )
+
+
+# ============================================================
+# ÓRGÃOS - IMPRIMIR
+# ============================================================
+
+def orgao_imprimir():
+
+    st.subheader(
+        "🖨️ Relatório de Órgãos"
+    )
+
+
+    # ========================================================
+    # ENTIDADES
+    # ========================================================
+
+    entidades = _sisget_fetch(
+        """
+        SELECT
+            id,
+            codigo,
+            nome
+        FROM entidades
+        ORDER BY codigo, nome
+        """
+    )
+
+
+    opcoes = {
+        "Todas as Entidades": None
+    }
+
+
+    for entidade_id, codigo, nome in entidades:
+
+        opcoes[
+            f"{codigo} - {nome}"
+        ] = entidade_id
+
+
+    entidade_selecionada = st.selectbox(
+        "Entidade",
+        list(
+            opcoes.keys()
+        ),
+        key="imprimir_orgao_entidade"
+    )
+
+
+    situacao = st.selectbox(
+        "Situação",
+        [
+            "Todos",
+            "Ativos",
+            "Inativos"
+        ],
+        key="imprimir_orgao_situacao"
+    )
+
+
+    # ========================================================
+    # SQL
+    # ========================================================
+
+    sql = """
+        SELECT
+            e.codigo,
+            e.nome,
+            o.codigo,
+            o.nome,
+            COALESCE(
+                o.sigla,
+                ''
+            ),
+            o.ativo
+
+        FROM orgaos o
+
+        INNER JOIN entidades e
+            ON e.id = o.entidade_id
+
+        WHERE 1 = 1
+    """
+
+
+    parametros = []
+
+
+    entidade_id = (
+        opcoes[
+            entidade_selecionada
+        ]
+    )
+
+
+    if entidade_id is not None:
+
+        sql += """
+            AND o.entidade_id = ?
+        """
+
+        parametros.append(
+            entidade_id
+        )
+
+
+    if situacao == "Ativos":
+
+        sql += """
+            AND o.ativo = TRUE
+        """
+
+
+    elif situacao == "Inativos":
+
+        sql += """
+            AND o.ativo = FALSE
+        """
+
+
+    sql += """
+        ORDER BY
+            e.codigo,
+            o.codigo
+    """
+
+
+    dados = _sisget_fetch(
+        sql,
+        tuple(parametros)
+    )
+
+
+    if not dados:
+
+        st.info(
+            "Nenhum órgão encontrado."
+        )
+
+        return
+
+
+    # ========================================================
+    # DATAFRAME
+    # ========================================================
+
+    visualizacao = []
+
+
+    for registro in dados:
+
+        visualizacao.append({
+
+            "Entidade":
+                f"{registro[0]} - {registro[1]}",
+
+            "Código":
+                registro[2],
+
+            "Órgão":
+                registro[3],
+
+            "Sigla":
+                registro[4],
+
+            "Situação":
+                (
+                    "Ativo"
+                    if registro[5]
+                    else "Inativo"
+                )
+        })
+
+
+    df = pd.DataFrame(
+        visualizacao
+    )
+
+
+    st.dataframe(
+        df,
+        use_container_width=True,
+        hide_index=True
+    )
+
+
+    st.caption(
+        f"Total de órgãos: {len(df)}"
+    )
+
+
+    # ========================================================
+    # GERAR PDF
+    # ========================================================
+
+    if st.button(
+        "📄 Gerar PDF",
+        type="primary",
+        use_container_width=True,
+        key="gerar_pdf_orgaos"
+    ):
+
+        buffer = BytesIO()
+
+
+        documento = SimpleDocTemplate(
+            buffer,
+            pagesize=A4,
+            rightMargin=1.2 * cm,
+            leftMargin=1.2 * cm,
+            topMargin=1.2 * cm,
+            bottomMargin=1.2 * cm
+        )
+
+
+        estilos = (
+            getSampleStyleSheet()
+        )
+
+
+        elementos = []
+
+
+        elementos.append(
+            Paragraph(
+                "SISGET - Sistema Integrado de Gestão Pública",
+                estilos["Heading1"]
+            )
+        )
+
+
+        elementos.append(
+            Paragraph(
+                "Relatório de Órgãos",
+                estilos["Heading2"]
+            )
+        )
+
+
+        elementos.append(
+            Spacer(
+                1,
+                0.4 * cm
+            )
+        )
+
+
+        tabela_dados = [[
+            "Entidade",
+            "Código",
+            "Órgão",
+            "Sigla",
+            "Situação"
+        ]]
+
+
+        for registro in dados:
+
+            tabela_dados.append([
+
+                str(
+                    registro[0] or ""
+                ),
+
+                str(
+                    registro[2] or ""
+                ),
+
+                Paragraph(
+                    str(
+                        registro[3] or ""
+                    ),
+                    estilos["Normal"]
+                ),
+
+                str(
+                    registro[4] or ""
+                ),
+
+                (
+                    "Ativo"
+                    if registro[5]
+                    else "Inativo"
+                )
+            ])
+
+
+        tabela = Table(
+            tabela_dados,
+            colWidths=[
+                2.5 * cm,
+                2.5 * cm,
+                7 * cm,
+                2.5 * cm,
+                2.5 * cm
+            ],
+            repeatRows=1
+        )
+
+
+        tabela.setStyle(
+            TableStyle([
+                (
+                    "BACKGROUND",
+                    (0, 0),
+                    (-1, 0),
+                    colors.lightgrey
+                ),
+                (
+                    "FONTNAME",
+                    (0, 0),
+                    (-1, 0),
+                    "Helvetica-Bold"
+                ),
+                (
+                    "GRID",
+                    (0, 0),
+                    (-1, -1),
+                    0.5,
+                    colors.grey
+                ),
+                (
+                    "VALIGN",
+                    (0, 0),
+                    (-1, -1),
+                    "MIDDLE"
+                ),
+                (
+                    "FONTSIZE",
+                    (0, 0),
+                    (-1, -1),
+                    8
+                )
+            ])
+        )
+
+
+        elementos.append(
+            tabela
+        )
+
+
+        documento.build(
+            elementos
+        )
+
+
+        buffer.seek(0)
+
+
+        st.download_button(
+            "⬇️ Baixar Relatório em PDF",
+            data=buffer,
+            file_name="relatorio_orgaos.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+            key="baixar_pdf_orgaos"
+        )
 
 
 def cadastro_unidades_orcamentarias():
