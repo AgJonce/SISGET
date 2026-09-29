@@ -1499,13 +1499,1099 @@ def cadastro_basico():
 
         organograma_sisget()
 
+# ============================================================
+# CADASTRO DE ENTIDADES
+# ============================================================
+
 def cadastro_entidades():
 
-    modulo_em_desenvolvimento(
-        "Cadastro de Entidades",
-        "🏢"
+    sisget_tela_principal(
+        titulo="Cadastro de Entidades",
+        chave="entidades",
+        func_incluir=entidade_incluir,
+        func_localizar=entidade_localizar,
+        func_alterar=entidade_alterar,
+        func_imprimir=entidade_imprimir,
+        icone="🏢"
     )
 
+
+# ============================================================
+# ENTIDADES - INCLUIR
+# ============================================================
+
+def entidade_incluir():
+
+    st.subheader(
+        "🏢 Dados da Entidade"
+    )
+
+    with st.form(
+        "form_entidade_incluir",
+        clear_on_submit=True
+    ):
+
+        col1, col2 = st.columns(
+            [1, 3]
+        )
+
+
+        with col1:
+
+            codigo = st.text_input(
+                "Código *",
+                max_chars=20
+            )
+
+
+        with col2:
+
+            nome = st.text_input(
+                "Nome da Entidade *",
+                max_chars=200
+            )
+
+
+        col3, col4 = st.columns(2)
+
+
+        with col3:
+
+            cnpj = st.text_input(
+                "CNPJ",
+                max_chars=18,
+                placeholder="00.000.000/0000-00"
+            )
+
+
+        with col4:
+
+            tipo_entidade = st.selectbox(
+                "Tipo de Entidade",
+                [
+                    "Prefeitura",
+                    "Câmara",
+                    "Autarquia",
+                    "Fundação",
+                    "Consórcio",
+                    "Outro"
+                ]
+            )
+
+
+        ativo = st.checkbox(
+            "Entidade ativa",
+            value=True
+        )
+
+
+        st.markdown("---")
+
+
+        salvar = st.form_submit_button(
+            "💾 Salvar",
+            type="primary",
+            use_container_width=True
+        )
+
+
+    # ========================================================
+    # SALVAR
+    # ========================================================
+
+    if salvar:
+
+        codigo = codigo.strip()
+
+        nome = nome.strip()
+
+        cnpj = cnpj.strip()
+
+
+        # ====================================================
+        # VALIDAÇÕES
+        # ====================================================
+
+        if not codigo:
+
+            st.warning(
+                "⚠️ Informe o código da entidade."
+            )
+
+            return
+
+
+        if not nome:
+
+            st.warning(
+                "⚠️ Informe o nome da entidade."
+            )
+
+            return
+
+
+        # ====================================================
+        # VERIFICAR CÓDIGO DUPLICADO
+        # ====================================================
+
+        existente = _sisget_fetchone(
+            """
+            SELECT id
+            FROM entidades
+            WHERE codigo = ?
+            """,
+            (
+                codigo,
+            )
+        )
+
+
+        if existente:
+
+            st.warning(
+                "⚠️ Já existe uma entidade com esse código."
+            )
+
+            return
+
+
+        # ====================================================
+        # INSERT
+        # ====================================================
+
+        sucesso = _sisget_salvar(
+            """
+            INSERT INTO entidades
+            (
+                codigo,
+                nome,
+                cnpj,
+                tipo_entidade,
+                ativo
+            )
+            VALUES
+            (
+                ?,
+                ?,
+                ?,
+                ?,
+                ?
+            )
+            """,
+            (
+                codigo,
+                nome,
+                cnpj if cnpj else None,
+                tipo_entidade,
+                ativo
+            )
+        )
+
+
+        if sucesso:
+
+            st.success(
+                "✅ Entidade cadastrada com sucesso!"
+            )
+
+
+# ============================================================
+# ENTIDADES - LOCALIZAR
+# ============================================================
+
+def entidade_localizar():
+
+    st.subheader(
+        "🔎 Localizar Entidades"
+    )
+
+
+    # ========================================================
+    # FILTROS
+    # ========================================================
+
+    col1, col2, col3 = st.columns(
+        [1, 3, 1]
+    )
+
+
+    with col1:
+
+        filtro_codigo = st.text_input(
+            "Código",
+            key="entidade_filtro_codigo"
+        )
+
+
+    with col2:
+
+        filtro_nome = st.text_input(
+            "Nome",
+            key="entidade_filtro_nome"
+        )
+
+
+    with col3:
+
+        filtro_situacao = st.selectbox(
+            "Situação",
+            [
+                "Todos",
+                "Ativos",
+                "Inativos"
+            ],
+            key="entidade_filtro_situacao"
+        )
+
+
+    # ========================================================
+    # SQL
+    # ========================================================
+
+    sql = """
+        SELECT
+            id,
+            codigo AS "Código",
+            nome AS "Nome",
+            cnpj AS "CNPJ",
+            tipo_entidade AS "Tipo",
+            CASE
+                WHEN ativo = TRUE
+                    THEN 'Ativo'
+                ELSE 'Inativo'
+            END AS "Situação"
+        FROM entidades
+        WHERE 1 = 1
+    """
+
+
+    parametros = []
+
+
+    # ========================================================
+    # CÓDIGO
+    # ========================================================
+
+    if filtro_codigo.strip():
+
+        sql += """
+            AND codigo ILIKE ?
+        """
+
+        parametros.append(
+            f"%{filtro_codigo.strip()}%"
+        )
+
+
+    # ========================================================
+    # NOME
+    # ========================================================
+
+    if filtro_nome.strip():
+
+        sql += """
+            AND nome ILIKE ?
+        """
+
+        parametros.append(
+            f"%{filtro_nome.strip()}%"
+        )
+
+
+    # ========================================================
+    # SITUAÇÃO
+    # ========================================================
+
+    if filtro_situacao == "Ativos":
+
+        sql += """
+            AND ativo = TRUE
+        """
+
+
+    elif filtro_situacao == "Inativos":
+
+        sql += """
+            AND ativo = FALSE
+        """
+
+
+    sql += """
+        ORDER BY nome
+    """
+
+
+    # ========================================================
+    # DATAFRAME
+    # ========================================================
+
+    df = _sisget_dataframe(
+        sql,
+        tuple(parametros)
+    )
+
+
+    if df.empty:
+
+        st.info(
+            "Nenhuma entidade encontrada."
+        )
+
+        return None
+
+
+    st.caption(
+        f"Registros encontrados: {len(df)}"
+    )
+
+
+    # ========================================================
+    # GRID
+    #
+    # DUPLO CLIQUE -> ALTERAR
+    # ========================================================
+
+    registro_id = sisget_grid_localizar(
+        df=df,
+        chave="entidades",
+        coluna_id="id",
+        altura=420
+    )
+
+
+    return registro_id
+
+
+# ============================================================
+# ENTIDADES - ALTERAR
+# ============================================================
+
+def entidade_alterar(
+    entidade_id
+):
+
+    # ========================================================
+    # LOCALIZAR REGISTRO
+    # ========================================================
+
+    entidade = _sisget_fetchone(
+        """
+        SELECT
+            id,
+            codigo,
+            nome,
+            cnpj,
+            tipo_entidade,
+            ativo
+        FROM entidades
+        WHERE id = ?
+        """,
+        (
+            entidade_id,
+        )
+    )
+
+
+    if not entidade:
+
+        st.error(
+            "❌ Entidade não encontrada."
+        )
+
+        return
+
+
+    (
+        id_entidade,
+        codigo_atual,
+        nome_atual,
+        cnpj_atual,
+        tipo_atual,
+        ativo_atual
+    ) = entidade
+
+
+    st.subheader(
+        f"🏢 Entidade #{id_entidade}"
+    )
+
+
+    # ========================================================
+    # TIPOS
+    # ========================================================
+
+    tipos = [
+        "Prefeitura",
+        "Câmara",
+        "Autarquia",
+        "Fundação",
+        "Consórcio",
+        "Outro"
+    ]
+
+
+    if tipo_atual not in tipos:
+
+        tipos.append(
+            tipo_atual
+        )
+
+
+    indice_tipo = tipos.index(
+        tipo_atual
+    )
+
+
+    # ========================================================
+    # FORM
+    # ========================================================
+
+    with st.form(
+        f"form_entidade_alterar_{entidade_id}"
+    ):
+
+        col1, col2 = st.columns(
+            [1, 3]
+        )
+
+
+        with col1:
+
+            codigo = st.text_input(
+                "Código *",
+                value=codigo_atual or "",
+                max_chars=20
+            )
+
+
+        with col2:
+
+            nome = st.text_input(
+                "Nome da Entidade *",
+                value=nome_atual or "",
+                max_chars=200
+            )
+
+
+        col3, col4 = st.columns(2)
+
+
+        with col3:
+
+            cnpj = st.text_input(
+                "CNPJ",
+                value=cnpj_atual or "",
+                max_chars=18
+            )
+
+
+        with col4:
+
+            tipo_entidade = st.selectbox(
+                "Tipo de Entidade",
+                tipos,
+                index=indice_tipo
+            )
+
+
+        ativo = st.checkbox(
+            "Entidade ativa",
+            value=bool(
+                ativo_atual
+            )
+        )
+
+
+        st.markdown("---")
+
+
+        col_salvar, col_cancelar = st.columns(2)
+
+
+        with col_salvar:
+
+            salvar = st.form_submit_button(
+                "💾 Salvar Alterações",
+                type="primary",
+                use_container_width=True
+            )
+
+
+        with col_cancelar:
+
+            cancelar = st.form_submit_button(
+                "❌ Cancelar",
+                use_container_width=True
+            )
+
+
+    # ========================================================
+    # CANCELAR
+    # ========================================================
+
+    if cancelar:
+
+        sisget_voltar_localizar(
+            "entidades"
+        )
+
+
+    # ========================================================
+    # SALVAR ALTERAÇÃO
+    # ========================================================
+
+    if salvar:
+
+        codigo = codigo.strip()
+
+        nome = nome.strip()
+
+        cnpj = cnpj.strip()
+
+
+        if not codigo:
+
+            st.warning(
+                "⚠️ Informe o código da entidade."
+            )
+
+            return
+
+
+        if not nome:
+
+            st.warning(
+                "⚠️ Informe o nome da entidade."
+            )
+
+            return
+
+
+        # ====================================================
+        # VERIFICAR CÓDIGO DUPLICADO
+        # ====================================================
+
+        duplicado = _sisget_fetchone(
+            """
+            SELECT id
+            FROM entidades
+            WHERE codigo = ?
+              AND id <> ?
+            """,
+            (
+                codigo,
+                entidade_id
+            )
+        )
+
+
+        if duplicado:
+
+            st.warning(
+                "⚠️ Já existe outra entidade com esse código."
+            )
+
+            return
+
+
+        # ====================================================
+        # UPDATE
+        # ====================================================
+
+        sucesso = _sisget_salvar(
+            """
+            UPDATE entidades
+
+            SET
+                codigo = ?,
+                nome = ?,
+                cnpj = ?,
+                tipo_entidade = ?,
+                ativo = ?
+
+            WHERE id = ?
+            """,
+            (
+                codigo,
+                nome,
+                cnpj if cnpj else None,
+                tipo_entidade,
+                ativo,
+                entidade_id
+            )
+        )
+
+
+        if sucesso:
+
+            st.success(
+                "✅ Entidade alterada com sucesso!"
+            )
+
+
+            st.session_state[
+                "sisget_tela_entidades"
+            ] = "localizar"
+
+
+            st.session_state[
+                "sisget_id_entidades"
+            ] = None
+
+
+            st.rerun()
+
+
+# ============================================================
+# ENTIDADES - IMPRIMIR
+# ============================================================
+
+def entidade_imprimir():
+
+    st.subheader(
+        "🖨️ Relatório de Entidades"
+    )
+
+
+    # ========================================================
+    # FILTRO
+    # ========================================================
+
+    filtro = st.selectbox(
+        "Situação",
+        [
+            "Todas",
+            "Ativas",
+            "Inativas"
+        ],
+        key="entidade_imprimir_situacao"
+    )
+
+
+    # ========================================================
+    # SQL
+    # ========================================================
+
+    sql = """
+        SELECT
+            codigo,
+            nome,
+            cnpj,
+            tipo_entidade,
+            ativo
+        FROM entidades
+        WHERE 1 = 1
+    """
+
+
+    if filtro == "Ativas":
+
+        sql += """
+            AND ativo = TRUE
+        """
+
+
+    elif filtro == "Inativas":
+
+        sql += """
+            AND ativo = FALSE
+        """
+
+
+    sql += """
+        ORDER BY nome
+    """
+
+
+    dados = _sisget_fetch(
+        sql
+    )
+
+
+    if not dados:
+
+        st.info(
+            "Nenhuma entidade encontrada para impressão."
+        )
+
+        return
+
+
+    # ========================================================
+    # VISUALIZAÇÃO
+    # ========================================================
+
+    dados_visualizacao = []
+
+
+    for registro in dados:
+
+        dados_visualizacao.append({
+
+            "Código":
+                registro[0],
+
+            "Nome":
+                registro[1],
+
+            "CNPJ":
+                registro[2] or "",
+
+            "Tipo":
+                registro[3] or "",
+
+            "Situação":
+                "Ativo"
+                if registro[4]
+                else "Inativo"
+        })
+
+
+    df = pd.DataFrame(
+        dados_visualizacao
+    )
+
+
+    st.dataframe(
+        df,
+        use_container_width=True,
+        hide_index=True
+    )
+
+
+    st.caption(
+        f"Total de entidades: {len(df)}"
+    )
+
+
+    # ========================================================
+    # GERAR PDF
+    # ========================================================
+
+    if st.button(
+        "📄 Gerar PDF",
+        type="primary",
+        use_container_width=True,
+        key="btn_pdf_entidades"
+    ):
+
+        buffer = BytesIO()
+
+
+        documento = SimpleDocTemplate(
+
+            buffer,
+
+            pagesize=A4,
+
+            rightMargin=1.2 * cm,
+
+            leftMargin=1.2 * cm,
+
+            topMargin=1.2 * cm,
+
+            bottomMargin=1.2 * cm
+        )
+
+
+        estilos = getSampleStyleSheet()
+
+
+        titulo_style = ParagraphStyle(
+
+            "TituloSISGET",
+
+            parent=estilos[
+                "Heading1"
+            ],
+
+            alignment=1,
+
+            fontSize=16,
+
+            spaceAfter=10
+        )
+
+
+        subtitulo_style = ParagraphStyle(
+
+            "SubtituloSISGET",
+
+            parent=estilos[
+                "Normal"
+            ],
+
+            alignment=1,
+
+            fontSize=9,
+
+            spaceAfter=15
+        )
+
+
+        elementos = []
+
+
+        # ====================================================
+        # TÍTULO
+        # ====================================================
+
+        elementos.append(
+
+            Paragraph(
+                "SISGET - Sistema Integrado de Gestão Pública",
+                titulo_style
+            )
+        )
+
+
+        elementos.append(
+
+            Paragraph(
+                "Relatório de Entidades",
+                estilos["Heading2"]
+            )
+        )
+
+
+        elementos.append(
+
+            Paragraph(
+                f"Situação: {filtro}",
+                subtitulo_style
+            )
+        )
+
+
+        elementos.append(
+            Spacer(
+                1,
+                0.3 * cm
+            )
+        )
+
+
+        # ====================================================
+        # CABEÇALHO DA TABELA
+        # ====================================================
+
+        tabela_dados = [[
+
+            "Código",
+            "Nome",
+            "CNPJ",
+            "Tipo",
+            "Situação"
+
+        ]]
+
+
+        # ====================================================
+        # DADOS
+        # ====================================================
+
+        for registro in dados:
+
+            tabela_dados.append([
+
+                str(
+                    registro[0] or ""
+                ),
+
+                Paragraph(
+                    str(
+                        registro[1] or ""
+                    ),
+                    estilos["Normal"]
+                ),
+
+                str(
+                    registro[2] or ""
+                ),
+
+                str(
+                    registro[3] or ""
+                ),
+
+                (
+                    "Ativo"
+                    if registro[4]
+                    else "Inativo"
+                )
+            ])
+
+
+        # ====================================================
+        # TABELA
+        # ====================================================
+
+        tabela = Table(
+
+            tabela_dados,
+
+            colWidths=[
+                2 * cm,
+                6 * cm,
+                4 * cm,
+                3 * cm,
+                2 * cm
+            ],
+
+            repeatRows=1
+        )
+
+
+        tabela.setStyle(
+
+            TableStyle([
+
+                (
+                    "BACKGROUND",
+                    (0, 0),
+                    (-1, 0),
+                    colors.lightgrey
+                ),
+
+                (
+                    "TEXTCOLOR",
+                    (0, 0),
+                    (-1, 0),
+                    colors.black
+                ),
+
+                (
+                    "ALIGN",
+                    (0, 0),
+                    (-1, 0),
+                    "CENTER"
+                ),
+
+                (
+                    "VALIGN",
+                    (0, 0),
+                    (-1, -1),
+                    "MIDDLE"
+                ),
+
+                (
+                    "FONTNAME",
+                    (0, 0),
+                    (-1, 0),
+                    "Helvetica-Bold"
+                ),
+
+                (
+                    "FONTSIZE",
+                    (0, 0),
+                    (-1, -1),
+                    8
+                ),
+
+                (
+                    "GRID",
+                    (0, 0),
+                    (-1, -1),
+                    0.5,
+                    colors.grey
+                ),
+
+                (
+                    "LEFTPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    4
+                ),
+
+                (
+                    "RIGHTPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    4
+                ),
+
+                (
+                    "TOPPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    4
+                ),
+
+                (
+                    "BOTTOMPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    4
+                )
+            ])
+        )
+
+
+        elementos.append(
+            tabela
+        )
+
+
+        elementos.append(
+            Spacer(
+                1,
+                0.5 * cm
+            )
+        )
+
+
+        elementos.append(
+
+            Paragraph(
+                f"Total de registros: {len(dados)}",
+                estilos["Normal"]
+            )
+        )
+
+
+        # ====================================================
+        # DATA
+        # ====================================================
+
+        elementos.append(
+
+            Paragraph(
+                (
+                    "Emitido em: "
+                    + datetime.now().strftime(
+                        "%d/%m/%Y %H:%M"
+                    )
+                ),
+                estilos["Normal"]
+            )
+        )
+
+
+        # ====================================================
+        # CONSTRUIR PDF
+        # ====================================================
+
+        documento.build(
+            elementos
+        )
+
+
+        buffer.seek(0)
+
+
+        st.download_button(
+
+            label="⬇️ Baixar Relatório em PDF",
+
+            data=buffer,
+
+            file_name="relatorio_entidades.pdf",
+
+            mime="application/pdf",
+
+            use_container_width=True,
+
+            key="download_pdf_entidades"
+        )
 
 def cadastro_orgaos():
 
