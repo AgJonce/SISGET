@@ -1522,42 +1522,80 @@ def cadastro_entidades():
 # ENTIDADES - INCLUIR
 # ============================================================
 
+# ============================================================
+# ENTIDADES - INCLUIR
+# CÓDIGO AUTOMÁTICO
+# ============================================================
+
 def entidade_incluir():
 
     st.subheader(
         "🏢 Dados da Entidade"
     )
 
+    # ========================================================
+    # GERAR PRÓXIMO CÓDIGO
+    # ========================================================
+
+    ultimo_codigo = _sisget_fetchone(
+        """
+        SELECT
+            COALESCE(
+                MAX(
+                    CAST(codigo AS INTEGER)
+                ),
+                0
+            )
+        FROM entidades
+        WHERE codigo ~ '^[0-9]+$'
+        """
+    )
+
+
+    if ultimo_codigo:
+
+        proximo_codigo = (
+            int(ultimo_codigo[0]) + 1
+        )
+
+    else:
+
+        proximo_codigo = 1
+
+
+    codigo = str(
+        proximo_codigo
+    ).zfill(3)
+
+
+    # ========================================================
+    # MOSTRAR CÓDIGO
+    # ========================================================
+
+    st.info(
+        f"🔢 Código automático: {codigo}"
+    )
+
+
+    # ========================================================
+    # FORMULÁRIO
+    # ========================================================
+
     with st.form(
         "form_entidade_incluir",
         clear_on_submit=True
     ):
 
-        col1, col2 = st.columns(
-            [1, 3]
+        nome = st.text_input(
+            "Nome da Entidade *",
+            max_chars=200
         )
 
 
+        col1, col2 = st.columns(2)
+
+
         with col1:
-
-            codigo = st.text_input(
-                "Código *",
-                max_chars=20
-            )
-
-
-        with col2:
-
-            nome = st.text_input(
-                "Nome da Entidade *",
-                max_chars=200
-            )
-
-
-        col3, col4 = st.columns(2)
-
-
-        with col3:
 
             cnpj = st.text_input(
                 "CNPJ",
@@ -1566,7 +1604,7 @@ def entidade_incluir():
             )
 
 
-        with col4:
+        with col2:
 
             tipo_entidade = st.selectbox(
                 "Tipo de Entidade",
@@ -1603,24 +1641,9 @@ def entidade_incluir():
 
     if salvar:
 
-        codigo = codigo.strip()
-
         nome = nome.strip()
 
         cnpj = cnpj.strip()
-
-
-        # ====================================================
-        # VALIDAÇÕES
-        # ====================================================
-
-        if not codigo:
-
-            st.warning(
-                "⚠️ Informe o código da entidade."
-            )
-
-            return
 
 
         if not nome:
@@ -1633,28 +1656,39 @@ def entidade_incluir():
 
 
         # ====================================================
-        # VERIFICAR CÓDIGO DUPLICADO
+        # RECALCULAR CÓDIGO ANTES DO INSERT
+        # EVITA PEGAR CÓDIGO ANTIGO
         # ====================================================
 
-        existente = _sisget_fetchone(
+        ultimo_codigo = _sisget_fetchone(
             """
-            SELECT id
+            SELECT
+                COALESCE(
+                    MAX(
+                        CAST(codigo AS INTEGER)
+                    ),
+                    0
+                )
             FROM entidades
-            WHERE codigo = ?
-            """,
-            (
-                codigo,
-            )
+            WHERE codigo ~ '^[0-9]+$'
+            """
         )
 
 
-        if existente:
+        if ultimo_codigo:
 
-            st.warning(
-                "⚠️ Já existe uma entidade com esse código."
+            proximo_codigo = (
+                int(ultimo_codigo[0]) + 1
             )
 
-            return
+        else:
+
+            proximo_codigo = 1
+
+
+        codigo = str(
+            proximo_codigo
+        ).zfill(3)
 
 
         # ====================================================
@@ -1693,13 +1727,8 @@ def entidade_incluir():
         if sucesso:
 
             st.success(
-                "✅ Entidade cadastrada com sucesso!"
+                f"✅ Entidade cadastrada com sucesso! Código: {codigo}"
             )
-
-
-# ============================================================
-# ENTIDADES - LOCALIZAR
-# ============================================================
 
 def entidade_localizar():
 
