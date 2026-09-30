@@ -17175,39 +17175,121 @@ def planejamento_programas():
     )
 
 
+# ============================================================
+# PROGRAMA ORÇAMENTÁRIO - INCLUIR
+# ============================================================
+
 def programa_orcamentario_incluir():
 
+    st.subheader(
+        "📘 Incluir Programa Orçamentário"
+    )
+
+    # ========================================================
+    # EXERCÍCIO
+    # ========================================================
+
+    exercicio = st.number_input(
+        "Exercício *",
+        min_value=2000,
+        max_value=2100,
+        value=datetime.now().year,
+        step=1,
+        key="programa_incluir_exercicio"
+    )
+
+    # ========================================================
+    # CÓDIGO AUTOMÁTICO
+    # ========================================================
+
+    codigo_automatico = (
+        sisget_proximo_codigo_programa(
+            exercicio
+        )
+    )
+
+    st.markdown("---")
+
     with st.form(
-        "form_programa_incluir",
+        "form_programa_orcamentario_incluir",
         clear_on_submit=True
     ):
 
-        col1, col2 = st.columns([1, 1])
-
-        exercicio = col1.number_input(
-            "Exercício *",
-            2000,
-            2100,
-            datetime.now().year
+        col1, col2 = st.columns(
+            [1, 4]
         )
 
-        codigo = col2.text_input(
-            "Código *"
+        with col1:
+
+            st.text_input(
+                "Código",
+                value=codigo_automatico,
+                disabled=True
+            )
+
+        with col2:
+
+            descricao = st.text_input(
+                "Nome / Descrição do Programa *",
+                max_chars=250,
+                placeholder=(
+                    "Ex.: Gestão Administrativa"
+                )
+            )
+
+        ativo = st.checkbox(
+            "Programa ativo",
+            value=True
         )
 
-        descricao = st.text_input(
-            "Descrição *"
+        st.caption(
+            "O código é gerado automaticamente "
+            "de acordo com o exercício."
         )
+
+        st.markdown("---")
 
         salvar = st.form_submit_button(
-            "💾 Salvar",
+            "💾 Salvar Programa",
             type="primary",
             use_container_width=True
         )
 
+    # ========================================================
+    # SALVAR
+    # ========================================================
+
     if salvar:
 
-        if _sisget_salvar(
+        descricao = descricao.strip()
+
+        if not descricao:
+
+            st.warning(
+                "⚠️ Informe o nome ou descrição do Programa."
+            )
+
+            return
+
+        # ====================================================
+        # RECALCULAR CÓDIGO NO MOMENTO DE SALVAR
+        #
+        # IMPORTANTE:
+        # evita pegar código antigo caso outro registro
+        # tenha sido criado antes do clique em salvar.
+        # ====================================================
+
+        codigo = (
+            sisget_proximo_codigo_programa(
+                exercicio
+            )
+        )
+
+        # ====================================================
+        # SALVAR
+        # ====================================================
+
+        sucesso = _sisget_salvar(
             """
             INSERT INTO programas_orcamentarios
             (
@@ -17216,18 +17298,30 @@ def programa_orcamentario_incluir():
                 descricao,
                 ativo
             )
-            VALUES (?, ?, ?, TRUE)
+            VALUES
+            (
+                ?,
+                ?,
+                ?,
+                ?
+            )
             """,
             (
                 int(exercicio),
-                codigo.strip(),
-                descricao.strip()
+                codigo,
+                descricao,
+                ativo
             )
-        ):
+        )
 
-            st.success("✅ Programa cadastrado.")
+        if sucesso:
+
+            st.success(
+                f"✅ Programa {codigo} - {descricao} "
+                "cadastrado com sucesso!"
+            )
+
             st.rerun()
-
 
 def programa_orcamentario_localizar():
 
