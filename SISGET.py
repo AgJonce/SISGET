@@ -17179,28 +17179,164 @@ def planejamento_programas():
 # PROGRAMA ORÇAMENTÁRIO - INCLUIR
 # ============================================================
 
+# ============================================================
+# PROGRAMA ORÇAMENTÁRIO - INCLUIR
+# ============================================================
+
 def programa_orcamentario_incluir():
 
     st.subheader(
         "📘 Incluir Programa Orçamentário"
     )
 
-    exercicio = st.number_input(
-        "Exercício *",
-        min_value=2000,
-        max_value=2100,
-        value=datetime.now().year,
-        step=1,
-        key="programa_incluir_exercicio"
+    # ========================================================
+    # ENTIDADES
+    # ========================================================
+
+    entidades = _sisget_fetch(
+        """
+        SELECT
+            id,
+            codigo,
+            nome
+        FROM entidades
+        WHERE ativo = TRUE
+        ORDER BY codigo, nome
+        """
     )
 
-    codigo_automatico = (
-        sisget_proximo_codigo_programa(
-            exercicio
+    if not entidades:
+
+        st.warning(
+            "⚠️ Nenhuma Entidade ativa cadastrada."
+        )
+
+        return
+
+    mapa_entidades = {
+        f"{codigo} - {nome}": entidade_id
+        for entidade_id, codigo, nome in entidades
+    }
+
+    entidade_nome = st.selectbox(
+        "Entidade *",
+        list(mapa_entidades.keys()),
+        key="programa_entidade"
+    )
+
+    entidade_id = mapa_entidades[
+        entidade_nome
+    ]
+
+    # ========================================================
+    # EXERCÍCIOS DA ENTIDADE
+    # ========================================================
+
+    exercicios = _sisget_fetch(
+        """
+        SELECT
+            id,
+            ano,
+            descricao
+        FROM exercicios
+        WHERE entidade_id = ?
+          AND ativo = TRUE
+          AND encerrado = FALSE
+        ORDER BY ano DESC
+        """,
+        (
+            entidade_id,
         )
     )
 
-    st.markdown("---")
+    if not exercicios:
+
+        st.warning(
+            "⚠️ Esta Entidade não possui Exercício "
+            "ativo e aberto."
+        )
+
+        return
+
+    mapa_exercicios = {}
+
+    for exercicio_id, ano, descricao in exercicios:
+
+        texto = str(ano)
+
+        if descricao:
+
+            texto += f" - {descricao}"
+
+        mapa_exercicios[
+            texto
+        ] = (
+            exercicio_id,
+            ano
+        )
+
+    exercicio_nome = st.selectbox(
+        "Exercício *",
+        list(mapa_exercicios.keys()),
+        key="programa_exercicio"
+    )
+
+    (
+        exercicio_id,
+        ano_exercicio
+    ) = mapa_exercicios[
+        exercicio_nome
+    ]
+
+    # ========================================================
+    # PRÓXIMO CÓDIGO AUTOMÁTICO
+    # ========================================================
+
+    dados_codigos = _sisget_fetch(
+        """
+        SELECT codigo
+        FROM programas
+        WHERE entidade_id = ?
+          AND exercicio_id = ?
+        ORDER BY codigo
+        """,
+        (
+            entidade_id,
+            exercicio_id
+        )
+    )
+
+    usados = set()
+
+    for registro in dados_codigos:
+
+        try:
+
+            usados.add(
+                int(
+                    str(
+                        registro[0]
+                    ).strip()
+                )
+            )
+
+        except (ValueError, TypeError):
+
+            pass
+
+    proximo = 1
+
+    while proximo in usados:
+
+        proximo += 1
+
+    codigo_automatico = str(
+        proximo
+    ).zfill(4)
+
+    # ========================================================
+    # FORM
+    # ========================================================
 
     with st.form(
         "form_programa_orcamentario_incluir",
@@ -17221,16 +17357,23 @@ def programa_orcamentario_incluir():
 
         with col2:
 
-            descricao = st.text_input(
-                "Nome / Descrição do Programa *",
+            nome = st.text_input(
+                "Nome do Programa *",
                 max_chars=250,
                 placeholder="Ex.: Gestão Administrativa"
             )
+
+        descricao = st.text_area(
+            "Descrição",
+            height=100
+        )
 
         ativo = st.checkbox(
             "Programa ativo",
             value=True
         )
+
+        st.markdown("---")
 
         salvar = st.form_submit_button(
             "💾 Salvar Programa",
@@ -17238,30 +17381,80 @@ def programa_orcamentario_incluir():
             use_container_width=True
         )
 
+    # ========================================================
+    # SALVAR
+    # ========================================================
+
     if salvar:
 
+        nome = nome.strip()
         descricao = descricao.strip()
 
-        if not descricao:
+        if not nome:
 
             st.warning(
-                "⚠️ Informe o nome ou descrição do Programa."
+                "⚠️ Informe o nome do Programa."
             )
 
             return
 
-        codigo = (
-            sisget_proximo_codigo_programa(
-                exercicio
+        # ====================================================
+        # RECALCULAR CÓDIGO
+        # ====================================================
+
+        dados_codigos = _sisget_fetch(
+            """
+            SELECT codigo
+            FROM programas
+            WHERE entidade_id = ?
+              AND exercicio_id = ?
+            """,
+            (
+                entidade_id,
+                exercicio_id
             )
         )
 
+        usados = set()
+
+        for registro in dados_codigos:
+
+            try:
+
+                usados.add(
+                    int(
+                        str(
+                            registro[0]
+                        ).strip()
+                    )
+                )
+
+            except (ValueError, TypeError):
+
+                pass
+
+        proximo = 1
+
+        while proximo in usados:
+
+            proximo += 1
+
+        codigo = str(
+            proximo
+        ).zfill(4)
+
+        # ====================================================
+        # INSERT
+        # ====================================================
+
         sucesso = _sisget_salvar(
             """
-            INSERT INTO programas_orcamentarios
+            INSERT INTO programas
             (
-                exercicio,
+                entidade_id,
+                exercicio_id,
                 codigo,
+                nome,
                 descricao,
                 ativo
             )
@@ -17270,13 +17463,17 @@ def programa_orcamentario_incluir():
                 ?,
                 ?,
                 ?,
+                ?,
+                ?,
                 ?
             )
             """,
             (
-                int(exercicio),
+                entidade_id,
+                exercicio_id,
                 codigo,
-                descricao,
+                nome,
+                descricao or None,
                 ativo
             )
         )
@@ -17284,8 +17481,8 @@ def programa_orcamentario_incluir():
         if sucesso:
 
             st.success(
-                f"✅ Programa {codigo} - {descricao} "
-                "cadastrado com sucesso!"
+                f"✅ Programa {codigo} - {nome} "
+                f"cadastrado para {ano_exercicio}."
             )
 
             st.rerun()
