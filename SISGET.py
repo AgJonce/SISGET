@@ -13282,359 +13282,77 @@ def solicitacao_imprimir():
             use_container_width=True,
             key="baixar_pdf_solicitacoes"
         )
-# ============================================================
-# PLANEJAMENTO
-# ============================================================
-# ============================================================
-# MÓDULO DE PLANEJAMENTO
-# ============================================================
-
 def modulo_planejamento():
 
-    st.title(
-        "📐 Planejamento"
-    )
+    st.title("📐 Planejamento Orçamentário")
 
     st.caption(
-        "Planejamento orçamentário e disponibilidade de recursos."
+        "Selecione o módulo de Planejamento Orçamentário "
+        "que deseja acessar."
     )
 
-    st.markdown("---")
+    st.divider()
 
     # ========================================================
-    # CONTROLE DA TELA
+    # SELECTBOX DOS MÓDULOS
     # ========================================================
 
-    if "planejamento_tela" not in st.session_state:
+    modulo = st.selectbox(
+        "Módulo *",
+        options=[
+            "Selecione...",
+            "🧾 Classificações Orçamentárias",
+            "📘 Programas Orçamentários",
+            "🎯 Ações Orçamentárias",
+            "💧 Fontes de Recursos",
+            "📄 Fichas Orçamentárias"
+        ],
+        key="sisget_planejamento_modulo"
+    )
 
-        st.session_state[
-            "planejamento_tela"
-        ] = "principal"
-
-    tela = st.session_state[
-        "planejamento_tela"
-    ]
+    st.divider()
 
     # ========================================================
-    # TELA PRINCIPAL
+    # NENHUM MÓDULO SELECIONADO
     # ========================================================
 
-    if tela == "principal":
-
-        st.subheader(
-            "💰 Planejamento Orçamentário"
-        )
-
-        st.caption(
-            "Cadastre e acompanhe a estrutura orçamentária "
-            "que será utilizada nas Solicitações."
-        )
-
-        st.markdown("---")
-
-        # ====================================================
-        # PRIMEIRA LINHA
-        # ====================================================
-
-        col1, col2, col3 = st.columns(3)
-
-        # ====================================================
-        # CLASSIFICAÇÕES
-        # ====================================================
-
-        with col1:
-
-            st.markdown(
-                "### 🧾 Classificações"
-            )
-
-            st.caption(
-                "Função, Subfunção, Programa, "
-                "Ação e Natureza da Despesa."
-            )
-
-            if st.button(
-                "🧾 Abrir Classificações",
-                use_container_width=True,
-                key="btn_planejamento_classificacoes"
-            ):
-
-                st.session_state[
-                    "planejamento_tela"
-                ] = "classificacoes"
-
-                st.rerun()
-
-        # ====================================================
-        # FONTES
-        # ====================================================
-
-        with col2:
-
-            st.markdown(
-                "### 💧 Fontes de Recursos"
-            )
-
-            st.caption(
-                "Cadastro das fontes de recursos "
-                "utilizadas nas fichas orçamentárias."
-            )
-
-            if st.button(
-                "💧 Abrir Fontes",
-                use_container_width=True,
-                key="btn_planejamento_fontes"
-            ):
-
-                st.session_state[
-                    "planejamento_tela"
-                ] = "fontes"
-
-                st.rerun()
-
-        # ====================================================
-        # FICHAS
-        # ====================================================
-
-        with col3:
-
-            st.markdown(
-                "### 📄 Fichas Orçamentárias"
-            )
-
-            st.caption(
-                "Cadastro das fichas vinculadas às "
-                "Unidades Orçamentárias do Cadastro Básico."
-            )
-
-            if st.button(
-                "📄 Abrir Fichas",
-                type="primary",
-                use_container_width=True,
-                key="btn_planejamento_fichas"
-            ):
-
-                st.session_state[
-                    "planejamento_tela"
-                ] = "fichas"
-
-                st.rerun()
-
-        st.markdown("---")
-
-        # ====================================================
-        # SEGUNDA LINHA
-        # ====================================================
-
-        col4, col5, col6 = st.columns(3)
-
-        # ====================================================
-        # SALDOS
-        # ====================================================
-
-        with col4:
-
-            st.markdown(
-                "### 💰 Saldos Orçamentários"
-            )
-
-            st.caption(
-                "Consulta dos valores atuais, reservados "
-                "e disponíveis por ficha."
-            )
-
-            if st.button(
-                "💰 Consultar Saldos",
-                use_container_width=True,
-                key="btn_planejamento_saldos"
-            ):
-
-                st.session_state[
-                    "planejamento_tela"
-                ] = "saldos"
-
-                st.rerun()
-
-        # ====================================================
-        # RESERVAS
-        # ====================================================
-
-        with col5:
-
-            st.markdown(
-                "### 🔒 Reservas Orçamentárias"
-            )
-
-            st.caption(
-                "Controle dos valores reservados "
-                "para futuras despesas."
-            )
-
-            if st.button(
-                "🔒 Abrir Reservas",
-                use_container_width=True,
-                key="btn_planejamento_reservas"
-            ):
-
-                st.session_state[
-                    "planejamento_tela"
-                ] = "reservas"
-
-                st.rerun()
-
-        # ====================================================
-        # CONSULTA
-        # ====================================================
-
-        with col6:
-
-            st.markdown(
-                "### 🔎 Consulta Orçamentária"
-            )
-
-            st.caption(
-                "Consulta geral de fichas, fontes, "
-                "classificações e disponibilidade."
-            )
-
-            if st.button(
-                "🔎 Consultar Orçamento",
-                use_container_width=True,
-                key="btn_planejamento_consulta"
-            ):
-
-                st.session_state[
-                    "planejamento_tela"
-                ] = "consulta"
-
-                st.rerun()
-
-        st.markdown("---")
-
-        # ====================================================
-        # TERCEIRA LINHA
-        # ====================================================
-
-        col7, col8, col9 = st.columns(3)
-
-        # ====================================================
-        # RELATÓRIOS
-        # ====================================================
-
-        with col7:
-
-            st.markdown(
-                "### 🖨️ Relatórios"
-            )
-
-            st.caption(
-                "Relatórios do planejamento e "
-                "disponibilidade orçamentária."
-            )
-
-            if st.button(
-                "🖨️ Abrir Relatórios",
-                use_container_width=True,
-                key="btn_planejamento_relatorios"
-            ):
-
-                st.session_state[
-                    "planejamento_tela"
-                ] = "relatorios"
-
-                st.rerun()
-
-        # ====================================================
-        # ESPAÇOS RESERVADOS
-        # ====================================================
-
-        with col8:
-
-            st.markdown(
-                "### 📊 Planejamento"
-            )
-
-            st.caption(
-                "Espaço reservado para futuras "
-                "rotinas de planejamento."
-            )
-
-        with col9:
-
-            st.markdown(
-                "### 🔄 Integração"
-            )
-
-            st.caption(
-                "Integração do orçamento com "
-                "Solicitações e execução."
-            )
-
-        # ====================================================
-        # FLUXO
-        # ====================================================
-
-        st.markdown("---")
-
-        st.subheader(
-            "🔄 Fluxo Orçamentário"
-        )
+    if modulo == "Selecione...":
 
         st.info(
-            "🧾 Classificações"
-            "  →  💧 Fontes"
-            "  →  📄 Fichas Orçamentárias"
-            "  →  💰 Saldo Disponível"
-            "  →  📝 Solicitação"
-            "  →  🔒 Reserva Orçamentária"
+            "Selecione um módulo acima para continuar."
         )
 
-        st.caption(
-            "As Fichas Orçamentárias utilizam as Unidades "
-            "Orçamentárias cadastradas no Cadastro Básico."
-        )
-
-        st.caption(
-            "Depois, a Solicitação poderá selecionar a ficha "
-            "e consultar o saldo disponível antes de seguir para "
-            "DFD, ETP e Termo de Referência."
-        )
+        return
 
     # ========================================================
     # CLASSIFICAÇÕES ORÇAMENTÁRIAS
     # ========================================================
 
-    elif tela == "classificacoes":
-
-        if st.button(
-            "⬅️ Voltar ao Planejamento",
-            key="voltar_planejamento_classificacoes"
-        ):
-
-            st.session_state[
-                "planejamento_tela"
-            ] = "principal"
-
-            st.rerun()
+    if modulo == "🧾 Classificações Orçamentárias":
 
         planejamento_classificacoes()
+
+    # ========================================================
+    # PROGRAMAS ORÇAMENTÁRIOS
+    # ========================================================
+
+    elif modulo == "📘 Programas Orçamentários":
+
+        planejamento_programas_orcamentarios()
+
+    # ========================================================
+    # AÇÕES ORÇAMENTÁRIAS
+    # ========================================================
+
+    elif modulo == "🎯 Ações Orçamentárias":
+
+        planejamento_acoes_orcamentarias()
 
     # ========================================================
     # FONTES DE RECURSOS
     # ========================================================
 
-    elif tela == "fontes":
-
-        if st.button(
-            "⬅️ Voltar ao Planejamento",
-            key="voltar_planejamento_fontes"
-        ):
-
-            st.session_state[
-                "planejamento_tela"
-            ] = "principal"
-
-            st.rerun()
+    elif modulo == "💧 Fontes de Recursos":
 
         planejamento_fontes_recursos()
 
@@ -13642,112 +13360,9 @@ def modulo_planejamento():
     # FICHAS ORÇAMENTÁRIAS
     # ========================================================
 
-    elif tela == "fichas":
-
-        if st.button(
-            "⬅️ Voltar ao Planejamento",
-            key="voltar_planejamento_fichas"
-        ):
-
-            st.session_state[
-                "planejamento_tela"
-            ] = "principal"
-
-            st.rerun()
+    elif modulo == "📄 Fichas Orçamentárias":
 
         planejamento_fichas_orcamentarias()
-
-    # ========================================================
-    # SALDOS
-    # ========================================================
-
-    elif tela == "saldos":
-
-        if st.button(
-            "⬅️ Voltar ao Planejamento",
-            key="voltar_planejamento_saldos"
-        ):
-
-            st.session_state[
-                "planejamento_tela"
-            ] = "principal"
-
-            st.rerun()
-
-        planejamento_saldos()
-
-    # ========================================================
-    # RESERVAS
-    # ========================================================
-
-    elif tela == "reservas":
-
-        if st.button(
-            "⬅️ Voltar ao Planejamento",
-            key="voltar_planejamento_reservas"
-        ):
-
-            st.session_state[
-                "planejamento_tela"
-            ] = "principal"
-
-            st.rerun()
-
-        planejamento_reservas()
-
-    # ========================================================
-    # CONSULTA ORÇAMENTÁRIA
-    # ========================================================
-
-    elif tela == "consulta":
-
-        if st.button(
-            "⬅️ Voltar ao Planejamento",
-            key="voltar_planejamento_consulta"
-        ):
-
-            st.session_state[
-                "planejamento_tela"
-            ] = "principal"
-
-            st.rerun()
-
-        planejamento_consulta_orcamentaria()
-
-    # ========================================================
-    # RELATÓRIOS
-    # ========================================================
-
-    elif tela == "relatorios":
-
-        if st.button(
-            "⬅️ Voltar ao Planejamento",
-            key="voltar_planejamento_relatorios"
-        ):
-
-            st.session_state[
-                "planejamento_tela"
-            ] = "principal"
-
-            st.rerun()
-
-        planejamento_relatorios()
-
-    # ========================================================
-    # SEGURANÇA
-    # ========================================================
-
-    else:
-
-        st.session_state[
-            "planejamento_tela"
-        ] = "principal"
-
-        st.rerun()
-
-# Substitua a def ficha_orcamentaria_incluir() antiga INTEIRA por esta.
-# Usa os helpers _sisget_fetch, _sisget_fetchone e _sisget_salvar já existentes.
-
 def ficha_orcamentaria_incluir():
 
   # ========================================================
