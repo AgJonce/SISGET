@@ -14149,20 +14149,600 @@ def planejamento_fontes_recursos():
 
 
 # ============================================================
-# FICHAS ORÇAMENTÁRIAS
+# FICHA ORÇAMENTÁRIA - IMPRIMIR
 # ============================================================
+
+def ficha_orcamentaria_imprimir():
+
+    st.subheader(
+        "🖨️ Relatório de Fichas Orçamentárias"
+    )
+
+    # ========================================================
+    # FILTROS
+    # ========================================================
+
+    col1, col2 = st.columns(
+        [1, 2]
+    )
+
+    with col1:
+
+        exercicio = st.number_input(
+            "Exercício",
+            min_value=2000,
+            max_value=2100,
+            value=datetime.now().year,
+            step=1,
+            key="ficha_imprimir_exercicio"
+        )
+
+    with col2:
+
+        situacao = st.selectbox(
+            "Situação",
+            [
+                "Todas",
+                "Ativas",
+                "Inativas"
+            ],
+            key="ficha_imprimir_situacao"
+        )
+
+    # ========================================================
+    # SQL
+    # ========================================================
+
+    sql = """
+        SELECT
+            f.numero_ficha,
+
+            o.codigo || ' - ' || o.nome,
+
+            e.codigo || ' - ' || e.nome,
+
+            u.codigo || ' - ' || u.nome,
+
+            COALESCE(
+                f.funcao,
+                ''
+            ),
+
+            COALESCE(
+                f.subfuncao,
+                ''
+            ),
+
+            COALESCE(
+                f.programa,
+                ''
+            ),
+
+            COALESCE(
+                f.acao,
+                ''
+            ),
+
+            COALESCE(
+                f.natureza_despesa,
+                ''
+            ),
+
+            COALESCE(
+                fr.codigo,
+                ''
+            ),
+
+            COALESCE(
+                f.descricao,
+                ''
+            ),
+
+            f.valor_inicial,
+
+            f.valor_atual,
+
+            f.valor_reservado,
+
+            (
+                f.valor_atual
+                -
+                f.valor_reservado
+            ),
+
+            f.ativo
+
+        FROM fichas_orcamentarias f
+
+        INNER JOIN orgaos o
+            ON o.id = f.orgao_id
+
+        INNER JOIN entidades e
+            ON e.id = f.entidade_id
+
+        INNER JOIN unidades_orcamentarias u
+            ON u.id = f.unidade_orcamentaria_id
+
+        LEFT JOIN fontes_recursos fr
+            ON fr.id = f.fonte_recurso_id
+
+        WHERE f.exercicio = ?
+    """
+
+    parametros = [
+        int(exercicio)
+    ]
+
+    # ========================================================
+    # SITUAÇÃO
+    # ========================================================
+
+    if situacao == "Ativas":
+
+        sql += """
+            AND f.ativo = TRUE
+        """
+
+    elif situacao == "Inativas":
+
+        sql += """
+            AND f.ativo = FALSE
+        """
+
+    sql += """
+        ORDER BY
+            o.codigo,
+            e.codigo,
+            u.codigo,
+            f.numero_ficha
+    """
+
+    dados = _sisget_fetch(
+        sql,
+        tuple(parametros)
+    )
+
+    # ========================================================
+    # SEM REGISTROS
+    # ========================================================
+
+    if not dados:
+
+        st.info(
+            "Nenhuma ficha orçamentária encontrada."
+        )
+
+        return
+
+    # ========================================================
+    # DATAFRAME
+    # ========================================================
+
+    visualizacao = []
+
+    for registro in dados:
+
+        visualizacao.append({
+
+            "Ficha":
+                registro[0],
+
+            "Órgão":
+                registro[1],
+
+            "Entidade":
+                registro[2],
+
+            "Unidade Orçamentária":
+                registro[3],
+
+            "Função":
+                registro[4],
+
+            "Subfunção":
+                registro[5],
+
+            "Programa":
+                registro[6],
+
+            "Ação":
+                registro[7],
+
+            "Natureza":
+                registro[8],
+
+            "Fonte":
+                registro[9],
+
+            "Descrição":
+                registro[10],
+
+            "Valor Inicial":
+                float(
+                    registro[11] or 0
+                ),
+
+            "Valor Atual":
+                float(
+                    registro[12] or 0
+                ),
+
+            "Reservado":
+                float(
+                    registro[13] or 0
+                ),
+
+            "Disponível":
+                float(
+                    registro[14] or 0
+                ),
+
+            "Situação":
+                (
+                    "Ativa"
+                    if registro[15]
+                    else "Inativa"
+                )
+        })
+
+    df = pd.DataFrame(
+        visualizacao
+    )
+
+    # ========================================================
+    # EXIBIR
+    # ========================================================
+
+    st.dataframe(
+        df,
+        use_container_width=True,
+        hide_index=True
+    )
+
+    st.caption(
+        f"Total de fichas: {len(df)}"
+    )
+
+    # ========================================================
+    # TOTAIS
+    # ========================================================
+
+    total_inicial = sum(
+        float(
+            registro[11] or 0
+        )
+        for registro in dados
+    )
+
+    total_atual = sum(
+        float(
+            registro[12] or 0
+        )
+        for registro in dados
+    )
+
+    total_reservado = sum(
+        float(
+            registro[13] or 0
+        )
+        for registro in dados
+    )
+
+    total_disponivel = sum(
+        float(
+            registro[14] or 0
+        )
+        for registro in dados
+    )
+
+    st.markdown("---")
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+
+        st.metric(
+            "Dotação Inicial",
+            f"R$ {total_inicial:,.2f}"
+        )
+
+    with col2:
+
+        st.metric(
+            "Dotação Atual",
+            f"R$ {total_atual:,.2f}"
+        )
+
+    with col3:
+
+        st.metric(
+            "Reservado",
+            f"R$ {total_reservado:,.2f}"
+        )
+
+    with col4:
+
+        st.metric(
+            "Disponível",
+            f"R$ {total_disponivel:,.2f}"
+        )
+
+    # ========================================================
+    # GERAR PDF
+    # ========================================================
+
+    if st.button(
+        "📄 Gerar PDF",
+        type="primary",
+        use_container_width=True,
+        key="gerar_pdf_fichas_orcamentarias"
+    ):
+
+        buffer = BytesIO()
+
+        documento = SimpleDocTemplate(
+            buffer,
+            pagesize=A4,
+            rightMargin=0.7 * cm,
+            leftMargin=0.7 * cm,
+            topMargin=0.8 * cm,
+            bottomMargin=0.8 * cm
+        )
+
+        estilos = (
+            getSampleStyleSheet()
+        )
+
+        estilo_tabela = ParagraphStyle(
+            "TextoFicha",
+            parent=estilos["Normal"],
+            fontSize=6,
+            leading=7
+        )
+
+        elementos = []
+
+        # ====================================================
+        # CABEÇALHO PDF
+        # ====================================================
+
+        elementos.append(
+            Paragraph(
+                "SISGET - Sistema Integrado de Gestão Pública",
+                estilos["Heading1"]
+            )
+        )
+
+        elementos.append(
+            Paragraph(
+                f"Fichas Orçamentárias - Exercício {int(exercicio)}",
+                estilos["Heading2"]
+            )
+        )
+
+        elementos.append(
+            Spacer(
+                1,
+                0.4 * cm
+            )
+        )
+
+        # ====================================================
+        # TABELA
+        # ====================================================
+
+        tabela_dados = [[
+            "Ficha",
+            "Unidade Orçamentária",
+            "Natureza",
+            "Fonte",
+            "Descrição",
+            "Atual",
+            "Reservado",
+            "Disponível"
+        ]]
+
+        for registro in dados:
+
+            tabela_dados.append([
+
+                str(
+                    registro[0] or ""
+                ),
+
+                Paragraph(
+                    str(
+                        registro[3] or ""
+                    ),
+                    estilo_tabela
+                ),
+
+                Paragraph(
+                    str(
+                        registro[8] or ""
+                    ),
+                    estilo_tabela
+                ),
+
+                str(
+                    registro[9] or ""
+                ),
+
+                Paragraph(
+                    str(
+                        registro[10] or ""
+                    ),
+                    estilo_tabela
+                ),
+
+                (
+                    f"{float(registro[12] or 0):,.2f}"
+                ),
+
+                (
+                    f"{float(registro[13] or 0):,.2f}"
+                ),
+
+                (
+                    f"{float(registro[14] or 0):,.2f}"
+                )
+            ])
+
+        tabela = Table(
+            tabela_dados,
+            colWidths=[
+                1.2 * cm,
+                4.2 * cm,
+                2.2 * cm,
+                1.5 * cm,
+                4.0 * cm,
+                2.0 * cm,
+                2.0 * cm,
+                2.0 * cm
+            ],
+            repeatRows=1
+        )
+
+        tabela.setStyle(
+            TableStyle([
+
+                (
+                    "BACKGROUND",
+                    (0, 0),
+                    (-1, 0),
+                    colors.lightgrey
+                ),
+
+                (
+                    "FONTNAME",
+                    (0, 0),
+                    (-1, 0),
+                    "Helvetica-Bold"
+                ),
+
+                (
+                    "GRID",
+                    (0, 0),
+                    (-1, -1),
+                    0.4,
+                    colors.grey
+                ),
+
+                (
+                    "VALIGN",
+                    (0, 0),
+                    (-1, -1),
+                    "MIDDLE"
+                ),
+
+                (
+                    "FONTSIZE",
+                    (0, 0),
+                    (-1, -1),
+                    6
+                )
+            ])
+        )
+
+        elementos.append(
+            tabela
+        )
+
+        elementos.append(
+            Spacer(
+                1,
+                0.5 * cm
+            )
+        )
+
+        # ====================================================
+        # TOTAIS PDF
+        # ====================================================
+
+        elementos.append(
+            Paragraph(
+                (
+                    f"Dotação Atual: "
+                    f"R$ {total_atual:,.2f}"
+                ),
+                estilos["Normal"]
+            )
+        )
+
+        elementos.append(
+            Paragraph(
+                (
+                    f"Total Reservado: "
+                    f"R$ {total_reservado:,.2f}"
+                ),
+                estilos["Normal"]
+            )
+        )
+
+        elementos.append(
+            Paragraph(
+                (
+                    f"Total Disponível: "
+                    f"R$ {total_disponivel:,.2f}"
+                ),
+                estilos["Normal"]
+            )
+        )
+
+        elementos.append(
+            Spacer(
+                1,
+                0.3 * cm
+            )
+        )
+
+        elementos.append(
+            Paragraph(
+                (
+                    "Emitido em: "
+                    + datetime.now().strftime(
+                        "%d/%m/%Y %H:%M"
+                    )
+                ),
+                estilos["Normal"]
+            )
+        )
+
+        # ====================================================
+        # GERAR
+        # ====================================================
+
+        documento.build(
+            elementos
+        )
+
+        buffer.seek(0)
+
+        st.download_button(
+            "⬇️ Baixar Relatório em PDF",
+            data=buffer,
+            file_name=(
+                f"fichas_orcamentarias_{int(exercicio)}.pdf"
+            ),
+            mime="application/pdf",
+            use_container_width=True,
+            key="baixar_pdf_fichas_orcamentarias"
+        )
 
 def planejamento_fichas_orcamentarias():
 
-    st.subheader(
-        "📄 Fichas Orçamentárias"
-    )
+    sisget_tela_principal(
+        titulo="Fichas Orçamentárias",
+        chave="fichas_orcamentarias",
 
-    st.info(
-        "Aqui serão cadastradas as fichas orçamentárias "
-        "que depois poderão ser selecionadas nas Solicitações."
-    )
+        func_incluir=ficha_orcamentaria_incluir,
+        func_localizar=ficha_orcamentaria_localizar,
+        func_alterar=ficha_orcamentaria_alterar,
+        func_excluir=ficha_orcamentaria_excluir,
+        func_imprimir=ficha_orcamentaria_imprimir,
 
+        icone="📄"
+    )
 
 # ============================================================
 # SALDOS ORÇAMENTÁRIOS
