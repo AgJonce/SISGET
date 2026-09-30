@@ -14566,30 +14566,211 @@ def fonte_recurso_exercicios():
 # INCLUIR
 # ============================================================
 
+# ============================================================
+# FONTES DE RECURSOS - INCLUIR
+# ENTIDADE + EXERCÍCIO VINCULADOS AUTOMATICAMENTE
+# ============================================================
+
 def fonte_recurso_incluir():
 
     st.subheader("💧 Incluir Fonte de Recurso")
 
-    exercicios = fonte_recurso_exercicios()
+    st.caption(
+        "Selecione a estrutura administrativa e informe "
+        "o código e a descrição da Fonte de Recurso."
+    )
 
-    if not exercicios:
+    # ========================================================
+    # 1 - ÓRGÃO
+    # ========================================================
+
+    orgaos = _sisget_fetch(
+        """
+        SELECT
+            id,
+            codigo,
+            nome
+        FROM orgaos
+        WHERE ativo = TRUE
+        ORDER BY codigo, nome
+        """
+    )
+
+    if not orgaos:
+
+        st.warning("Nenhum Órgão ativo cadastrado.")
+        return
+
+    mapa_orgaos = {
+        int(r[0]): f"{r[1]} - {r[2]}"
+        for r in orgaos
+    }
+
+    orgao_id = st.selectbox(
+        "Órgão *",
+        options=[None] + list(mapa_orgaos.keys()),
+        format_func=lambda x: (
+            "Selecione o Órgão"
+            if x is None
+            else mapa_orgaos[x]
+        ),
+        key="fonte_inc_orgao"
+    )
+
+    if orgao_id is None:
+        st.info("Selecione o Órgão para continuar.")
+        return
+
+    # ========================================================
+    # 2 - ENTIDADE VINCULADA AO ÓRGÃO
+    # ========================================================
+
+    entidades = _sisget_fetch(
+        """
+        SELECT
+            id,
+            codigo,
+            nome
+        FROM entidades
+        WHERE orgao_id = ?
+          AND ativo = TRUE
+        ORDER BY codigo, nome
+        """,
+        (orgao_id,)
+    )
+
+    if not entidades:
 
         st.warning(
-            "Nenhum Exercício ativo cadastrado."
+            "Nenhuma Entidade ativa vinculada ao Órgão."
         )
 
         return
 
+    mapa_entidades = {
+        int(r[0]): f"{r[1]} - {r[2]}"
+        for r in entidades
+    }
+
+    entidade_id = st.selectbox(
+        "Entidade *",
+        options=[None] + list(mapa_entidades.keys()),
+        format_func=lambda x: (
+            "Selecione a Entidade"
+            if x is None
+            else mapa_entidades[x]
+        ),
+        key="fonte_inc_entidade"
+    )
+
+    if entidade_id is None:
+        return
+
+    # ========================================================
+    # 3 - EXERCÍCIO DA ENTIDADE
+    # ========================================================
+
+    exercicios = _sisget_fetch(
+        """
+        SELECT
+            id,
+            ano,
+            descricao
+        FROM exercicios
+        WHERE entidade_id = ?
+          AND ativo = TRUE
+          AND encerrado = FALSE
+        ORDER BY ano DESC
+        """,
+        (entidade_id,)
+    )
+
+    if not exercicios:
+
+        st.warning(
+            "Esta Entidade não possui Exercício ativo e aberto."
+        )
+
+        st.info(
+            "É necessário ter um Exercício válido para "
+            "vincular corretamente a Fonte de Recurso."
+        )
+
+        return
+
+    mapa_exercicios = {}
+
+    for registro in exercicios:
+
+        exercicio_id = int(registro[0])
+        ano = int(registro[1])
+        descricao = str(registro[2] or "")
+
+        mapa_exercicios[exercicio_id] = {
+            "ano": ano,
+            "texto": (
+                f"{ano} - {descricao}"
+                if descricao
+                else str(ano)
+            )
+        }
+
+    exercicio_id = st.selectbox(
+        "Exercício *",
+        options=[None] + list(mapa_exercicios.keys()),
+        format_func=lambda x: (
+            "Selecione o Exercício"
+            if x is None
+            else mapa_exercicios[x]["texto"]
+        ),
+        key="fonte_inc_exercicio"
+    )
+
+    if exercicio_id is None:
+        return
+
+    ano_exercicio = mapa_exercicios[
+        exercicio_id
+    ]["ano"]
+
+    # ========================================================
+    # 4 - DADOS VINCULADOS
+    # ========================================================
+
+    st.markdown("---")
+
+    st.markdown("### 🔗 Vinculação da Fonte")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        st.text_input(
+            "Entidade vinculada",
+            value=mapa_entidades[entidade_id],
+            disabled=True,
+            key="fonte_inc_entidade_visual"
+        )
+
+    with col2:
+
+        st.text_input(
+            "Ano do Exercício",
+            value=str(ano_exercicio),
+            disabled=True,
+            key="fonte_inc_ano_visual"
+        )
+
+    # ========================================================
+    # 5 - FORMULÁRIO
+    # ========================================================
+
+    st.markdown("---")
+
     with st.form(
-        "form_incluir_fonte_recurso",
+        "form_fonte_recurso_incluir",
         clear_on_submit=True
     ):
-
-        exercicio = st.selectbox(
-            "Exercício *",
-            options=exercicios,
-            key="fonte_incluir_exercicio"
-        )
 
         col1, col2 = st.columns([1, 3])
 
@@ -14598,8 +14779,7 @@ def fonte_recurso_incluir():
             codigo = st.text_input(
                 "Código da Fonte *",
                 max_chars=20,
-                placeholder="Ex.: 1500",
-                key="fonte_incluir_codigo"
+                placeholder="Ex.: 1500"
             )
 
         with col2:
@@ -14607,14 +14787,15 @@ def fonte_recurso_incluir():
             descricao = st.text_input(
                 "Descrição da Fonte *",
                 max_chars=200,
-                key="fonte_incluir_descricao"
+                placeholder="Ex.: Recursos não Vinculados de Impostos"
             )
 
         ativo = st.checkbox(
             "Fonte ativa",
-            value=True,
-            key="fonte_incluir_ativo"
+            value=True
         )
+
+        st.markdown("---")
 
         salvar = st.form_submit_button(
             "💾 Salvar Fonte de Recurso",
@@ -14622,28 +14803,73 @@ def fonte_recurso_incluir():
             use_container_width=True
         )
 
+    # ========================================================
+    # 6 - SALVAR
+    # ========================================================
+
     if salvar:
 
         codigo = codigo.strip()
         descricao = descricao.strip()
 
-        if not codigo or not descricao:
+        if not codigo:
 
             st.warning(
-                "Informe o código e a descrição da Fonte."
+                "Informe o Código da Fonte de Recurso."
             )
-
             return
+
+        if not descricao:
+
+            st.warning(
+                "Informe a Descrição da Fonte de Recurso."
+            )
+            return
+
+        # ====================================================
+        # REVALIDAR O EXERCÍCIO E A ENTIDADE
+        # ====================================================
+
+        exercicio_valido = _sisget_fetchone(
+            """
+            SELECT ano
+            FROM exercicios
+            WHERE id = ?
+              AND entidade_id = ?
+              AND ativo = TRUE
+              AND encerrado = FALSE
+            """,
+            (
+                exercicio_id,
+                entidade_id
+            )
+        )
+
+        if not exercicio_valido:
+
+            st.warning(
+                "O Exercício selecionado não está mais "
+                "disponível para esta Entidade."
+            )
+            return
+
+        ano_exercicio = int(exercicio_valido[0])
+
+        # ====================================================
+        # VERIFICAR DUPLICIDADE
+        # ====================================================
 
         existe = _sisget_fetchone(
             """
             SELECT id
             FROM fontes_recursos
-            WHERE exercicio = ?
+            WHERE entidade_id = ?
+              AND exercicio_id = ?
               AND codigo = ?
             """,
             (
-                exercicio,
+                entidade_id,
+                exercicio_id,
                 codigo
             )
         )
@@ -14652,24 +14878,36 @@ def fonte_recurso_incluir():
 
             st.warning(
                 f"A Fonte {codigo} já está cadastrada "
-                f"para o exercício {exercicio}."
+                f"para esta Entidade no exercício "
+                f"{ano_exercicio}."
             )
 
             return
+
+        # ====================================================
+        # INSERT COMPATÍVEL COM A TABELA REAL
+        # ====================================================
 
         sucesso = _sisget_salvar(
             """
             INSERT INTO fontes_recursos
             (
+                entidade_id,
+                exercicio_id,
                 exercicio,
                 codigo,
                 descricao,
                 ativo
             )
-            VALUES (?, ?, ?, ?)
+            VALUES
+            (
+                ?, ?, ?, ?, ?, ?
+            )
             """,
             (
-                exercicio,
+                entidade_id,
+                exercicio_id,
+                ano_exercicio,
                 codigo,
                 descricao,
                 ativo
@@ -14681,120 +14919,11 @@ def fonte_recurso_incluir():
             st.session_state[
                 "fonte_recurso_mensagem"
             ] = (
-                f"Fonte {codigo} - {descricao} "
-                "cadastrada com sucesso!"
+                f"✅ Fonte {codigo} - {descricao} "
+                f"cadastrada com sucesso para {ano_exercicio}!"
             )
 
             st.rerun()
-
-
-# ============================================================
-# LOCALIZAR
-# DUPLO CLIQUE -> ALTERAR
-# ============================================================
-
-def fonte_recurso_localizar():
-
-    st.subheader("🔎 Localizar Fontes de Recursos")
-
-    filtro_exercicio = st.selectbox(
-        "Exercício",
-        options=["Todos"] + fonte_recurso_exercicios(),
-        key="fonte_localizar_exercicio"
-    )
-
-    filtro_texto = st.text_input(
-        "Pesquisar Código ou Descrição",
-        key="fonte_localizar_pesquisa"
-    )
-
-    filtro_situacao = st.selectbox(
-        "Situação",
-        ["Todos", "Ativos", "Inativos"],
-        key="fonte_localizar_situacao"
-    )
-
-    sql = """
-        SELECT
-            id,
-            exercicio AS "Exercício",
-            codigo AS "Código",
-            descricao AS "Descrição",
-
-            CASE
-                WHEN ativo = TRUE THEN 'Ativo'
-                ELSE 'Inativo'
-            END AS "Situação"
-
-        FROM fontes_recursos
-        WHERE 1 = 1
-    """
-
-    parametros = []
-
-    if filtro_exercicio != "Todos":
-
-        sql += " AND exercicio = ?"
-
-        parametros.append(filtro_exercicio)
-
-    if filtro_texto.strip():
-
-        sql += """
-            AND (
-                codigo ILIKE ?
-                OR descricao ILIKE ?
-            )
-        """
-
-        pesquisa = f"%{filtro_texto.strip()}%"
-
-        parametros.extend([
-            pesquisa,
-            pesquisa
-        ])
-
-    if filtro_situacao == "Ativos":
-
-        sql += " AND ativo = TRUE"
-
-    elif filtro_situacao == "Inativos":
-
-        sql += " AND ativo = FALSE"
-
-    sql += """
-        ORDER BY exercicio DESC, codigo
-    """
-
-    df = _sisget_dataframe(
-        sql,
-        tuple(parametros)
-    )
-
-    if df.empty:
-
-        st.info(
-            "Nenhuma Fonte de Recurso encontrada."
-        )
-
-        return None
-
-    st.caption(
-        f"{len(df)} registro(s) encontrado(s). "
-        "Dê duplo clique para alterar."
-    )
-
-    return sisget_grid_localizar(
-        df=df,
-        chave="localizar_fontes_recursos",
-        coluna_id="id",
-        altura=420
-    )
-
-
-# ============================================================
-# ALTERAR
-# ============================================================
 
 def fonte_recurso_alterar(registro_id):
 
