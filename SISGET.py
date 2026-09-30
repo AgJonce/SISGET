@@ -518,9 +518,14 @@ def sisget_voltar_localizar(
 # BOTÃO VOLTAR
 # ============================================================
 
+# ============================================================
+# CABEÇALHO PADRÃO DAS TELAS
+# ============================================================
+
 def sisget_cabecalho_tela(
     titulo,
-    voltar=None
+    voltar=None,
+    chave=None
 ):
 
     col1, col2 = st.columns(
@@ -545,10 +550,16 @@ def sisget_cabecalho_tela(
 
         if voltar is not None:
 
+            chave_botao = (
+                f"btn_voltar_{chave}_{titulo}"
+                if chave
+                else f"btn_voltar_{titulo}"
+            )
+
             if st.button(
                 "⬅️ Voltar",
                 use_container_width=True,
-                key=f"btn_voltar_{titulo}"
+                key=chave_botao
             ):
 
                 voltar()
