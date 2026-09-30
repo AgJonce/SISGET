@@ -13751,924 +13751,295 @@ def modulo_planejamento():
 # ============================================================
 
 
-# ============================================================
-# FICHAS ORÇAMENTÁRIAS - INCLUIR
-# LAYOUT INSPIRADO NA TELA DE REFERÊNCIA
-# NÚMERO DA FICHA DIGITADO PELO USUÁRIO
-# ============================================================
+# Substitua a def ficha_orcamentaria_incluir() antiga INTEIRA por esta.
+# Usa os helpers _sisget_fetch, _sisget_fetchone e _sisget_salvar já existentes.
 
 def ficha_orcamentaria_incluir():
-
     st.subheader("📄 Cadastro de Ficha de Despesa")
+    st.caption("Selecione as classificações cadastradas e informe manualmente o número da ficha.")
 
-    st.caption(
-        "Preencha a estrutura orçamentária, selecione as "
-        "classificações cadastradas e informe o número da ficha."
-    )
+    aviso = st.session_state.pop("sisget_mensagem_ficha_incluir", None)
+    if aviso:
+        st.success(aviso)
 
-    # ========================================================
-    # SELETOR AUXILIAR
-    # ========================================================
-
-    def selecionar(
-        titulo,
-        registros,
-        chave,
-        mensagem="Selecione",
-        desabilitado=False
-    ):
-
+    def selecionar(titulo, registros, chave, mensagem="Selecione", desabilitado=False):
         mapa = {}
+        for item in registros:
+            identificador = int(item[0])
+            codigo = "" if item[1] is None else str(item[1])
+            descricao = "" if item[2] is None else str(item[2])
+            mapa[identificador] = (codigo, descricao)
 
-        for registro in registros:
-
-            registro_id = int(registro[0])
-
-            codigo = str(
-                registro[1] if registro[1] is not None else ""
-            )
-
-            descricao = str(
-                registro[2] if registro[2] is not None else ""
-            )
-
-            mapa[registro_id] = {
-                "codigo": codigo,
-                "descricao": descricao,
-                "texto": f"{codigo} | {descricao}"
-            }
-
-        selecionado = st.selectbox(
+        valor = st.selectbox(
             titulo,
-            options=[None] + list(mapa.keys()),
-            format_func=lambda valor: (
-                mensagem
-                if valor is None
-                else mapa[valor]["texto"]
-            ),
+            options=[None] + list(mapa),
+            format_func=lambda x: mensagem if x is None else f"{mapa[x][0]} | {mapa[x][1]}",
             key=chave,
             disabled=desabilitado or not bool(mapa)
         )
-
-        if selecionado is None:
+        if valor is None:
             return None, None, None
+        codigo, descricao = mapa[valor]
+        return valor, codigo, f"{codigo} | {descricao}"
 
-        return (
-            selecionado,
-            mapa[selecionado]["codigo"],
-            mapa[selecionado]["texto"]
-        )
+    esquerda, direita = st.columns([1.15, 1], gap="large")
 
-    # ========================================================
-    # CARREGAR ÓRGÃOS
-    # ========================================================
+    # 1. A estrutura administrativa deve ser definida primeiro.
+    with esquerda:
+        with st.container(border=True):
+            st.markdown("#### 🏛️ Código Local")
+            orgaos = _sisget_fetch("""
+                SELECT id, codigo, nome FROM orgaos
+                WHERE ativo = TRUE ORDER BY codigo, nome
+            """)
+            orgao_id, _, orgao_texto = selecionar(
+                "Órgão *", orgaos, "sisget_ficha_v4_orgao", "Selecione o Órgão"
+            )
+            entidades = _sisget_fetch("""
+                SELECT id, codigo, nome FROM entidades
+                WHERE orgao_id = ? AND ativo = TRUE ORDER BY codigo, nome
+            """, (orgao_id,)) if orgao_id is not None else []
+            entidade_id, _, entidade_texto = selecionar(
+                "Entidade *", entidades, f"sisget_ficha_v4_entidade_{orgao_id}",
+                "Selecione a Entidade", orgao_id is None
+            )
+            unidades = _sisget_fetch("""
+                SELECT id, codigo, nome FROM unidades_orcamentarias
+                WHERE orgao_id = ? AND entidade_id = ? AND ativo = TRUE
+                ORDER BY codigo, nome
+            """, (orgao_id, entidade_id)) if entidade_id is not None else []
+            unidade_id, _, unidade_texto = selecionar(
+                "Unidade Orçamentária *", unidades,
+                f"sisget_ficha_v4_unidade_{orgao_id}_{entidade_id}",
+                "Selecione a Unidade Orçamentária", entidade_id is None
+            )
 
-    orgaos = _sisget_fetch(
-        """
-        SELECT id, codigo, nome
-        FROM orgaos
-        WHERE ativo = TRUE
-        ORDER BY codigo, nome
-        """
-    )
+    # 2. Renderizar Exercício ANTES de consultar Programa e Ação.
+    with direita:
+        with st.container(border=True):
+            st.markdown("#### 📅 Dados Orçamentários")
+            exercicios = _sisget_fetch("""
+                SELECT id, ano, descricao FROM exercicios
+                WHERE entidade_id = ? AND ativo = TRUE AND encerrado = FALSE
+                ORDER BY ano DESC
+            """, (entidade_id,)) if entidade_id is not None else []
+            anos = {
+                int(r[0]): (int(r[1]), str(r[2] or ""))
+                for r in exercicios
+            }
+            exercicio_id = st.selectbox(
+                "Exercício *", options=[None] + list(anos),
+                format_func=lambda x: "Selecione o Exercício" if x is None else (
+                    f"{anos[x][0]} - {anos[x][1]}" if anos[x][1] else str(anos[x][0])
+                ),
+                key=f"sisget_ficha_v4_exercicio_{entidade_id}",
+                disabled=not bool(anos)
+            )
+            exercicio = anos[exercicio_id][0] if exercicio_id is not None else None
+            if entidade_id is not None and not exercicios:
+                st.warning("Esta Entidade não possui Exercício ativo e aberto.")
 
-    if not orgaos:
+    # 3. Classificação funcional dependente de Exercício já renderizado.
+    with esquerda:
+        with st.container(border=True):
+            st.markdown("#### 📊 Funcional Programática")
+            funcoes = _sisget_fetch("""
+                SELECT id, codigo, descricao FROM funcoes_orcamentarias
+                WHERE ativo = TRUE ORDER BY codigo
+            """)
+            funcao_id, funcao, funcao_texto = selecionar(
+                "Função *", funcoes, "sisget_ficha_v4_funcao", "Selecione a Função"
+            )
+            subfuncoes = _sisget_fetch("""
+                SELECT id, codigo, descricao FROM subfuncoes_orcamentarias
+                WHERE funcao_id = ? AND ativo = TRUE ORDER BY codigo
+            """, (funcao_id,)) if funcao_id is not None else []
+            subfuncao_id, subfuncao, subfuncao_texto = selecionar(
+                "Subfunção *", subfuncoes, f"sisget_ficha_v4_subfuncao_{funcao_id}",
+                "Selecione a Subfunção", funcao_id is None
+            )
+            programas = _sisget_fetch("""
+                SELECT id, codigo, nome FROM programas
+                WHERE entidade_id = ? AND exercicio_id = ? AND ativo = TRUE
+                ORDER BY codigo
+            """, (entidade_id, exercicio_id)) if exercicio_id is not None else []
+            programa_id, programa, programa_texto = selecionar(
+                "Programa *", programas,
+                f"sisget_ficha_v4_programa_{entidade_id}_{exercicio_id}",
+                "Selecione o Programa", exercicio_id is None
+            )
+            acoes = _sisget_fetch("""
+                SELECT id, codigo, nome FROM acoes_orcamentarias
+                WHERE entidade_id = ? AND exercicio_id = ? AND programa_id = ?
+                  AND ativo = TRUE ORDER BY codigo
+            """, (entidade_id, exercicio_id, programa_id)) if programa_id is not None else []
+            acao_id, acao, acao_texto = selecionar(
+                "Projeto / Atividade / Ação *", acoes,
+                f"sisget_ficha_v4_acao_{entidade_id}_{exercicio_id}_{programa_id}",
+                "Selecione a Ação", programa_id is None
+            )
 
-        st.warning("Nenhum Órgão ativo cadastrado.")
+        with st.container(border=True):
+            st.markdown("#### 💰 Natureza da Despesa")
+            naturezas = _sisget_fetch("""
+                SELECT id, codigo, descricao FROM naturezas_despesa
+                WHERE ativo = TRUE ORDER BY codigo
+            """)
+            natureza_id, natureza_despesa, natureza_texto = selecionar(
+                "Natureza da Despesa *", naturezas,
+                "sisget_ficha_v4_natureza", "Selecione a Natureza da Despesa"
+            )
+
+    # 4. Fonte por entidade e ID do exercício; identificação na lateral direita.
+    with direita:
+        with st.container(border=True):
+            st.markdown("#### 💧 Fonte de Recurso")
+            fontes = _sisget_fetch("""
+                SELECT id, codigo, descricao FROM fontes_recursos
+                WHERE entidade_id = ? AND exercicio_id = ? AND ativo = TRUE
+                ORDER BY codigo, descricao
+            """, (entidade_id, exercicio_id)) if exercicio_id is not None else []
+            fonte_recurso_id, _, fonte_texto = selecionar(
+                "Fonte de Recurso *", fontes,
+                f"sisget_ficha_v4_fonte_{entidade_id}_{exercicio_id}",
+                "Selecione a Fonte de Recurso", exercicio_id is None
+            )
+            if exercicio_id is not None and not fontes:
+                st.warning("Nenhuma Fonte ativa para esta Entidade e Exercício.")
+
+        with st.container(border=True):
+            st.markdown("#### 📄 Identificação e Orçamento")
+            # Fora do form para manter a visualização na coluna direita.
+            numero_ficha_texto = st.text_input(
+                "Número da Ficha *", max_chars=10, placeholder="Ex.: 125",
+                key="sisget_ficha_v4_numero"
+            )
+            descricao = st.text_input(
+                "Descrição da Ficha", max_chars=250,
+                placeholder="Ex.: Manutenção das Atividades do Gabinete",
+                key="sisget_ficha_v4_descricao"
+            )
+            valor_inicial = st.number_input(
+                "Valor Inicial / Total Orçado (R$)", min_value=0.0,
+                value=0.0, step=100.0, format="%.2f",
+                key="sisget_ficha_v4_valor"
+            )
+            ativo = st.checkbox("Ficha ativa", value=True, key="sisget_ficha_v4_ativo")
+
+    st.divider()
+    st.markdown("### 🔗 Classificação Selecionada")
+    st.dataframe([
+        {"Classificação": "Órgão", "Código e descrição": orgao_texto or "Não selecionado"},
+        {"Classificação": "Entidade", "Código e descrição": entidade_texto or "Não selecionada"},
+        {"Classificação": "Unidade Orçamentária", "Código e descrição": unidade_texto or "Não selecionada"},
+        {"Classificação": "Função", "Código e descrição": funcao_texto or "Não selecionada"},
+        {"Classificação": "Subfunção", "Código e descrição": subfuncao_texto or "Não selecionada"},
+        {"Classificação": "Programa", "Código e descrição": programa_texto or "Não selecionado"},
+        {"Classificação": "Ação", "Código e descrição": acao_texto or "Não selecionada"},
+        {"Classificação": "Natureza da Despesa", "Código e descrição": natureza_texto or "Não selecionada"},
+        {"Classificação": "Fonte de Recurso", "Código e descrição": fonte_texto or "Não selecionada"}
+    ], use_container_width=True, hide_index=True, key="sisget_ficha_v4_resumo")
+
+    if not st.button("💾 Salvar Ficha", type="primary", use_container_width=True,
+                     key="sisget_ficha_v4_salvar"):
         return
 
-    # ========================================================
-    # ORGANIZAÇÃO DA TELA
-    # ========================================================
-
-    coluna_esquerda, coluna_direita = st.columns(
-        [1.15, 1],
-        gap="large"
-    )
-
-    # ========================================================
-    # COLUNA ESQUERDA
-    # ========================================================
-
-    with coluna_esquerda:
-
-        # ====================================================
-        # ESTRUTURA ADMINISTRATIVA
-        # ====================================================
-
-        with st.container(border=True):
-
-            st.markdown("#### 🏛️ Código Local")
-
-            orgao_id, _, orgao_texto = selecionar(
-                "Órgão *",
-                orgaos,
-                "ficha_layout_orgao_v3",
-                "Selecione o Órgão"
-            )
-
-            entidades = []
-
-            if orgao_id is not None:
-
-                entidades = _sisget_fetch(
-                    """
-                    SELECT id, codigo, nome
-                    FROM entidades
-                    WHERE orgao_id = ?
-                      AND ativo = TRUE
-                    ORDER BY codigo, nome
-                    """,
-                    (orgao_id,)
-                )
-
-            entidade_id, _, entidade_texto = selecionar(
-                "Entidade *",
-                entidades,
-                f"ficha_layout_entidade_v3_{orgao_id}",
-                "Selecione a Entidade",
-                desabilitado=orgao_id is None
-            )
-
-            unidades = []
-
-            if entidade_id is not None:
-
-                unidades = _sisget_fetch(
-                    """
-                    SELECT id, codigo, nome
-                    FROM unidades_orcamentarias
-                    WHERE orgao_id = ?
-                      AND entidade_id = ?
-                      AND ativo = TRUE
-                    ORDER BY codigo, nome
-                    """,
-                    (
-                        orgao_id,
-                        entidade_id
-                    )
-                )
-
-            unidade_id, _, unidade_texto = selecionar(
-                "Unidade Orçamentária *",
-                unidades,
-                f"ficha_layout_uo_v3_{entidade_id}",
-                "Selecione a Unidade Orçamentária",
-                desabilitado=entidade_id is None
-            )
-
-        # ====================================================
-        # CLASSIFICAÇÃO FUNCIONAL PROGRAMÁTICA
-        # ====================================================
-
-        with st.container(border=True):
-
-            st.markdown(
-                "#### 📊 Funcional Programática"
-            )
-
-            # ------------------------------------------------
-            # FUNÇÃO
-            # ------------------------------------------------
-
-            funcoes = _sisget_fetch(
-                """
-                SELECT id, codigo, descricao
-                FROM funcoes_orcamentarias
-                WHERE ativo = TRUE
-                ORDER BY codigo
-                """
-            )
-
-            funcao_id, funcao, funcao_texto = selecionar(
-                "Função *",
-                funcoes,
-                "ficha_layout_funcao_v3",
-                "Selecione a Função"
-            )
-
-            # ------------------------------------------------
-            # SUBFUNÇÃO
-            # ------------------------------------------------
-
-            subfuncoes = []
-
-            if funcao_id is not None:
-
-                subfuncoes = _sisget_fetch(
-                    """
-                    SELECT id, codigo, descricao
-                    FROM subfuncoes_orcamentarias
-                    WHERE funcao_id = ?
-                      AND ativo = TRUE
-                    ORDER BY codigo
-                    """,
-                    (funcao_id,)
-                )
-
-            subfuncao_id, subfuncao, subfuncao_texto = selecionar(
-                "Subfunção *",
-                subfuncoes,
-                f"ficha_layout_subfuncao_v3_{funcao_id}",
-                "Selecione a Subfunção",
-                desabilitado=funcao_id is None
-            )
-
-            # ------------------------------------------------
-            # PROGRAMA
-            # ------------------------------------------------
-
-            # O exercício é selecionado na coluna direita,
-            # mas sua variável fica disponível nesta mesma
-            # execução por meio da consulta antecipada abaixo.
-
-            exercicios_disponiveis = []
-
-            if entidade_id is not None:
-
-                exercicios_disponiveis = _sisget_fetch(
-                    """
-                    SELECT id, ano, descricao
-                    FROM exercicios
-                    WHERE entidade_id = ?
-                      AND ativo = TRUE
-                      AND encerrado = FALSE
-                    ORDER BY ano DESC
-                    """,
-                    (entidade_id,)
-                )
-
-            mapa_exercicios = {}
-
-            for registro in exercicios_disponiveis:
-
-                registro_id = int(registro[0])
-
-                mapa_exercicios[registro_id] = {
-                    "ano": int(registro[1]),
-                    "descricao": str(registro[2] or "")
-                }
-
-            # O widget de Exercício é apresentado abaixo,
-            # na coluna direita. Recuperamos aqui somente
-            # o valor persistido, validando sua entidade.
-
-            exercicio_id = st.session_state.get(
-                f"ficha_layout_exercicio_v3_{entidade_id}"
-            )
-
-            if exercicio_id not in mapa_exercicios:
-                exercicio_id = None
-
-            programas = []
-
-            if entidade_id is not None and exercicio_id is not None:
-
-                programas = _sisget_fetch(
-                    """
-                    SELECT id, codigo, nome
-                    FROM programas
-                    WHERE entidade_id = ?
-                      AND exercicio_id = ?
-                      AND ativo = TRUE
-                    ORDER BY codigo
-                    """,
-                    (
-                        entidade_id,
-                        exercicio_id
-                    )
-                )
-
-            programa_id, programa, programa_texto = selecionar(
-                "Programa *",
-                programas,
-                f"ficha_layout_programa_v3_{entidade_id}_{exercicio_id}",
-                "Selecione o Programa",
-                desabilitado=exercicio_id is None
-            )
-
-            # ------------------------------------------------
-            # AÇÃO
-            # ------------------------------------------------
-
-            acoes = []
-
-            if programa_id is not None:
-
-                acoes = _sisget_fetch(
-                    """
-                    SELECT id, codigo, nome
-                    FROM acoes_orcamentarias
-                    WHERE entidade_id = ?
-                      AND exercicio_id = ?
-                      AND programa_id = ?
-                      AND ativo = TRUE
-                    ORDER BY codigo
-                    """,
-                    (
-                        entidade_id,
-                        exercicio_id,
-                        programa_id
-                    )
-                )
-
-            acao_id, acao, acao_texto = selecionar(
-                "Projeto / Atividade / Ação *",
-                acoes,
-                f"ficha_layout_acao_v3_{programa_id}",
-                "Selecione a Ação",
-                desabilitado=programa_id is None
-            )
-
-        # ====================================================
-        # NATUREZA DA DESPESA
-        # ====================================================
-
-        with st.container(border=True):
-
-            st.markdown(
-                "#### 💰 Natureza da Despesa"
-            )
-
-            naturezas = _sisget_fetch(
-                """
-                SELECT id, codigo, descricao
-                FROM naturezas_despesa
-                WHERE ativo = TRUE
-                ORDER BY codigo
-                """
-            )
-
-            natureza_id, natureza_despesa, natureza_texto = selecionar(
-                "Natureza da Despesa *",
-                naturezas,
-                "ficha_layout_natureza_v3",
-                "Selecione a Natureza da Despesa"
-            )
-
-            st.caption(
-                "A Natureza é selecionada diretamente do "
-                "cadastro existente, mantendo seu código completo."
-            )
-
-    # ========================================================
-    # COLUNA DIREITA
-    # ========================================================
-
-    with coluna_direita:
-
-        # ====================================================
-        # EXERCÍCIO
-        # ====================================================
-
-        with st.container(border=True):
-
-            st.markdown(
-                "#### 📅 Dados Orçamentários"
-            )
-
-            exercicio_id_widget = st.selectbox(
-                "Exercício *",
-                options=[None] + list(mapa_exercicios.keys()),
-                format_func=lambda valor: (
-                    "Selecione o Exercício"
-                    if valor is None
-                    else (
-                        str(mapa_exercicios[valor]["ano"])
-                        + (
-                            " - "
-                            + mapa_exercicios[valor]["descricao"]
-                            if mapa_exercicios[valor]["descricao"]
-                            else ""
-                        )
-                    )
-                ),
-                key=f"ficha_layout_exercicio_v3_{entidade_id}",
-                disabled=not bool(mapa_exercicios)
-            )
-
-            exercicio_id = exercicio_id_widget
-
-            exercicio = (
-                mapa_exercicios[exercicio_id]["ano"]
-                if exercicio_id is not None
-                else None
-            )
-
-            if entidade_id is not None and not mapa_exercicios:
-
-                st.warning(
-                    "A Entidade não possui Exercício "
-                    "ativo e aberto."
-                )
-
-            st.caption(
-                "Ao selecionar ou trocar o Exercício, "
-                "os Programas e as Ações da coluna esquerda "
-                "serão atualizados."
-            )
-
-        # ====================================================
-        # FONTE DE RECURSO
-        # ====================================================
-
-        with st.container(border=True):
-
-            st.markdown(
-                "#### 💧 Fonte de Recurso"
-            )
-
-            fontes = []
-
-            if entidade_id is not None and exercicio_id is not None:
-
-                fontes = _sisget_fetch(
-                    """
-                    SELECT id, codigo, descricao
-                    FROM fontes_recursos
-                    WHERE entidade_id = ?
-                      AND exercicio_id = ?
-                      AND ativo = TRUE
-                    ORDER BY codigo, descricao
-                    """,
-                    (
-                        entidade_id,
-                        exercicio_id
-                    )
-                )
-
-            fonte_recurso_id, fonte_codigo, fonte_texto = selecionar(
-                "Fonte de Recurso *",
-                fontes,
-                f"ficha_layout_fonte_v3_{entidade_id}_{exercicio_id}",
-                "Selecione a Fonte de Recurso",
-                desabilitado=exercicio_id is None
-            )
-
-            if exercicio_id is not None and not fontes:
-
-                st.warning(
-                    "Não existem Fontes de Recursos ativas "
-                    "para a Entidade e o Exercício."
-                )
-
-        # ====================================================
-        # NÚMERO DA FICHA E DESCRIÇÃO
-        # ====================================================
-
-        with st.container(border=True):
-
-            st.markdown(
-                "#### 📄 Identificação da Ficha"
-            )
-
-            st.info(
-                "O número da Ficha será informado manualmente."
-            )
-
-            # Os campos editáveis e o botão Salvar estão
-            # no formulário único ao final da tela.
-
-    # ========================================================
-    # RESUMO DA CLASSIFICAÇÃO SELECIONADA
-    # ========================================================
-
-    st.divider()
-
-    st.markdown(
-        "### 🔗 Classificação Selecionada"
-    )
-
-    classificacoes = [
-        {
-            "Classificação": "Órgão",
-            "Código e descrição": orgao_texto or "Não selecionado"
-        },
-        {
-            "Classificação": "Entidade",
-            "Código e descrição": entidade_texto or "Não selecionada"
-        },
-        {
-            "Classificação": "Unidade Orçamentária",
-            "Código e descrição": unidade_texto or "Não selecionada"
-        },
-        {
-            "Classificação": "Função",
-            "Código e descrição": funcao_texto or "Não selecionada"
-        },
-        {
-            "Classificação": "Subfunção",
-            "Código e descrição": subfuncao_texto or "Não selecionada"
-        },
-        {
-            "Classificação": "Programa",
-            "Código e descrição": programa_texto or "Não selecionado"
-        },
-        {
-            "Classificação": "Ação",
-            "Código e descrição": acao_texto or "Não selecionada"
-        },
-        {
-            "Classificação": "Natureza da Despesa",
-            "Código e descrição": natureza_texto or "Não selecionada"
-        },
-        {
-            "Classificação": "Fonte de Recurso",
-            "Código e descrição": fonte_texto or "Não selecionada"
-        }
-    ]
-
-    st.dataframe(
-        classificacoes,
-        use_container_width=True,
-        hide_index=True,
-        key="ficha_layout_resumo_v3"
-    )
-
-    # ========================================================
-    # DADOS DA FICHA
-    # ========================================================
-
-    st.divider()
-
-    st.markdown(
-        "### 📝 Dados para Cadastramento"
-    )
-
-    with st.form(
-        "form_ficha_orcamentaria_layout_v3"
-    ):
-
-        col1, col2 = st.columns([1, 3])
-
-        with col1:
-
-            numero_ficha_texto = st.text_input(
-                "Número da Ficha *",
-                placeholder="Ex.: 125",
-                max_chars=10,
-                help=(
-                    "Informe o número da Ficha manualmente. "
-                    "Aceita somente números inteiros positivos."
-                )
-            )
-
-        with col2:
-
-            descricao = st.text_input(
-                "Descrição da Ficha",
-                max_chars=250,
-                placeholder="Ex.: Manutenção das Atividades do Gabinete"
-            )
-
-        valor_inicial = st.number_input(
-            "Valor Inicial / Total Orçado (R$)",
-            min_value=0.0,
-            value=0.0,
-            step=100.0,
-            format="%.2f"
+    # 5. Validações no momento de salvar.
+    numero_ficha_texto = numero_ficha_texto.strip()
+    if not numero_ficha_texto.isascii() or not numero_ficha_texto.isdecimal():
+        st.warning("Informe um número de Ficha com dígitos de 0 a 9.")
+        return
+    numero_ficha = int(numero_ficha_texto)
+    if numero_ficha <= 0:
+        st.warning("O número da Ficha deve ser maior que zero.")
+        return
+
+    obrigatorios = {
+        "Órgão": orgao_id, "Entidade": entidade_id,
+        "Unidade Orçamentária": unidade_id, "Exercício": exercicio_id,
+        "Função": funcao_id, "Subfunção": subfuncao_id,
+        "Programa": programa_id, "Ação": acao_id,
+        "Natureza da Despesa": natureza_id, "Fonte de Recurso": fonte_recurso_id
+    }
+    faltantes = [nome for nome, valor in obrigatorios.items() if valor is None]
+    if faltantes:
+        st.warning("Selecione os campos: " + ", ".join(faltantes))
+        return
+
+    estrutura = _sisget_fetchone("""
+        SELECT u.id FROM unidades_orcamentarias u
+        JOIN entidades e ON e.id = u.entidade_id
+        JOIN orgaos o ON o.id = u.orgao_id
+        WHERE u.id = ? AND u.entidade_id = ? AND u.orgao_id = ?
+          AND e.orgao_id = ? AND u.ativo = TRUE AND e.ativo = TRUE AND o.ativo = TRUE
+    """, (unidade_id, entidade_id, orgao_id, orgao_id))
+    if not estrutura:
+        st.warning("Vínculo de Órgão, Entidade e Unidade Orçamentária inválido.")
+        return
+
+    exercicio_valido = _sisget_fetchone("""
+        SELECT ano FROM exercicios
+        WHERE id = ? AND entidade_id = ? AND ativo = TRUE AND encerrado = FALSE
+    """, (exercicio_id, entidade_id))
+    if not exercicio_valido:
+        st.warning("Exercício indisponível para esta Entidade.")
+        return
+    exercicio = int(exercicio_valido[0])
+
+    subfuncao_valida = _sisget_fetchone("""
+        SELECT id FROM subfuncoes_orcamentarias
+        WHERE id = ? AND funcao_id = ? AND ativo = TRUE
+    """, (subfuncao_id, funcao_id))
+    if not subfuncao_valida:
+        st.warning("Subfunção não vinculada à Função selecionada.")
+        return
+
+    acao_valida = _sisget_fetchone("""
+        SELECT a.id FROM acoes_orcamentarias a
+        JOIN programas p ON p.id = a.programa_id
+        WHERE a.id = ? AND a.programa_id = ?
+          AND a.entidade_id = ? AND a.exercicio_id = ?
+          AND p.entidade_id = ? AND p.exercicio_id = ?
+          AND a.ativo = TRUE AND p.ativo = TRUE
+    """, (acao_id, programa_id, entidade_id, exercicio_id, entidade_id, exercicio_id))
+    if not acao_valida:
+        st.warning("Ação não vinculada ao Programa e Exercício selecionados.")
+        return
+
+    fonte_valida = _sisget_fetchone("""
+        SELECT id FROM fontes_recursos
+        WHERE id = ? AND entidade_id = ? AND exercicio_id = ? AND ativo = TRUE
+    """, (fonte_recurso_id, entidade_id, exercicio_id))
+    if not fonte_valida:
+        st.warning("Fonte não vinculada à Entidade e ao Exercício.")
+        return
+
+    duplicado = _sisget_fetchone("""
+        SELECT id FROM fichas_orcamentarias
+        WHERE exercicio = ? AND entidade_id = ? AND numero_ficha = ?
+    """, (exercicio, entidade_id, numero_ficha))
+    if duplicado:
+        st.warning(f"A Ficha nº {numero_ficha} já existe para esta Entidade em {exercicio}.")
+        return
+
+    sucesso = _sisget_salvar("""
+        INSERT INTO fichas_orcamentarias (
+            exercicio, numero_ficha, orgao_id, entidade_id, unidade_orcamentaria_id,
+            funcao, subfuncao, programa, acao, natureza_despesa,
+            fonte_recurso_id, descricao, valor_inicial, valor_atual, valor_reservado, ativo
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        exercicio, numero_ficha, orgao_id, entidade_id, unidade_id,
+        funcao, subfuncao, programa, acao, natureza_despesa,
+        fonte_recurso_id, descricao.strip() or None,
+        float(valor_inicial), float(valor_inicial), 0.0, ativo
+    ))
+    if sucesso:
+        st.session_state["sisget_mensagem_ficha_incluir"] = (
+            f"✅ Ficha nº {numero_ficha} cadastrada com sucesso!"
         )
+        st.rerun()
 
-        ativo = st.checkbox(
-            "Ficha ativa",
-            value=True
-        )
-
-        st.divider()
-
-        salvar = st.form_submit_button(
-            "💾 Salvar Ficha",
-            type="primary",
-            use_container_width=True
-        )
-
-    # ========================================================
-    # VALIDAÇÕES
-    # ========================================================
-
-    if salvar:
-
-        # ====================================================
-        # NÚMERO DA FICHA
-        # ====================================================
-
-        numero_ficha_texto = numero_ficha_texto.strip()
-
-        if not numero_ficha_texto.isdigit():
-
-            st.warning(
-                "Informe um número válido para a Ficha."
-            )
-
-            return
-
-        numero_ficha = int(numero_ficha_texto)
-
-        if numero_ficha <= 0:
-
-            st.warning(
-                "O número da Ficha deve ser maior que zero."
-            )
-
-            return
-
-        # ====================================================
-        # CAMPOS OBRIGATÓRIOS
-        # ====================================================
-
-        obrigatorios = {
-            "Órgão": orgao_id,
-            "Entidade": entidade_id,
-            "Unidade Orçamentária": unidade_id,
-            "Exercício": exercicio_id,
-            "Função": funcao_id,
-            "Subfunção": subfuncao_id,
-            "Programa": programa_id,
-            "Ação": acao_id,
-            "Natureza da Despesa": natureza_id,
-            "Fonte de Recurso": fonte_recurso_id
-        }
-
-        faltantes = [
-            nome
-            for nome, valor in obrigatorios.items()
-            if valor is None
-        ]
-
-        if faltantes:
-
-            st.warning(
-                "Preencha os seguintes campos: "
-                + ", ".join(faltantes)
-            )
-
-            return
-
-        # ====================================================
-        # VALIDAR EXERCÍCIO
-        # ====================================================
-
-        exercicio_valido = _sisget_fetchone(
-            """
-            SELECT ano
-            FROM exercicios
-            WHERE id = ?
-              AND entidade_id = ?
-              AND ativo = TRUE
-              AND encerrado = FALSE
-            """,
-            (
-                exercicio_id,
-                entidade_id
-            )
-        )
-
-        if not exercicio_valido:
-
-            st.warning(
-                "O Exercício selecionado não está disponível."
-            )
-
-            return
-
-        exercicio = int(exercicio_valido[0])
-
-        # ====================================================
-        # VALIDAR ESTRUTURA ADMINISTRATIVA
-        # ====================================================
-
-        estrutura_valida = _sisget_fetchone(
-            """
-            SELECT u.id
-            FROM unidades_orcamentarias u
-            INNER JOIN entidades e
-                ON e.id = u.entidade_id
-            INNER JOIN orgaos o
-                ON o.id = u.orgao_id
-            WHERE u.id = ?
-              AND u.entidade_id = ?
-              AND u.orgao_id = ?
-              AND e.orgao_id = ?
-              AND u.ativo = TRUE
-              AND e.ativo = TRUE
-              AND o.ativo = TRUE
-            """,
-            (
-                unidade_id,
-                entidade_id,
-                orgao_id,
-                orgao_id
-            )
-        )
-
-        if not estrutura_valida:
-
-            st.warning(
-                "O vínculo entre Órgão, Entidade e Unidade "
-                "Orçamentária não é válido."
-            )
-
-            return
-
-        # ====================================================
-        # VALIDAR SUBFUNÇÃO
-        # ====================================================
-
-        subfuncao_valida = _sisget_fetchone(
-            """
-            SELECT id
-            FROM subfuncoes_orcamentarias
-            WHERE id = ?
-              AND funcao_id = ?
-              AND ativo = TRUE
-            """,
-            (
-                subfuncao_id,
-                funcao_id
-            )
-        )
-
-        if not subfuncao_valida:
-
-            st.warning(
-                "A Subfunção selecionada não pertence à Função."
-            )
-
-            return
-
-        # ====================================================
-        # VALIDAR PROGRAMA E AÇÃO
-        # ====================================================
-
-        acao_valida = _sisget_fetchone(
-            """
-            SELECT a.id
-            FROM acoes_orcamentarias a
-            INNER JOIN programas p
-                ON p.id = a.programa_id
-            WHERE a.id = ?
-              AND a.programa_id = ?
-              AND a.entidade_id = ?
-              AND a.exercicio_id = ?
-              AND p.entidade_id = ?
-              AND p.exercicio_id = ?
-              AND a.ativo = TRUE
-              AND p.ativo = TRUE
-            """,
-            (
-                acao_id,
-                programa_id,
-                entidade_id,
-                exercicio_id,
-                entidade_id,
-                exercicio_id
-            )
-        )
-
-        if not acao_valida:
-
-            st.warning(
-                "A Ação não possui vínculo válido com "
-                "o Programa e o Exercício selecionados."
-            )
-
-            return
-
-        # ====================================================
-        # VALIDAR FONTE
-        # ====================================================
-
-        fonte_valida = _sisget_fetchone(
-            """
-            SELECT id
-            FROM fontes_recursos
-            WHERE id = ?
-              AND entidade_id = ?
-              AND exercicio_id = ?
-              AND ativo = TRUE
-            """,
-            (
-                fonte_recurso_id,
-                entidade_id,
-                exercicio_id
-            )
-        )
-
-        if not fonte_valida:
-
-            st.warning(
-                "A Fonte de Recurso não pertence à Entidade "
-                "e ao Exercício selecionados."
-            )
-
-            return
-
-        # ====================================================
-        # VERIFICAR NÚMERO REPETIDO
-        # ====================================================
-
-        ficha_existente = _sisget_fetchone(
-            """
-            SELECT id
-            FROM fichas_orcamentarias
-            WHERE exercicio = ?
-              AND entidade_id = ?
-              AND numero_ficha = ?
-            """,
-            (
-                exercicio,
-                entidade_id,
-                numero_ficha
-            )
-        )
-
-        if ficha_existente:
-
-            st.warning(
-                f"Já existe uma Ficha nº {numero_ficha} "
-                f"cadastrada para esta Entidade em {exercicio}."
-            )
-
-            return
-
-        # ====================================================
-        # SALVAR
-        # ====================================================
-
-        sucesso = _sisget_salvar(
-            """
-            INSERT INTO fichas_orcamentarias
-            (
-                exercicio,
-                numero_ficha,
-
-                orgao_id,
-                entidade_id,
-                unidade_orcamentaria_id,
-
-                funcao,
-                subfuncao,
-                programa,
-                acao,
-                natureza_despesa,
-
-                fonte_recurso_id,
-
-                descricao,
-
-                valor_inicial,
-                valor_atual,
-                valor_reservado,
-
-                ativo
-            )
-            VALUES
-            (
-                ?, ?,
-                ?, ?, ?,
-                ?, ?, ?, ?, ?,
-                ?,
-                ?,
-                ?, ?, ?,
-                ?
-            )
-            """,
-            (
-                exercicio,
-                numero_ficha,
-
-                orgao_id,
-                entidade_id,
-                unidade_id,
-
-                funcao,
-                subfuncao,
-                programa,
-                acao,
-                natureza_despesa,
-
-                fonte_recurso_id,
-
-                descricao.strip() or None,
-
-                float(valor_inicial),
-                float(valor_inicial),
-                0.0,
-
-                ativo
-            )
-        )
-
-        if sucesso:
-
-            st.session_state[
-                "sisget_mensagem_ficha_incluir"
-            ] = (
-                f"✅ Ficha nº {numero_ficha} "
-                "cadastrada com sucesso!"
-            )
-
-            st.rerun()
     def proximo_numero_ficha(ano, id_entidade):
 
         registros = _sisget_fetch(
