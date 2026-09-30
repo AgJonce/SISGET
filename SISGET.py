@@ -512,12 +512,6 @@ def sisget_voltar_localizar(
 # ============================================================
 # CABEÇALHO PADRÃO DAS TELAS
 # ============================================================
-
-# ============================================================
-# CABEÇALHO PADRÃO DAS TELAS
-# BOTÃO VOLTAR
-# ============================================================
-
 # ============================================================
 # CABEÇALHO PADRÃO DAS TELAS
 # ============================================================
@@ -550,11 +544,17 @@ def sisget_cabecalho_tela(
 
         if voltar is not None:
 
-            chave_botao = (
-                f"btn_voltar_{chave}_{titulo}"
-                if chave
-                else f"btn_voltar_{titulo}"
-            )
+            if chave:
+
+                chave_botao = (
+                    f"sisget_btn_voltar_{chave}_{titulo}"
+                )
+
+            else:
+
+                chave_botao = (
+                    f"sisget_btn_voltar_padrao_{titulo}"
+                )
 
             if st.button(
                 "⬅️ Voltar",
@@ -801,22 +801,25 @@ def sisget_grid_localizar(
 # DUPLO CLIQUE EM LOCALIZAR -> ALTERAR
 # ============================================================
 
+# ============================================================
+# TELA PRINCIPAL PADRÃO DO SISGET
+#
+# INCLUIR
+# LOCALIZAR
+# EXCLUIR
+# IMPRIMIR
+#
+# DUPLO CLIQUE EM LOCALIZAR -> ALTERAR
+# ============================================================
+
 def sisget_tela_principal(
-
     titulo,
-
     chave,
-
     func_incluir,
-
     func_localizar,
-
     func_alterar,
-
     func_excluir=None,
-
     func_imprimir=None,
-
     icone="📋"
 ):
 
@@ -824,14 +827,12 @@ def sisget_tela_principal(
         f"sisget_tela_{chave}"
     )
 
-
     chave_id = (
         f"sisget_id_{chave}"
     )
 
-
     # ========================================================
-    # INICIALIZAR
+    # INICIALIZAÇÃO
     # ========================================================
 
     if chave_tela not in st.session_state:
@@ -840,18 +841,15 @@ def sisget_tela_principal(
             chave_tela
         ] = "principal"
 
-
     if chave_id not in st.session_state:
 
         st.session_state[
             chave_id
         ] = None
 
-
     tela = st.session_state[
         chave_tela
     ]
-
 
     # ========================================================
     # TÍTULO
@@ -861,7 +859,6 @@ def sisget_tela_principal(
         f"{icone} {titulo}"
     )
 
-
     # ========================================================
     # TELA PRINCIPAL
     # ========================================================
@@ -870,9 +867,7 @@ def sisget_tela_principal(
 
         st.markdown("---")
 
-
         col1, col2, col3, col4 = st.columns(4)
-
 
         # ====================================================
         # INCLUIR
@@ -882,7 +877,7 @@ def sisget_tela_principal(
 
             if st.button(
                 "➕ Incluir",
-                key=f"incluir_{chave}",
+                key=f"sisget_incluir_{chave}",
                 use_container_width=True,
                 type="primary"
             ):
@@ -897,7 +892,6 @@ def sisget_tela_principal(
 
                 st.rerun()
 
-
         # ====================================================
         # LOCALIZAR
         # ====================================================
@@ -906,7 +900,7 @@ def sisget_tela_principal(
 
             if st.button(
                 "🔎 Localizar",
-                key=f"localizar_{chave}",
+                key=f"sisget_localizar_{chave}",
                 use_container_width=True
             ):
 
@@ -920,7 +914,6 @@ def sisget_tela_principal(
 
                 st.rerun()
 
-
         # ====================================================
         # EXCLUIR
         # ====================================================
@@ -929,7 +922,7 @@ def sisget_tela_principal(
 
             if st.button(
                 "🗑️ Excluir",
-                key=f"excluir_{chave}",
+                key=f"sisget_excluir_{chave}",
                 use_container_width=True
             ):
 
@@ -943,7 +936,6 @@ def sisget_tela_principal(
 
                 st.rerun()
 
-
         # ====================================================
         # IMPRIMIR
         # ====================================================
@@ -952,7 +944,7 @@ def sisget_tela_principal(
 
             if st.button(
                 "🖨️ Imprimir",
-                key=f"imprimir_{chave}",
+                key=f"sisget_imprimir_{chave}",
                 use_container_width=True
             ):
 
@@ -966,9 +958,7 @@ def sisget_tela_principal(
 
                 st.rerun()
 
-
         st.markdown("---")
-
 
     # ========================================================
     # INCLUIR
@@ -980,11 +970,11 @@ def sisget_tela_principal(
             "➕ Incluir",
             voltar=lambda: sisget_voltar_principal(
                 chave
-            )
+            ),
+            chave=f"{chave}_incluir"
         )
 
         func_incluir()
-
 
     # ========================================================
     # LOCALIZAR
@@ -996,16 +986,15 @@ def sisget_tela_principal(
             "🔎 Localizar",
             voltar=lambda: sisget_voltar_principal(
                 chave
-            )
+            ),
+            chave=f"{chave}_localizar"
         )
 
         st.caption(
             "Dê duplo clique em um registro para alterar."
         )
 
-
         registro_id = func_localizar()
-
 
         if registro_id:
 
@@ -1019,7 +1008,6 @@ def sisget_tela_principal(
 
             st.rerun()
 
-
     # ========================================================
     # ALTERAR
     # ========================================================
@@ -1030,7 +1018,6 @@ def sisget_tela_principal(
             chave_id
         )
 
-
         if not registro_id:
 
             st.session_state[
@@ -1039,19 +1026,17 @@ def sisget_tela_principal(
 
             st.rerun()
 
-
         sisget_cabecalho_tela(
             "✏️ Alterar",
             voltar=lambda: sisget_voltar_localizar(
                 chave
-            )
+            ),
+            chave=f"{chave}_alterar"
         )
-
 
         func_alterar(
             registro_id
         )
-
 
     # ========================================================
     # EXCLUIR
@@ -1063,9 +1048,9 @@ def sisget_tela_principal(
             "🗑️ Excluir",
             voltar=lambda: sisget_voltar_principal(
                 chave
-            )
+            ),
+            chave=f"{chave}_excluir"
         )
-
 
         if func_excluir:
 
@@ -1077,7 +1062,6 @@ def sisget_tela_principal(
                 "Nenhuma rotina de exclusão configurada."
             )
 
-
     # ========================================================
     # IMPRIMIR
     # ========================================================
@@ -1088,9 +1072,9 @@ def sisget_tela_principal(
             "🖨️ Imprimir",
             voltar=lambda: sisget_voltar_principal(
                 chave
-            )
+            ),
+            chave=f"{chave}_imprimir"
         )
-
 
         if func_imprimir:
 
@@ -1101,6 +1085,22 @@ def sisget_tela_principal(
             st.info(
                 "Nenhum relatório configurado."
             )
+
+    # ========================================================
+    # SEGURANÇA
+    # ========================================================
+
+    else:
+
+        st.session_state[
+            chave_tela
+        ] = "principal"
+
+        st.session_state[
+            chave_id
+        ] = None
+
+        st.rerun()
 def modulo_em_desenvolvimento(
     nome,
     icone="🚧"
