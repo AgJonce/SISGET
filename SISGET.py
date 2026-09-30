@@ -13751,13 +13751,18 @@ def modulo_planejamento():
 # ============================================================
 
 
+# ============================================================
+# FICHAS ORÇAMENTÁRIAS - INCLUIR
+# SELECTBOX + CLASSIFICAÇÃO COMPLETA
+# ============================================================
+
 def ficha_orcamentaria_incluir():
 
     st.subheader("📄 Incluir Ficha Orçamentária")
 
     st.caption(
-        "Selecione os dados cadastrados no SISGET. "
-        "A classificação será preenchida automaticamente."
+        "Selecione os cadastros existentes. "
+        "Os códigos serão carregados automaticamente."
     )
 
     # ========================================================
@@ -13799,7 +13804,6 @@ def ficha_orcamentaria_incluir():
         )
 
         if selecionado is None:
-
             return None, None, None
 
         return (
@@ -13829,7 +13833,7 @@ def ficha_orcamentaria_incluir():
     orgao_id, _, orgao_texto = selecionar_cadastro(
         "Órgão *",
         orgaos,
-        "ficha_nova_orgao",
+        "sisget_ficha_incluir_orgao_v2",
         "Selecione o Órgão"
     )
 
@@ -13856,7 +13860,7 @@ def ficha_orcamentaria_incluir():
     entidade_id, _, entidade_texto = selecionar_cadastro(
         "Entidade *",
         entidades,
-        "ficha_nova_entidade",
+        "sisget_ficha_incluir_entidade_v2",
         "Selecione a Entidade"
     )
 
@@ -13892,7 +13896,7 @@ def ficha_orcamentaria_incluir():
     unidade_id, _, unidade_texto = selecionar_cadastro(
         "Unidade Orçamentária *",
         unidades,
-        "ficha_nova_unidade",
+        "sisget_ficha_incluir_unidade_v2",
         "Selecione a Unidade Orçamentária"
     )
 
@@ -13915,10 +13919,7 @@ def ficha_orcamentaria_incluir():
 
     exercicios = _sisget_fetch(
         """
-        SELECT
-            id,
-            ano,
-            descricao
+        SELECT id, ano, descricao
         FROM exercicios
         WHERE entidade_id = ?
           AND ativo = TRUE
@@ -13932,11 +13933,11 @@ def ficha_orcamentaria_incluir():
 
     for registro in exercicios:
 
-        exercicio_id_registro = int(registro[0])
+        registro_id = int(registro[0])
         ano = int(registro[1])
         descricao_exercicio = str(registro[2] or "")
 
-        mapa_exercicios[exercicio_id_registro] = {
+        mapa_exercicios[registro_id] = {
             "ano": ano,
             "texto": (
                 f"{ano} - {descricao_exercicio}"
@@ -13953,7 +13954,7 @@ def ficha_orcamentaria_incluir():
             if valor is None
             else mapa_exercicios[valor]["texto"]
         ),
-        key="ficha_nova_exercicio",
+        key="sisget_ficha_incluir_exercicio_v2",
         disabled=not bool(exercicios)
     )
 
@@ -13974,7 +13975,7 @@ def ficha_orcamentaria_incluir():
     # ========================================================
     # 5 - CLASSIFICAÇÃO ORÇAMENTÁRIA
     #
-    # OS SELECTBOX FICAM FORA DO st.form()
+    # SELECTBOX FORA DO FORM
     # ========================================================
 
     st.divider()
@@ -13997,7 +13998,7 @@ def ficha_orcamentaria_incluir():
     funcao_id, funcao, funcao_texto = selecionar_cadastro(
         "Função *",
         funcoes,
-        "ficha_nova_funcao",
+        "sisget_ficha_incluir_funcao_v2",
         "Selecione uma Função cadastrada"
     )
 
@@ -14009,7 +14010,6 @@ def ficha_orcamentaria_incluir():
 
     # ========================================================
     # SUBFUNÇÃO
-    # FILTRADA PELA FUNÇÃO SELECIONADA
     # ========================================================
 
     subfuncoes = []
@@ -14030,7 +14030,7 @@ def ficha_orcamentaria_incluir():
     subfuncao_id, subfuncao, subfuncao_texto = selecionar_cadastro(
         "Subfunção *",
         subfuncoes,
-        "ficha_nova_subfuncao",
+        "sisget_ficha_incluir_subfuncao_v2",
         "Selecione uma Subfunção cadastrada",
         desabilitado=funcao_id is None
     )
@@ -14038,13 +14038,12 @@ def ficha_orcamentaria_incluir():
     if funcao_id is not None and not subfuncoes:
 
         st.warning(
-            "Nenhuma Subfunção ativa vinculada à "
-            "Função selecionada."
+            "Nenhuma Subfunção ativa vinculada "
+            "à Função selecionada."
         )
 
     # ========================================================
     # PROGRAMA
-    # ENTIDADE + EXERCÍCIO
     # ========================================================
 
     programas = []
@@ -14069,7 +14068,7 @@ def ficha_orcamentaria_incluir():
     programa_id, programa, programa_texto = selecionar_cadastro(
         "Programa *",
         programas,
-        "ficha_nova_programa",
+        "sisget_ficha_incluir_programa_v2",
         "Selecione um Programa cadastrado",
         desabilitado=exercicio_id is None
     )
@@ -14083,7 +14082,6 @@ def ficha_orcamentaria_incluir():
 
     # ========================================================
     # AÇÃO
-    # FILTRADA PELO PROGRAMA
     # ========================================================
 
     acoes = []
@@ -14110,7 +14108,7 @@ def ficha_orcamentaria_incluir():
     acao_id, acao, acao_texto = selecionar_cadastro(
         "Ação *",
         acoes,
-        "ficha_nova_acao",
+        "sisget_ficha_incluir_acao_v2",
         "Selecione uma Ação cadastrada",
         desabilitado=programa_id is None
     )
@@ -14137,7 +14135,7 @@ def ficha_orcamentaria_incluir():
     natureza_id, natureza_despesa, natureza_texto = selecionar_cadastro(
         "Natureza da Despesa *",
         naturezas,
-        "ficha_nova_natureza",
+        "sisget_ficha_incluir_natureza_v2",
         "Selecione uma Natureza da Despesa cadastrada"
     )
 
@@ -14149,8 +14147,7 @@ def ficha_orcamentaria_incluir():
 
     # ========================================================
     # 6 - FONTE DE RECURSO
-    #
-    # FILTRADA PELA ENTIDADE E PELO EXERCÍCIO_ID
+    # ENTIDADE + EXERCÍCIO
     # ========================================================
 
     st.divider()
@@ -14161,10 +14158,7 @@ def ficha_orcamentaria_incluir():
 
         fontes = _sisget_fetch(
             """
-            SELECT
-                id,
-                codigo,
-                descricao
+            SELECT id, codigo, descricao
             FROM fontes_recursos
             WHERE entidade_id = ?
               AND exercicio_id = ?
@@ -14180,7 +14174,7 @@ def ficha_orcamentaria_incluir():
     fonte_recurso_id, fonte_codigo, fonte_texto = selecionar_cadastro(
         "Fonte de Recurso *",
         fontes,
-        "ficha_nova_fonte",
+        "sisget_ficha_incluir_fonte_v2",
         "Selecione uma Fonte de Recurso cadastrada",
         desabilitado=exercicio_id is None
     )
@@ -14194,8 +14188,7 @@ def ficha_orcamentaria_incluir():
 
     # ========================================================
     # 7 - CLASSIFICAÇÃO SELECIONADA
-    #
-    # EXIBE CÓDIGO + DESCRIÇÃO DE CADA CADASTRO
+    # CÓDIGO + DESCRIÇÃO
     # ========================================================
 
     st.divider()
@@ -14248,12 +14241,357 @@ def ficha_orcamentaria_incluir():
     st.dataframe(
         classificacoes,
         use_container_width=True,
-        hide_index=True
+        hide_index=True,
+        key="sisget_ficha_incluir_resumo_v2"
     )
 
     # ========================================================
-    # 8 - NÚMERO AUTOMÁTICO DA FICHA
+    # 8 - NUMERAÇÃO AUTOMÁTICA
     # ========================================================
+
+    def proximo_numero_ficha(ano, id_entidade):
+
+        registros = _sisget_fetch(
+            """
+            SELECT numero_ficha
+            FROM fichas_orcamentarias
+            WHERE exercicio = ?
+              AND entidade_id = ?
+            """,
+            (
+                ano,
+                id_entidade
+            )
+        )
+
+        numeros_utilizados = {
+            int(registro[0])
+            for registro in registros
+            if registro[0] is not None
+        }
+
+        proximo = 1
+
+        while proximo in numeros_utilizados:
+            proximo += 1
+
+        return proximo
+
+    numero_ficha = None
+
+    if exercicio is not None:
+
+        numero_ficha = proximo_numero_ficha(
+            exercicio,
+            entidade_id
+        )
+
+    st.text_input(
+        "Número da Ficha (automático)",
+        value=(
+            str(numero_ficha)
+            if numero_ficha is not None
+            else "Aguardando Exercício"
+        ),
+        disabled=True,
+        key="sisget_ficha_incluir_numero_v2"
+    )
+
+    # ========================================================
+    # 9 - DADOS FINANCEIROS
+    # ========================================================
+
+    st.divider()
+
+    st.markdown("### 💰 Dados Financeiros")
+
+    with st.form(
+        "sisget_form_ficha_incluir_v2",
+        clear_on_submit=True
+    ):
+
+        descricao = st.text_input(
+            "Descrição da Ficha",
+            max_chars=250,
+            placeholder="Ex.: Material de Consumo",
+            key="sisget_ficha_incluir_descricao_v2"
+        )
+
+        valor_inicial = st.number_input(
+            "Valor Inicial (R$)",
+            min_value=0.0,
+            value=0.0,
+            step=100.0,
+            format="%.2f",
+            key="sisget_ficha_incluir_valor_v2"
+        )
+
+        ativo = st.checkbox(
+            "Ficha ativa",
+            value=True,
+            key="sisget_ficha_incluir_ativo_v2"
+        )
+
+        salvar = st.form_submit_button(
+            "💾 Salvar Ficha Orçamentária",
+            type="primary",
+            use_container_width=True
+        )
+
+    # ========================================================
+    # 10 - VALIDAÇÕES E SALVAMENTO
+    # ========================================================
+
+    if salvar:
+
+        if exercicio_id is None:
+
+            st.warning(
+                "Selecione um Exercício ativo e aberto."
+            )
+
+            return
+
+        # ====================================================
+        # VALIDAR CAMPOS OBRIGATÓRIOS
+        # ====================================================
+
+        campos = {
+            "Função": funcao_id,
+            "Subfunção": subfuncao_id,
+            "Programa": programa_id,
+            "Ação": acao_id,
+            "Natureza da Despesa": natureza_id,
+            "Fonte de Recurso": fonte_recurso_id
+        }
+
+        faltantes = [
+            nome
+            for nome, valor in campos.items()
+            if valor is None
+        ]
+
+        if faltantes:
+
+            st.warning(
+                "Selecione os seguintes campos: "
+                + ", ".join(faltantes)
+            )
+
+            return
+
+        # ====================================================
+        # VALIDAR EXERCÍCIO
+        # ====================================================
+
+        exercicio_valido = _sisget_fetchone(
+            """
+            SELECT ano
+            FROM exercicios
+            WHERE id = ?
+              AND entidade_id = ?
+              AND ativo = TRUE
+              AND encerrado = FALSE
+            """,
+            (
+                exercicio_id,
+                entidade_id
+            )
+        )
+
+        if not exercicio_valido:
+
+            st.warning(
+                "O Exercício selecionado não está mais "
+                "disponível para esta Entidade."
+            )
+
+            return
+
+        exercicio = int(exercicio_valido[0])
+
+        # ====================================================
+        # VALIDAR SUBFUNÇÃO
+        # ====================================================
+
+        subfuncao_valida = _sisget_fetchone(
+            """
+            SELECT id
+            FROM subfuncoes_orcamentarias
+            WHERE id = ?
+              AND funcao_id = ?
+              AND ativo = TRUE
+            """,
+            (
+                subfuncao_id,
+                funcao_id
+            )
+        )
+
+        if not subfuncao_valida:
+
+            st.warning(
+                "A Subfunção não pertence à Função selecionada."
+            )
+
+            return
+
+        # ====================================================
+        # VALIDAR PROGRAMA E AÇÃO
+        # ====================================================
+
+        acao_valida = _sisget_fetchone(
+            """
+            SELECT a.id
+            FROM acoes_orcamentarias a
+
+            INNER JOIN programas p
+                ON p.id = a.programa_id
+
+            WHERE a.id = ?
+              AND a.programa_id = ?
+              AND a.entidade_id = ?
+              AND a.exercicio_id = ?
+
+              AND p.entidade_id = ?
+              AND p.exercicio_id = ?
+
+              AND a.ativo = TRUE
+              AND p.ativo = TRUE
+            """,
+            (
+                acao_id,
+                programa_id,
+                entidade_id,
+                exercicio_id,
+                entidade_id,
+                exercicio_id
+            )
+        )
+
+        if not acao_valida:
+
+            st.warning(
+                "A Ação selecionada não possui vínculo "
+                "válido com o Programa e o Exercício."
+            )
+
+            return
+
+        # ====================================================
+        # VALIDAR FONTE DE RECURSO
+        # ====================================================
+
+        fonte_valida = _sisget_fetchone(
+            """
+            SELECT id
+            FROM fontes_recursos
+            WHERE id = ?
+              AND entidade_id = ?
+              AND exercicio_id = ?
+              AND ativo = TRUE
+            """,
+            (
+                fonte_recurso_id,
+                entidade_id,
+                exercicio_id
+            )
+        )
+
+        if not fonte_valida:
+
+            st.warning(
+                "A Fonte de Recurso não está vinculada "
+                "corretamente à Entidade e ao Exercício."
+            )
+
+            return
+
+        # ====================================================
+        # RECALCULAR NÚMERO
+        # ====================================================
+
+        numero_salvar = proximo_numero_ficha(
+            exercicio,
+            entidade_id
+        )
+
+        # ====================================================
+        # INSERT
+        # ====================================================
+
+        sucesso = _sisget_salvar(
+            """
+            INSERT INTO fichas_orcamentarias
+            (
+                exercicio,
+                numero_ficha,
+
+                orgao_id,
+                entidade_id,
+                unidade_orcamentaria_id,
+
+                funcao,
+                subfuncao,
+                programa,
+                acao,
+                natureza_despesa,
+
+                fonte_recurso_id,
+
+                descricao,
+
+                valor_inicial,
+                valor_atual,
+                valor_reservado,
+
+                ativo
+            )
+            VALUES
+            (
+                ?, ?,
+                ?, ?, ?,
+                ?, ?, ?, ?, ?,
+                ?,
+                ?,
+                ?, ?, ?,
+                ?
+            )
+            """,
+            (
+                exercicio,
+                numero_salvar,
+
+                orgao_id,
+                entidade_id,
+                unidade_id,
+
+                funcao,
+                subfuncao,
+                programa,
+                acao,
+                natureza_despesa,
+
+                fonte_recurso_id,
+
+                descricao.strip() or None,
+
+                float(valor_inicial),
+                float(valor_inicial),
+                0.0,
+
+                ativo
+            )
+        )
+
+        if sucesso:
+
+            st.success(
+                f"✅ Ficha Orçamentária nº {numero_salvar} "
+                "cadastrada com sucesso!"
+            )
+
+            st.rerun()
 
     def proximo_numero_ficha(ano, id_entidade):
 
