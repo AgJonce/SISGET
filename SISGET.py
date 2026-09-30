@@ -14517,22 +14517,756 @@ def ficha_orcamentaria_incluir():
             )
 
             st.rerun()
+# ============================================================
+# SISGET - FONTES DE RECURSOS
+# ============================================================
+
+
+# ============================================================
+# TELA PRINCIPAL
+# ============================================================
+
 def planejamento_fontes_recursos():
 
-    st.subheader(
-        "💧 Fontes de Recursos"
-    )
-
-    st.info(
-        "Cadastro das Fontes de Recursos será desenvolvido "
-        "nesta etapa."
+    sisget_tela_principal(
+        titulo="Fontes de Recursos",
+        chave="fontes_recursos",
+        func_incluir=fonte_recurso_incluir,
+        func_localizar=fonte_recurso_localizar,
+        func_alterar=fonte_recurso_alterar,
+        func_excluir=fonte_recurso_excluir,
+        func_imprimir=fonte_recurso_imprimir,
+        icone="💧"
     )
 
 
 # ============================================================
-# FICHA ORÇAMENTÁRIA - IMPRIMIR
+# FUNÇÃO AUXILIAR - EXERCÍCIOS CADASTRADOS
 # ============================================================
 
+def fonte_recurso_exercicios():
+
+    dados = _sisget_fetch(
+        """
+        SELECT DISTINCT ano
+        FROM exercicios
+        WHERE ativo = TRUE
+        ORDER BY ano DESC
+        """
+    )
+
+    return [
+        int(registro[0])
+        for registro in dados
+        if registro[0] is not None
+    ]
+
+
+# ============================================================
+# INCLUIR
+# ============================================================
+
+def fonte_recurso_incluir():
+
+    st.subheader("💧 Incluir Fonte de Recurso")
+
+    exercicios = fonte_recurso_exercicios()
+
+    if not exercicios:
+
+        st.warning(
+            "Nenhum Exercício ativo cadastrado."
+        )
+
+        return
+
+    with st.form(
+        "form_incluir_fonte_recurso",
+        clear_on_submit=True
+    ):
+
+        exercicio = st.selectbox(
+            "Exercício *",
+            options=exercicios,
+            key="fonte_incluir_exercicio"
+        )
+
+        col1, col2 = st.columns([1, 3])
+
+        with col1:
+
+            codigo = st.text_input(
+                "Código da Fonte *",
+                max_chars=20,
+                placeholder="Ex.: 1500",
+                key="fonte_incluir_codigo"
+            )
+
+        with col2:
+
+            descricao = st.text_input(
+                "Descrição da Fonte *",
+                max_chars=200,
+                key="fonte_incluir_descricao"
+            )
+
+        ativo = st.checkbox(
+            "Fonte ativa",
+            value=True,
+            key="fonte_incluir_ativo"
+        )
+
+        salvar = st.form_submit_button(
+            "💾 Salvar Fonte de Recurso",
+            type="primary",
+            use_container_width=True
+        )
+
+    if salvar:
+
+        codigo = codigo.strip()
+        descricao = descricao.strip()
+
+        if not codigo or not descricao:
+
+            st.warning(
+                "Informe o código e a descrição da Fonte."
+            )
+
+            return
+
+        existe = _sisget_fetchone(
+            """
+            SELECT id
+            FROM fontes_recursos
+            WHERE exercicio = ?
+              AND codigo = ?
+            """,
+            (
+                exercicio,
+                codigo
+            )
+        )
+
+        if existe:
+
+            st.warning(
+                f"A Fonte {codigo} já está cadastrada "
+                f"para o exercício {exercicio}."
+            )
+
+            return
+
+        sucesso = _sisget_salvar(
+            """
+            INSERT INTO fontes_recursos
+            (
+                exercicio,
+                codigo,
+                descricao,
+                ativo
+            )
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                exercicio,
+                codigo,
+                descricao,
+                ativo
+            )
+        )
+
+        if sucesso:
+
+            st.session_state[
+                "fonte_recurso_mensagem"
+            ] = (
+                f"Fonte {codigo} - {descricao} "
+                "cadastrada com sucesso!"
+            )
+
+            st.rerun()
+
+
+# ============================================================
+# LOCALIZAR
+# DUPLO CLIQUE -> ALTERAR
+# ============================================================
+
+def fonte_recurso_localizar():
+
+    st.subheader("🔎 Localizar Fontes de Recursos")
+
+    filtro_exercicio = st.selectbox(
+        "Exercício",
+        options=["Todos"] + fonte_recurso_exercicios(),
+        key="fonte_localizar_exercicio"
+    )
+
+    filtro_texto = st.text_input(
+        "Pesquisar Código ou Descrição",
+        key="fonte_localizar_pesquisa"
+    )
+
+    filtro_situacao = st.selectbox(
+        "Situação",
+        ["Todos", "Ativos", "Inativos"],
+        key="fonte_localizar_situacao"
+    )
+
+    sql = """
+        SELECT
+            id,
+            exercicio AS "Exercício",
+            codigo AS "Código",
+            descricao AS "Descrição",
+
+            CASE
+                WHEN ativo = TRUE THEN 'Ativo'
+                ELSE 'Inativo'
+            END AS "Situação"
+
+        FROM fontes_recursos
+        WHERE 1 = 1
+    """
+
+    parametros = []
+
+    if filtro_exercicio != "Todos":
+
+        sql += " AND exercicio = ?"
+
+        parametros.append(filtro_exercicio)
+
+    if filtro_texto.strip():
+
+        sql += """
+            AND (
+                codigo ILIKE ?
+                OR descricao ILIKE ?
+            )
+        """
+
+        pesquisa = f"%{filtro_texto.strip()}%"
+
+        parametros.extend([
+            pesquisa,
+            pesquisa
+        ])
+
+    if filtro_situacao == "Ativos":
+
+        sql += " AND ativo = TRUE"
+
+    elif filtro_situacao == "Inativos":
+
+        sql += " AND ativo = FALSE"
+
+    sql += """
+        ORDER BY exercicio DESC, codigo
+    """
+
+    df = _sisget_dataframe(
+        sql,
+        tuple(parametros)
+    )
+
+    if df.empty:
+
+        st.info(
+            "Nenhuma Fonte de Recurso encontrada."
+        )
+
+        return None
+
+    st.caption(
+        f"{len(df)} registro(s) encontrado(s). "
+        "Dê duplo clique para alterar."
+    )
+
+    return sisget_grid_localizar(
+        df=df,
+        chave="localizar_fontes_recursos",
+        coluna_id="id",
+        altura=420
+    )
+
+
+# ============================================================
+# ALTERAR
+# ============================================================
+
+def fonte_recurso_alterar(registro_id):
+
+    st.subheader("✏️ Alterar Fonte de Recurso")
+
+    dados = _sisget_fetchone(
+        """
+        SELECT
+            id,
+            exercicio,
+            codigo,
+            descricao,
+            ativo
+        FROM fontes_recursos
+        WHERE id = ?
+        """,
+        (registro_id,)
+    )
+
+    if not dados:
+
+        st.error(
+            "Fonte de Recurso não encontrada."
+        )
+
+        return
+
+    (
+        fonte_id,
+        exercicio_atual,
+        codigo_atual,
+        descricao_atual,
+        ativo_atual
+    ) = dados
+
+    exercicios = fonte_recurso_exercicios()
+
+    if exercicio_atual not in exercicios:
+
+        exercicios.append(exercicio_atual)
+
+        exercicios.sort(reverse=True)
+
+    with st.form(
+        f"form_alterar_fonte_{fonte_id}"
+    ):
+
+        exercicio = st.selectbox(
+            "Exercício *",
+            exercicios,
+            index=exercicios.index(exercicio_atual)
+        )
+
+        col1, col2 = st.columns([1, 3])
+
+        with col1:
+
+            codigo = st.text_input(
+                "Código *",
+                value=str(codigo_atual),
+                max_chars=20
+            )
+
+        with col2:
+
+            descricao = st.text_input(
+                "Descrição *",
+                value=descricao_atual,
+                max_chars=200
+            )
+
+        ativo = st.checkbox(
+            "Fonte ativa",
+            value=bool(ativo_atual)
+        )
+
+        salvar = st.form_submit_button(
+            "💾 Salvar Alterações",
+            type="primary",
+            use_container_width=True
+        )
+
+    if salvar:
+
+        codigo = codigo.strip()
+        descricao = descricao.strip()
+
+        if not codigo or not descricao:
+
+            st.warning(
+                "Código e descrição são obrigatórios."
+            )
+
+            return
+
+        duplicado = _sisget_fetchone(
+            """
+            SELECT id
+            FROM fontes_recursos
+            WHERE exercicio = ?
+              AND codigo = ?
+              AND id <> ?
+            """,
+            (
+                exercicio,
+                codigo,
+                fonte_id
+            )
+        )
+
+        if duplicado:
+
+            st.warning(
+                "Já existe outra Fonte com este código "
+                "no exercício selecionado."
+            )
+
+            return
+
+        sucesso = _sisget_salvar(
+            """
+            UPDATE fontes_recursos
+
+            SET
+                exercicio = ?,
+                codigo = ?,
+                descricao = ?,
+                ativo = ?
+
+            WHERE id = ?
+            """,
+            (
+                exercicio,
+                codigo,
+                descricao,
+                ativo,
+                fonte_id
+            )
+        )
+
+        if sucesso:
+
+            st.session_state[
+                "fonte_recurso_mensagem"
+            ] = "Fonte de Recurso alterada com sucesso!"
+
+            st.session_state[
+                "sisget_id_fontes_recursos"
+            ] = None
+
+            st.session_state[
+                "sisget_tela_fontes_recursos"
+            ] = "localizar"
+
+            st.rerun()
+
+
+# ============================================================
+# EXCLUIR / INATIVAR
+#
+# PRESERVA O HISTÓRICO DAS FICHAS VINCULADAS
+# ============================================================
+
+def fonte_recurso_excluir():
+
+    st.subheader("🗑️ Excluir Fonte de Recurso")
+
+    st.caption(
+        "A exclusão será lógica (inativação), preservando "
+        "os vínculos com fichas orçamentárias existentes."
+    )
+
+    fontes = _sisget_fetch(
+        """
+        SELECT
+            id,
+            exercicio,
+            codigo,
+            descricao
+
+        FROM fontes_recursos
+
+        WHERE ativo = TRUE
+
+        ORDER BY exercicio DESC, codigo
+        """
+    )
+
+    if not fontes:
+
+        st.info(
+            "Nenhuma Fonte ativa disponível."
+        )
+
+        return
+
+    mapa = {
+        int(r[0]): (
+            f"{r[1]} | {r[2]} - {r[3]}"
+        )
+        for r in fontes
+    }
+
+    fonte_id = st.selectbox(
+        "Selecione a Fonte",
+        options=[None] + list(mapa.keys()),
+        format_func=lambda valor: (
+            "Selecione"
+            if valor is None
+            else mapa[valor]
+        ),
+        key="fonte_excluir_selecao"
+    )
+
+    if fonte_id is None:
+        return
+
+    vinculadas = _sisget_fetchone(
+        """
+        SELECT COUNT(*)
+        FROM fichas_orcamentarias
+        WHERE fonte_recurso_id = ?
+        """,
+        (fonte_id,)
+    )
+
+    quantidade = (
+        int(vinculadas[0])
+        if vinculadas
+        else 0
+    )
+
+    if quantidade:
+
+        st.warning(
+            f"Esta Fonte possui {quantidade} ficha(s) "
+            "orçamentária(s) vinculada(s). "
+            "O histórico será preservado."
+        )
+
+    confirmar = st.checkbox(
+        "Confirmo que desejo inativar esta Fonte.",
+        key="fonte_confirmar_exclusao"
+    )
+
+    if st.button(
+        "🗑️ Confirmar Inativação",
+        type="primary",
+        disabled=not confirmar,
+        key="fonte_botao_excluir"
+    ):
+
+        sucesso = _sisget_salvar(
+            """
+            UPDATE fontes_recursos
+            SET ativo = FALSE
+            WHERE id = ?
+            """,
+            (fonte_id,)
+        )
+
+        if sucesso:
+
+            st.session_state[
+                "fonte_recurso_mensagem"
+            ] = "Fonte de Recurso inativada com sucesso!"
+
+            st.rerun()
+
+
+# ============================================================
+# IMPRIMIR
+# ============================================================
+
+def fonte_recurso_imprimir():
+
+    st.subheader("🖨️ Relatório de Fontes de Recursos")
+
+    filtro_exercicio = st.selectbox(
+        "Exercício",
+        ["Todos"] + fonte_recurso_exercicios(),
+        key="fonte_imprimir_exercicio"
+    )
+
+    sql = """
+        SELECT
+            exercicio AS "Exercício",
+            codigo AS "Código",
+            descricao AS "Descrição",
+
+            CASE
+                WHEN ativo = TRUE THEN 'Ativo'
+                ELSE 'Inativo'
+            END AS "Situação"
+
+        FROM fontes_recursos
+        WHERE 1 = 1
+    """
+
+    parametros = []
+
+    if filtro_exercicio != "Todos":
+
+        sql += " AND exercicio = ?"
+
+        parametros.append(filtro_exercicio)
+
+    sql += """
+        ORDER BY exercicio DESC, codigo
+    """
+
+    df = _sisget_dataframe(
+        sql,
+        tuple(parametros)
+    )
+
+    if df.empty:
+
+        st.info(
+            "Nenhuma Fonte de Recurso para imprimir."
+        )
+
+        return
+
+    st.dataframe(
+        df,
+        use_container_width=True,
+        hide_index=True
+    )
+
+    # ========================================================
+    # GERAR PDF
+    # ========================================================
+
+    if st.button(
+        "📄 Gerar Relatório PDF",
+        key="fonte_gerar_pdf"
+    ):
+
+        from xml.sax.saxutils import escape
+
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.platypus import (
+            SimpleDocTemplate,
+            Paragraph,
+            Spacer,
+            Table,
+            TableStyle
+        )
+
+        from io import BytesIO
+
+        buffer = BytesIO()
+
+        documento = SimpleDocTemplate(
+            buffer,
+            pagesize=landscape(A4),
+            rightMargin=25,
+            leftMargin=25,
+            topMargin=25,
+            bottomMargin=25
+        )
+
+        estilos = getSampleStyleSheet()
+
+        elementos = []
+
+        elementos.append(
+            Paragraph(
+                "SISGET - Fontes de Recursos",
+                estilos["Title"]
+            )
+        )
+
+        elementos.append(Spacer(1, 12))
+
+        tabela_dados = [
+            [
+                "Exercício",
+                "Código",
+                "Descrição",
+                "Situação"
+            ]
+        ]
+
+        for _, registro in df.iterrows():
+
+            tabela_dados.append([
+                str(registro["Exercício"]),
+                str(registro["Código"]),
+                Paragraph(
+                    escape(str(registro["Descrição"])),
+                    estilos["Normal"]
+                ),
+                str(registro["Situação"])
+            ])
+
+        tabela = Table(
+            tabela_dados,
+            colWidths=[
+                75,
+                90,
+                500,
+                75
+            ],
+            repeatRows=1
+        )
+
+        tabela.setStyle(
+            TableStyle([
+                (
+                    "BACKGROUND",
+                    (0, 0),
+                    (-1, 0),
+                    colors.lightgrey
+                ),
+                (
+                    "GRID",
+                    (0, 0),
+                    (-1, -1),
+                    0.4,
+                    colors.grey
+                ),
+                (
+                    "FONTNAME",
+                    (0, 0),
+                    (-1, 0),
+                    "Helvetica-Bold"
+                ),
+                (
+                    "VALIGN",
+                    (0, 0),
+                    (-1, -1),
+                    "TOP"
+                ),
+                (
+                    "FONTSIZE",
+                    (0, 0),
+                    (-1, -1),
+                    9
+                ),
+                (
+                    "BOTTOMPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    7
+                )
+            ])
+        )
+
+        elementos.append(tabela)
+
+        documento.build(elementos)
+
+        buffer.seek(0)
+
+        st.session_state[
+            "fonte_pdf"
+        ] = buffer.getvalue()
+
+    if st.session_state.get("fonte_pdf"):
+
+        st.download_button(
+            "⬇️ Baixar PDF",
+            data=st.session_state["fonte_pdf"],
+            file_name="fontes_recursos_sisget.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+            key="fonte_baixar_pdf"
+        )
 def ficha_orcamentaria_imprimir():
 
     st.subheader(
