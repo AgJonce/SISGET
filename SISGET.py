@@ -13750,19 +13750,7 @@ def modulo_planejamento():
 
 def ficha_orcamentaria_incluir():
 
-    # ========================================================
-    # MENSAGEM APÓS SALVAR
-    # ========================================================
-
-    mensagem = st.session_state.pop(
-        "sisget_mensagem_ficha_incluir",
-        None
-    )
-
-    if mensagem:
-        st.success(mensagem)
-
-    # ========================================================
+  # ========================================================
     # CONTROLE DE RESET DA TELA
     # ========================================================
 
@@ -14600,6 +14588,21 @@ def ficha_orcamentaria_incluir():
                 type="primary",
                 use_container_width=True
             )
+
+    # ========================================================
+    # MENSAGEM DE SUCESSO - EMBAIXO
+    # ========================================================
+
+    mensagem = st.session_state.pop(
+        "sisget_mensagem_ficha_incluir",
+        None
+    )
+
+    if mensagem:
+
+        st.success(
+            mensagem
+        )
 
     # ========================================================
     # SE NÃO CLICOU EM SALVAR, PARA AQUI
