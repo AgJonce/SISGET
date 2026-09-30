@@ -13750,14 +13750,67 @@ def modulo_planejamento():
 # CAMPOS DE CLASSIFICAÇÃO COM SELECTBOX
 # ============================================================
 
+# ============================================================
+# FICHAS ORÇAMENTÁRIAS - INCLUIR
+# CLASSIFICAÇÃO POR SELECTBOX
+# ============================================================
+
 def ficha_orcamentaria_incluir():
 
     st.subheader("📄 Incluir Ficha Orçamentária")
 
     st.caption(
-        "Selecione os cadastros existentes. "
-        "Os códigos serão carregados automaticamente."
+        "Selecione os dados cadastrados no SISGET. "
+        "Os códigos da classificação serão preenchidos automaticamente."
     )
+
+    # ========================================================
+    # FUNÇÃO AUXILIAR LOCAL - SELECTBOX POR ID
+    # ========================================================
+
+    def selecionar_cadastro(
+        titulo,
+        registros,
+        chave,
+        mensagem,
+        desabilitado=False
+    ):
+
+        opcoes = {}
+
+        for registro in registros:
+
+            registro_id = int(registro[0])
+            codigo = str(registro[1] or "")
+            nome = str(registro[2] or "")
+
+            opcoes[registro_id] = {
+                "codigo": codigo,
+                "nome": nome
+            }
+
+        selecionado = st.selectbox(
+            titulo,
+            options=[None] + list(opcoes.keys()),
+            format_func=lambda valor: (
+                mensagem
+                if valor is None
+                else (
+                    f"{opcoes[valor]['codigo']} - "
+                    f"{opcoes[valor]['nome']}"
+                )
+            ),
+            key=chave,
+            disabled=desabilitado or not bool(registros)
+        )
+
+        if selecionado is None:
+            return None, None
+
+        return (
+            selecionado,
+            opcoes[selecionado]["codigo"]
+        )
 
     # ========================================================
     # 1 - ÓRGÃO
@@ -13773,27 +13826,19 @@ def ficha_orcamentaria_incluir():
     )
 
     if not orgaos:
+
         st.warning("Nenhum Órgão ativo cadastrado.")
         return
 
-    mapa_orgaos = {
-        int(r[0]): f"{r[1]} - {r[2]}"
-        for r in orgaos
-    }
-
-    orgao_id = st.selectbox(
+    orgao_id, _ = selecionar_cadastro(
         "Órgão *",
-        options=[None] + list(mapa_orgaos.keys()),
-        format_func=lambda x: (
-            "Selecione o Órgão"
-            if x is None
-            else mapa_orgaos[x]
-        ),
-        key="ficha_inc_orgao"
+        orgaos,
+        "ficha_nova_orgao",
+        "Selecione um Órgão"
     )
 
     if orgao_id is None:
-        st.info("Selecione um Órgão para continuar.")
+        st.info("Selecione o Órgão para continuar.")
         return
 
     # ========================================================
@@ -13811,26 +13856,20 @@ def ficha_orcamentaria_incluir():
         (orgao_id,)
     )
 
-    mapa_entidades = {
-        int(r[0]): f"{r[1]} - {r[2]}"
-        for r in entidades
-    }
-
-    entidade_id = st.selectbox(
+    entidade_id, _ = selecionar_cadastro(
         "Entidade *",
-        options=[None] + list(mapa_entidades.keys()),
-        format_func=lambda x: (
-            "Selecione a Entidade"
-            if x is None
-            else mapa_entidades[x]
-        ),
-        key="ficha_inc_entidade"
+        entidades,
+        "ficha_nova_entidade",
+        "Selecione uma Entidade"
     )
 
     if entidade_id is None:
-        st.info(
-            "Selecione uma Entidade vinculada ao Órgão."
-        )
+
+        if not entidades:
+            st.warning(
+                "Nenhuma Entidade ativa vinculada ao Órgão."
+            )
+
         return
 
     # ========================================================
@@ -13841,45 +13880,46 @@ def ficha_orcamentaria_incluir():
         """
         SELECT id, codigo, nome
         FROM unidades_orcamentarias
-        WHERE orgao_id = ?
-          AND entidade_id = ?
+        WHERE entidade_id = ?
+          AND orgao_id = ?
           AND ativo = TRUE
         ORDER BY codigo, nome
         """,
-        (orgao_id, entidade_id)
+        (
+            entidade_id,
+            orgao_id
+        )
     )
 
-    mapa_unidades = {
-        int(r[0]): f"{r[1]} - {r[2]}"
-        for r in unidades
-    }
-
-    unidade_id = st.selectbox(
+    unidade_id, _ = selecionar_cadastro(
         "Unidade Orçamentária *",
-        options=[None] + list(mapa_unidades.keys()),
-        format_func=lambda x: (
-            "Selecione a Unidade Orçamentária"
-            if x is None
-            else mapa_unidades[x]
-        ),
-        key="ficha_inc_unidade"
+        unidades,
+        "ficha_nova_unidade",
+        "Selecione a Unidade Orçamentária"
     )
 
     if unidade_id is None:
-        st.info("Selecione a Unidade Orçamentária.")
-        return
 
-    st.divider()
+        if not unidades:
+            st.warning(
+                "Nenhuma Unidade Orçamentária ativa "
+                "vinculada à Entidade."
+            )
+
+        return
 
     # ========================================================
     # 4 - EXERCÍCIO
-    #
-    # NÃO CRIA NEM REABRE EXERCÍCIO AUTOMATICAMENTE
     # ========================================================
+
+    st.markdown("---")
 
     exercicios = _sisget_fetch(
         """
-        SELECT id, ano, descricao
+        SELECT
+            id,
+            ano,
+            COALESCE(descricao, '')
         FROM exercicios
         WHERE entidade_id = ?
           AND ativo = TRUE
@@ -13890,51 +13930,63 @@ def ficha_orcamentaria_incluir():
     )
 
     mapa_exercicios = {
-        int(r[0]): (
-            f"{r[1]} - {r[2]}"
-            if r[2]
-            else str(r[1])
-        )
-        for r in exercicios
-    }
-
-    ano_por_id = {
-        int(r[0]): int(r[1])
-        for r in exercicios
+        int(registro[0]): {
+            "ano": int(registro[1]),
+            "descricao": str(registro[2] or "")
+        }
+        for registro in exercicios
     }
 
     exercicio_id = st.selectbox(
         "Exercício *",
         options=[None] + list(mapa_exercicios.keys()),
-        format_func=lambda x: (
+        format_func=lambda valor: (
             "Selecione o Exercício"
-            if x is None
-            else mapa_exercicios[x]
+            if valor is None
+            else (
+                f"{mapa_exercicios[valor]['ano']} - "
+                f"{mapa_exercicios[valor]['descricao']}"
+            )
         ),
-        key="ficha_inc_exercicio",
+        key="ficha_nova_exercicio",
         disabled=not bool(exercicios)
     )
 
-    if not exercicios:
-        st.warning(
-            "Esta Entidade não possui Exercício ativo e aberto. "
-            "As classificações cadastradas serão exibidas abaixo, "
-            "mas será necessário regularizar o Exercício antes "
-            "de salvar a Ficha."
-        )
-
-    ano = (
-        ano_por_id[exercicio_id]
+    exercicio = (
+        mapa_exercicios[exercicio_id]["ano"]
         if exercicio_id is not None
         else None
     )
 
-    st.divider()
+    if not exercicios:
 
-    st.markdown("### 🧾 Classificação Orçamentária")
+        st.warning(
+            "Esta Entidade não possui Exercício ativo e aberto. "
+            "Você ainda poderá visualizar as classificações "
+            "cadastradas abaixo, mas não poderá salvar a Ficha "
+            "até selecionar um Exercício válido."
+        )
 
     # ========================================================
-    # 5 - FUNÇÃO
+    # 5 - CLASSIFICAÇÃO ORÇAMENTÁRIA
+    #
+    # IMPORTANTE:
+    # ESTE BLOCO FICA FORA DO st.form()
+    # ========================================================
+
+    st.markdown("---")
+
+    st.markdown(
+        "### 🧾 Classificação Orçamentária"
+    )
+
+    st.caption(
+        "Os campos abaixo são carregados dos cadastros "
+        "existentes no banco de dados."
+    )
+
+    # ========================================================
+    # FUNÇÃO
     # ========================================================
 
     funcoes = _sisget_fetch(
@@ -13946,36 +13998,21 @@ def ficha_orcamentaria_incluir():
         """
     )
 
-    mapa_funcoes = {
-        int(r[0]): {
-            "codigo": str(r[1]),
-            "texto": f"{r[1]} - {r[2]}"
-        }
-        for r in funcoes
-    }
-
-    funcao_id = st.selectbox(
+    funcao_id, funcao = selecionar_cadastro(
         "Função *",
-        options=[None] + list(mapa_funcoes.keys()),
-        format_func=lambda x: (
-            "Selecione uma Função cadastrada"
-            if x is None
-            else mapa_funcoes[x]["texto"]
-        ),
-        key="ficha_inc_funcao"
-    )
-
-    codigo_funcao = (
-        mapa_funcoes[funcao_id]["codigo"]
-        if funcao_id is not None
-        else None
+        funcoes,
+        "ficha_nova_funcao",
+        "Selecione uma Função cadastrada"
     )
 
     if not funcoes:
-        st.warning("Nenhuma Função ativa cadastrada.")
+
+        st.warning(
+            "Nenhuma Função Orçamentária ativa cadastrada."
+        )
 
     # ========================================================
-    # 6 - SUBFUNÇÃO
+    # SUBFUNÇÃO
     # FILTRADA PELA FUNÇÃO SELECIONADA
     # ========================================================
 
@@ -13994,46 +14031,26 @@ def ficha_orcamentaria_incluir():
             (funcao_id,)
         )
 
-    mapa_subfuncoes = {
-        int(r[0]): {
-            "codigo": str(r[1]),
-            "texto": f"{r[1]} - {r[2]}"
-        }
-        for r in subfuncoes
-    }
-
-    subfuncao_id = st.selectbox(
+    subfuncao_id, subfuncao = selecionar_cadastro(
         "Subfunção *",
-        options=[None] + list(mapa_subfuncoes.keys()),
-        format_func=lambda x: (
-            "Selecione uma Subfunção cadastrada"
-            if x is None
-            else mapa_subfuncoes[x]["texto"]
-        ),
-        key="ficha_inc_subfuncao",
-        disabled=(
-            funcao_id is None
-            or not bool(subfuncoes)
-        )
-    )
-
-    codigo_subfuncao = (
-        mapa_subfuncoes[subfuncao_id]["codigo"]
-        if subfuncao_id is not None
-        else None
+        subfuncoes,
+        "ficha_nova_subfuncao",
+        "Selecione uma Subfunção cadastrada",
+        desabilitado=funcao_id is None
     )
 
     if funcao_id is not None and not subfuncoes:
+
         st.warning(
-            "Nenhuma Subfunção ativa vinculada à Função selecionada."
+            "Não existem Subfunções ativas vinculadas "
+            "à Função selecionada."
         )
 
     # ========================================================
-    # 7 - PROGRAMA
-    # FILTRADO POR ENTIDADE E EXERCÍCIO
+    # PROGRAMA
     #
-    # IMPORTANTE:
-    # UTILIZA A TABELA programas
+    # BUSCA NA TABELA programas
+    # FILTRADO POR ENTIDADE E EXERCÍCIO
     # ========================================================
 
     programas = []
@@ -14049,47 +14066,30 @@ def ficha_orcamentaria_incluir():
               AND ativo = TRUE
             ORDER BY codigo
             """,
-            (entidade_id, exercicio_id)
+            (
+                entidade_id,
+                exercicio_id
+            )
         )
 
-    mapa_programas = {
-        int(r[0]): {
-            "codigo": str(r[1]),
-            "texto": f"{r[1]} - {r[2]}"
-        }
-        for r in programas
-    }
-
-    programa_id = st.selectbox(
+    programa_id, programa = selecionar_cadastro(
         "Programa *",
-        options=[None] + list(mapa_programas.keys()),
-        format_func=lambda x: (
-            "Selecione um Programa cadastrado"
-            if x is None
-            else mapa_programas[x]["texto"]
-        ),
-        key="ficha_inc_programa",
-        disabled=(
-            exercicio_id is None
-            or not bool(programas)
-        )
-    )
-
-    codigo_programa = (
-        mapa_programas[programa_id]["codigo"]
-        if programa_id is not None
-        else None
+        programas,
+        "ficha_nova_programa",
+        "Selecione um Programa cadastrado",
+        desabilitado=exercicio_id is None
     )
 
     if exercicio_id is not None and not programas:
+
         st.warning(
-            "Nenhum Programa ativo vinculado à Entidade "
-            "e ao Exercício selecionados."
+            "Nenhum Programa ativo cadastrado para "
+            "esta Entidade e Exercício."
         )
 
     # ========================================================
-    # 8 - AÇÃO
-    # FILTRADA PELO PROGRAMA SELECIONADO
+    # AÇÃO
+    # FILTRADA PELO PROGRAMA
     # ========================================================
 
     acoes = []
@@ -14098,7 +14098,7 @@ def ficha_orcamentaria_incluir():
 
         acoes = _sisget_fetch(
             """
-            SELECT id, codigo, nome, tipo
+            SELECT id, codigo, nome
             FROM acoes_orcamentarias
             WHERE entidade_id = ?
               AND exercicio_id = ?
@@ -14113,45 +14113,22 @@ def ficha_orcamentaria_incluir():
             )
         )
 
-    mapa_acoes = {
-        int(r[0]): {
-            "codigo": str(r[1]),
-            "texto": (
-                f"{r[1]} - {r[2]}"
-                + (f" ({r[3]})" if r[3] else "")
-            )
-        }
-        for r in acoes
-    }
-
-    acao_id = st.selectbox(
+    acao_id, acao = selecionar_cadastro(
         "Ação *",
-        options=[None] + list(mapa_acoes.keys()),
-        format_func=lambda x: (
-            "Selecione uma Ação cadastrada"
-            if x is None
-            else mapa_acoes[x]["texto"]
-        ),
-        key="ficha_inc_acao",
-        disabled=(
-            programa_id is None
-            or not bool(acoes)
-        )
-    )
-
-    codigo_acao = (
-        mapa_acoes[acao_id]["codigo"]
-        if acao_id is not None
-        else None
+        acoes,
+        "ficha_nova_acao",
+        "Selecione uma Ação cadastrada",
+        desabilitado=programa_id is None
     )
 
     if programa_id is not None and not acoes:
+
         st.warning(
-            "Nenhuma Ação ativa vinculada a este Programa."
+            "Nenhuma Ação ativa vinculada ao Programa."
         )
 
     # ========================================================
-    # 9 - NATUREZA DA DESPESA
+    # NATUREZA DA DESPESA
     # ========================================================
 
     naturezas = _sisget_fetch(
@@ -14163,43 +14140,28 @@ def ficha_orcamentaria_incluir():
         """
     )
 
-    mapa_naturezas = {
-        int(r[0]): {
-            "codigo": str(r[1]),
-            "texto": f"{r[1]} - {r[2]}"
-        }
-        for r in naturezas
-    }
-
-    natureza_id = st.selectbox(
+    natureza_id, natureza_despesa = selecionar_cadastro(
         "Natureza da Despesa *",
-        options=[None] + list(mapa_naturezas.keys()),
-        format_func=lambda x: (
-            "Selecione uma Natureza da Despesa cadastrada"
-            if x is None
-            else mapa_naturezas[x]["texto"]
-        ),
-        key="ficha_inc_natureza"
-    )
-
-    codigo_natureza = (
-        mapa_naturezas[natureza_id]["codigo"]
-        if natureza_id is not None
-        else None
+        naturezas,
+        "ficha_nova_natureza",
+        "Selecione uma Natureza da Despesa cadastrada"
     )
 
     if not naturezas:
+
         st.warning(
             "Nenhuma Natureza da Despesa ativa cadastrada."
         )
 
     # ========================================================
-    # 10 - FONTE DE RECURSO
+    # 6 - FONTE DE RECURSO
     # ========================================================
+
+    st.markdown("---")
 
     fontes = []
 
-    if ano is not None:
+    if exercicio is not None:
 
         fontes = _sisget_fetch(
             """
@@ -14209,67 +14171,54 @@ def ficha_orcamentaria_incluir():
               AND ativo = TRUE
             ORDER BY codigo
             """,
-            (ano,)
+            (exercicio,)
         )
 
-    mapa_fontes = {
-        int(r[0]): {
-            "codigo": str(r[1]),
-            "texto": f"{r[1]} - {r[2]}"
-        }
-        for r in fontes
-    }
-
-    fonte_id = st.selectbox(
+    fonte_recurso_id, _ = selecionar_cadastro(
         "Fonte de Recurso *",
-        options=[None] + list(mapa_fontes.keys()),
-        format_func=lambda x: (
-            "Selecione uma Fonte de Recurso cadastrada"
-            if x is None
-            else mapa_fontes[x]["texto"]
-        ),
-        key="ficha_inc_fonte",
-        disabled=(
-            ano is None
-            or not bool(fontes)
-        )
+        fontes,
+        "ficha_nova_fonte",
+        "Selecione uma Fonte de Recurso cadastrada",
+        desabilitado=exercicio is None
     )
 
-    if ano is not None and not fontes:
+    if exercicio is not None and not fontes:
+
         st.warning(
-            f"Nenhuma Fonte de Recurso ativa para {ano}."
+            f"Nenhuma Fonte de Recurso ativa "
+            f"cadastrada para {exercicio}."
         )
 
     # ========================================================
-    # 11 - CLASSIFICAÇÃO AUTOMÁTICA
+    # 7 - CLASSIFICAÇÃO MONTADA AUTOMATICAMENTE
     # ========================================================
 
-    st.divider()
+    st.markdown("---")
 
-    st.markdown("### 🔗 Classificação selecionada")
+    st.markdown(
+        "### 🔗 Classificação Selecionada"
+    )
 
     classificacao = ".".join([
-        codigo_funcao or "--",
-        codigo_subfuncao or "---",
-        codigo_programa or "----",
-        codigo_acao or "----",
-        codigo_natureza or "------"
+        funcao or "--",
+        subfuncao or "---",
+        programa or "----",
+        acao or "----",
+        natureza_despesa or "------"
     ])
 
     st.text_input(
-        "Classificação Orçamentária",
+        "Código da Classificação Orçamentária",
         value=classificacao,
         disabled=True,
-        key="ficha_inc_classificacao"
+        key="ficha_nova_classificacao_visual"
     )
 
     # ========================================================
-    # 12 - PRÓXIMO NÚMERO DA FICHA
+    # 8 - NUMERAÇÃO AUTOMÁTICA DA FICHA
     # ========================================================
 
-    numero_ficha = None
-
-    if ano is not None:
+    def proximo_numero_ficha(ano, id_entidade):
 
         registros = _sisget_fetch(
             """
@@ -14278,38 +14227,57 @@ def ficha_orcamentaria_incluir():
             WHERE exercicio = ?
               AND entidade_id = ?
             """,
-            (ano, entidade_id)
+            (
+                ano,
+                id_entidade
+            )
         )
 
-        usados = {
-            int(r[0])
-            for r in registros
-            if r[0] is not None
+        numeros = {
+            int(registro[0])
+            for registro in registros
+            if registro[0] is not None
         }
 
-        numero_ficha = 1
+        proximo = 1
 
-        while numero_ficha in usados:
-            numero_ficha += 1
+        while proximo in numeros:
+            proximo += 1
+
+        return proximo
+
+    numero_ficha = None
+
+    if exercicio is not None:
+
+        numero_ficha = proximo_numero_ficha(
+            exercicio,
+            entidade_id
+        )
 
     st.text_input(
-        "Número da Ficha (automático)",
+        "Número da Ficha",
         value=(
             str(numero_ficha)
             if numero_ficha is not None
             else "Aguardando Exercício"
         ),
         disabled=True,
-        key="ficha_inc_numero_visual"
+        key="ficha_nova_numero_visual"
     )
 
     # ========================================================
-    # 13 - DADOS FINANCEIROS
+    # 9 - FORMULÁRIO
+    #
+    # SOMENTE OS DADOS FINANCEIROS FICAM DENTRO DO FORM
+    # OS SELECTBOX DE CLASSIFICAÇÃO JÁ FORAM CRIADOS ACIMA
     # ========================================================
 
-    st.divider()
+    st.markdown("---")
 
-    st.markdown("### 💰 Dados da Ficha")
+    st.markdown(
+        "### 💰 Dados Financeiros"
+    )
 
     with st.form(
         "form_ficha_orcamentaria_incluir",
@@ -14318,7 +14286,8 @@ def ficha_orcamentaria_incluir():
 
         descricao = st.text_input(
             "Descrição da Ficha",
-            max_chars=250
+            max_chars=250,
+            placeholder="Ex.: Material de Consumo"
         )
 
         valor_inicial = st.number_input(
@@ -14334,6 +14303,8 @@ def ficha_orcamentaria_incluir():
             value=True
         )
 
+        st.markdown("---")
+
         salvar = st.form_submit_button(
             "💾 Salvar Ficha Orçamentária",
             type="primary",
@@ -14341,72 +14312,138 @@ def ficha_orcamentaria_incluir():
         )
 
     # ========================================================
-    # 14 - VALIDAÇÕES
+    # 10 - SALVAR
     # ========================================================
 
     if salvar:
 
+        # ----------------------------------------------------
+        # VALIDAÇÃO DO EXERCÍCIO
+        # ----------------------------------------------------
+
         if exercicio_id is None:
 
             st.warning(
-                "Selecione ou cadastre um Exercício ativo e aberto."
+                "Selecione um Exercício ativo e aberto."
             )
+
             return
 
-        campos_obrigatorios = {
+        # ----------------------------------------------------
+        # VALIDAÇÃO DAS CLASSIFICAÇÕES
+        # ----------------------------------------------------
+
+        obrigatorios = {
             "Função": funcao_id,
             "Subfunção": subfuncao_id,
             "Programa": programa_id,
             "Ação": acao_id,
             "Natureza da Despesa": natureza_id,
-            "Fonte de Recurso": fonte_id
+            "Fonte de Recurso": fonte_recurso_id
         }
 
-        faltando = [
+        faltantes = [
             nome
-            for nome, valor in campos_obrigatorios.items()
+            for nome, valor in obrigatorios.items()
             if valor is None
         ]
 
-        if faltando:
+        if faltantes:
 
             st.warning(
-                "Preencha os seguintes campos: "
-                + ", ".join(faltando)
+                "Selecione os seguintes campos: "
+                + ", ".join(faltantes)
             )
+
             return
 
-        # ====================================================
-        # RECALCULAR NÚMERO NO MOMENTO DE SALVAR
-        # ====================================================
+        # ----------------------------------------------------
+        # REVALIDAR VÍNCULO DA SUBFUNÇÃO
+        # ----------------------------------------------------
 
-        registros = _sisget_fetch(
+        subfuncao_valida = _sisget_fetchone(
             """
-            SELECT numero_ficha
-            FROM fichas_orcamentarias
-            WHERE exercicio = ?
-              AND entidade_id = ?
+            SELECT id
+            FROM subfuncoes_orcamentarias
+            WHERE id = ?
+              AND funcao_id = ?
+              AND ativo = TRUE
             """,
-            (ano, entidade_id)
+            (
+                subfuncao_id,
+                funcao_id
+            )
         )
 
-        usados = {
-            int(r[0])
-            for r in registros
-            if r[0] is not None
-        }
+        if not subfuncao_valida:
 
-        numero_salvar = 1
+            st.warning(
+                "A Subfunção selecionada não pertence "
+                "à Função informada."
+            )
 
-        while numero_salvar in usados:
-            numero_salvar += 1
+            return
 
-        # ====================================================
-        # SALVAR FICHA
+        # ----------------------------------------------------
+        # REVALIDAR PROGRAMA E AÇÃO
+        # ----------------------------------------------------
+
+        vinculo_valido = _sisget_fetchone(
+            """
+            SELECT a.id
+            FROM acoes_orcamentarias a
+
+            INNER JOIN programas p
+                ON p.id = a.programa_id
+
+            WHERE a.id = ?
+              AND a.programa_id = ?
+              AND a.entidade_id = ?
+              AND a.exercicio_id = ?
+
+              AND p.entidade_id = ?
+              AND p.exercicio_id = ?
+
+              AND a.ativo = TRUE
+              AND p.ativo = TRUE
+            """,
+            (
+                acao_id,
+                programa_id,
+                entidade_id,
+                exercicio_id,
+                entidade_id,
+                exercicio_id
+            )
+        )
+
+        if not vinculo_valido:
+
+            st.warning(
+                "A Ação selecionada não está vinculada "
+                "corretamente ao Programa e ao Exercício."
+            )
+
+            return
+
+        # ----------------------------------------------------
+        # RECALCULAR NÚMERO DA FICHA
+        # ----------------------------------------------------
+
+        numero_salvar = proximo_numero_ficha(
+            exercicio,
+            entidade_id
+        )
+
+        # ----------------------------------------------------
+        # INSERT
         #
-        # A TABELA ATUAL GUARDA OS CÓDIGOS DA CLASSIFICAÇÃO
-        # EM CAMPOS DE TEXTO.
-        # ====================================================
+        # A TABELA ATUAL DE FICHAS POSSUI CAMPOS VARCHAR
+        # PARA FUNÇÃO, SUBFUNÇÃO, PROGRAMA, AÇÃO E NATUREZA.
+        #
+        # POR ISSO, SELECIONAMOS PELO ID, MAS GRAVAMOS
+        # O CÓDIGO CORRESPONDENTE.
+        # ----------------------------------------------------
 
         sucesso = _sisget_salvar(
             """
@@ -14414,44 +14451,60 @@ def ficha_orcamentaria_incluir():
             (
                 exercicio,
                 numero_ficha,
+
                 orgao_id,
                 entidade_id,
                 unidade_orcamentaria_id,
+
                 funcao,
                 subfuncao,
                 programa,
                 acao,
                 natureza_despesa,
+
                 fonte_recurso_id,
+
                 descricao,
+
                 valor_inicial,
                 valor_atual,
                 valor_reservado,
+
                 ativo
             )
             VALUES
             (
+                ?, ?,
+                ?, ?, ?,
                 ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?, ?
+                ?,
+                ?,
+                ?, ?, ?,
+                ?
             )
             """,
             (
-                int(ano),
+                int(exercicio),
                 numero_salvar,
+
                 orgao_id,
                 entidade_id,
                 unidade_id,
-                codigo_funcao,
-                codigo_subfuncao,
-                codigo_programa,
-                codigo_acao,
-                codigo_natureza,
-                fonte_id,
+
+                funcao,
+                subfuncao,
+                programa,
+                acao,
+                natureza_despesa,
+
+                fonte_recurso_id,
+
                 descricao.strip() or None,
+
                 float(valor_inicial),
                 float(valor_inicial),
                 0.0,
+
                 ativo
             )
         )
@@ -14459,7 +14512,7 @@ def ficha_orcamentaria_incluir():
         if sucesso:
 
             st.success(
-                f"✅ Ficha nº {numero_salvar} "
+                f"✅ Ficha Orçamentária nº {numero_salvar} "
                 "cadastrada com sucesso!"
             )
 
