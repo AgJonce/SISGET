@@ -14717,50 +14717,6 @@ def ficha_orcamentaria_incluir():
         key="sisget_ficha_incluir_numero_v2"
     )
 
-    # ========================================================
-    # 9 - DADOS FINANCEIROS
-    # ========================================================
-
-    st.divider()
-
-    st.markdown("### 💰 Dados Financeiros")
-
-    with st.form(
-        "sisget_form_ficha_incluir_v2",
-        clear_on_submit=True
-    ):
-
-        descricao = st.text_input(
-            "Descrição da Ficha",
-            max_chars=250,
-            placeholder="Ex.: Material de Consumo",
-            key="sisget_ficha_incluir_descricao_v2"
-        )
-
-        valor_inicial = st.number_input(
-            "Valor Inicial (R$)",
-            min_value=0.0,
-            value=0.0,
-            step=100.0,
-            format="%.2f",
-            key="sisget_ficha_incluir_valor_v2"
-        )
-
-        ativo = st.checkbox(
-            "Ficha ativa",
-            value=True,
-            key="sisget_ficha_incluir_ativo_v2"
-        )
-
-        salvar = st.form_submit_button(
-            "💾 Salvar Ficha Orçamentária",
-            type="primary",
-            use_container_width=True
-        )
-
-    # ========================================================
-    # 10 - VALIDAÇÕES E SALVAMENTO
-    # ========================================================
 
     if salvar:
 
