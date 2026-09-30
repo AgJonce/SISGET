@@ -17232,9 +17232,7 @@ def programa_orcamentario_incluir():
             descricao = st.text_input(
                 "Nome / Descrição do Programa *",
                 max_chars=250,
-                placeholder=(
-                    "Ex.: Gestão Administrativa"
-                )
+                placeholder="Ex.: Gestão Administrativa"
             )
 
         ativo = st.checkbox(
@@ -17271,23 +17269,11 @@ def programa_orcamentario_incluir():
 
             return
 
-        # ====================================================
-        # RECALCULAR CÓDIGO NO MOMENTO DE SALVAR
-        #
-        # IMPORTANTE:
-        # evita pegar código antigo caso outro registro
-        # tenha sido criado antes do clique em salvar.
-        # ====================================================
-
         codigo = (
             sisget_proximo_codigo_programa(
                 exercicio
             )
         )
-
-        # ====================================================
-        # SALVAR
-        # ====================================================
 
         sucesso = _sisget_salvar(
             """
