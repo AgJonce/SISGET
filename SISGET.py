@@ -17185,10 +17185,6 @@ def programa_orcamentario_incluir():
         "📘 Incluir Programa Orçamentário"
     )
 
-    # ========================================================
-    # EXERCÍCIO
-    # ========================================================
-
     exercicio = st.number_input(
         "Exercício *",
         min_value=2000,
@@ -17197,10 +17193,6 @@ def programa_orcamentario_incluir():
         step=1,
         key="programa_incluir_exercicio"
     )
-
-    # ========================================================
-    # CÓDIGO AUTOMÁTICO
-    # ========================================================
 
     codigo_automatico = (
         sisget_proximo_codigo_programa(
@@ -17240,22 +17232,11 @@ def programa_orcamentario_incluir():
             value=True
         )
 
-        st.caption(
-            "O código é gerado automaticamente "
-            "de acordo com o exercício."
-        )
-
-        st.markdown("---")
-
         salvar = st.form_submit_button(
             "💾 Salvar Programa",
             type="primary",
             use_container_width=True
         )
-
-    # ========================================================
-    # SALVAR
-    # ========================================================
 
     if salvar:
 
