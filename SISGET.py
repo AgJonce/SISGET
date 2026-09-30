@@ -13274,7 +13274,6 @@ def solicitacao_imprimir():
 # ============================================================
 # PLANEJAMENTO
 # ============================================================
-
 # ============================================================
 # MÓDULO DE PLANEJAMENTO
 # ============================================================
@@ -13316,8 +13315,8 @@ def modulo_planejamento():
         )
 
         st.caption(
-            "Cadastre e acompanhe os recursos que poderão "
-            "ser utilizados nas solicitações."
+            "Cadastre e acompanhe a estrutura orçamentária "
+            "que será utilizada nas Solicitações."
         )
 
         st.markdown("---")
@@ -13329,24 +13328,51 @@ def modulo_planejamento():
         col1, col2, col3 = st.columns(3)
 
         # ====================================================
-        # FONTES
+        # CLASSIFICAÇÕES
         # ====================================================
 
         with col1:
+
+            st.markdown(
+                "### 🧾 Classificações"
+            )
+
+            st.caption(
+                "Função, Subfunção, Programa, "
+                "Ação e Natureza da Despesa."
+            )
+
+            if st.button(
+                "🧾 Abrir Classificações",
+                use_container_width=True,
+                key="btn_planejamento_classificacoes"
+            ):
+
+                st.session_state[
+                    "planejamento_tela"
+                ] = "classificacoes"
+
+                st.rerun()
+
+        # ====================================================
+        # FONTES
+        # ====================================================
+
+        with col2:
 
             st.markdown(
                 "### 💧 Fontes de Recursos"
             )
 
             st.caption(
-                "Cadastro das fontes utilizadas "
-                "no orçamento."
+                "Cadastro das fontes de recursos "
+                "utilizadas nas fichas orçamentárias."
             )
 
             if st.button(
                 "💧 Abrir Fontes",
                 use_container_width=True,
-                key="planejamento_fontes"
+                key="btn_planejamento_fontes"
             ):
 
                 st.session_state[
@@ -13359,54 +13385,27 @@ def modulo_planejamento():
         # FICHAS
         # ====================================================
 
-        with col2:
+        with col3:
 
             st.markdown(
                 "### 📄 Fichas Orçamentárias"
             )
 
             st.caption(
-                "Cadastro das dotações que poderão "
-                "ser vinculadas às solicitações."
+                "Cadastro das fichas vinculadas às "
+                "Unidades Orçamentárias do Cadastro Básico."
             )
 
             if st.button(
                 "📄 Abrir Fichas",
                 type="primary",
                 use_container_width=True,
-                key="planejamento_fichas"
+                key="btn_planejamento_fichas"
             ):
 
                 st.session_state[
                     "planejamento_tela"
                 ] = "fichas"
-
-                st.rerun()
-
-        # ====================================================
-        # SALDOS
-        # ====================================================
-
-        with col3:
-
-            st.markdown(
-                "### 💰 Saldos Orçamentários"
-            )
-
-            st.caption(
-                "Consulta dos valores disponíveis "
-                "por ficha orçamentária."
-            )
-
-            if st.button(
-                "💰 Consultar Saldos",
-                use_container_width=True,
-                key="planejamento_saldos"
-            ):
-
-                st.session_state[
-                    "planejamento_tela"
-                ] = "saldos"
 
                 st.rerun()
 
@@ -13419,24 +13418,51 @@ def modulo_planejamento():
         col4, col5, col6 = st.columns(3)
 
         # ====================================================
-        # RESERVAS
+        # SALDOS
         # ====================================================
 
         with col4:
+
+            st.markdown(
+                "### 💰 Saldos Orçamentários"
+            )
+
+            st.caption(
+                "Consulta dos valores atuais, reservados "
+                "e disponíveis por ficha."
+            )
+
+            if st.button(
+                "💰 Consultar Saldos",
+                use_container_width=True,
+                key="btn_planejamento_saldos"
+            ):
+
+                st.session_state[
+                    "planejamento_tela"
+                ] = "saldos"
+
+                st.rerun()
+
+        # ====================================================
+        # RESERVAS
+        # ====================================================
+
+        with col5:
 
             st.markdown(
                 "### 🔒 Reservas Orçamentárias"
             )
 
             st.caption(
-                "Controle de valores reservados "
+                "Controle dos valores reservados "
                 "para futuras despesas."
             )
 
             if st.button(
                 "🔒 Abrir Reservas",
                 use_container_width=True,
-                key="planejamento_reservas"
+                key="btn_planejamento_reservas"
             ):
 
                 st.session_state[
@@ -13449,21 +13475,21 @@ def modulo_planejamento():
         # CONSULTA
         # ====================================================
 
-        with col5:
+        with col6:
 
             st.markdown(
                 "### 🔎 Consulta Orçamentária"
             )
 
             st.caption(
-                "Pesquise fichas, fontes, valores "
-                "e disponibilidade."
+                "Consulta geral de fichas, fontes, "
+                "classificações e disponibilidade."
             )
 
             if st.button(
                 "🔎 Consultar Orçamento",
                 use_container_width=True,
-                key="planejamento_consulta"
+                key="btn_planejamento_consulta"
             ):
 
                 st.session_state[
@@ -13472,25 +13498,33 @@ def modulo_planejamento():
 
                 st.rerun()
 
+        st.markdown("---")
+
+        # ====================================================
+        # TERCEIRA LINHA
+        # ====================================================
+
+        col7, col8, col9 = st.columns(3)
+
         # ====================================================
         # RELATÓRIOS
         # ====================================================
 
-        with col6:
+        with col7:
 
             st.markdown(
                 "### 🖨️ Relatórios"
             )
 
             st.caption(
-                "Relatórios da execução e disponibilidade "
-                "orçamentária."
+                "Relatórios do planejamento e "
+                "disponibilidade orçamentária."
             )
 
             if st.button(
                 "🖨️ Abrir Relatórios",
                 use_container_width=True,
-                key="planejamento_relatorios"
+                key="btn_planejamento_relatorios"
             ):
 
                 st.session_state[
@@ -13500,29 +13534,79 @@ def modulo_planejamento():
                 st.rerun()
 
         # ====================================================
+        # ESPAÇOS RESERVADOS
+        # ====================================================
+
+        with col8:
+
+            st.markdown(
+                "### 📊 Planejamento"
+            )
+
+            st.caption(
+                "Espaço reservado para futuras "
+                "rotinas de planejamento."
+            )
+
+        with col9:
+
+            st.markdown(
+                "### 🔄 Integração"
+            )
+
+            st.caption(
+                "Integração do orçamento com "
+                "Solicitações e execução."
+            )
+
+        # ====================================================
         # FLUXO
         # ====================================================
 
         st.markdown("---")
 
         st.subheader(
-            "🔄 Fluxo do Planejamento"
+            "🔄 Fluxo Orçamentário"
         )
 
         st.info(
-            "💧 Fonte de Recursos"
-            "  →  📄 Ficha Orçamentária"
+            "🧾 Classificações"
+            "  →  💧 Fontes"
+            "  →  📄 Fichas Orçamentárias"
             "  →  💰 Saldo Disponível"
             "  →  📝 Solicitação"
             "  →  🔒 Reserva Orçamentária"
         )
 
         st.caption(
-            "A Solicitação poderá consultar e vincular uma ou "
-            "mais fichas orçamentárias. A reserva será realizada "
-            "posteriormente, sem reduzir o saldo apenas pela abertura "
-            "da solicitação."
+            "As Fichas Orçamentárias utilizam as Unidades "
+            "Orçamentárias cadastradas no Cadastro Básico."
         )
+
+        st.caption(
+            "Depois, a Solicitação poderá selecionar a ficha "
+            "e consultar o saldo disponível antes de seguir para "
+            "DFD, ETP e Termo de Referência."
+        )
+
+    # ========================================================
+    # CLASSIFICAÇÕES ORÇAMENTÁRIAS
+    # ========================================================
+
+    elif tela == "classificacoes":
+
+        if st.button(
+            "⬅️ Voltar ao Planejamento",
+            key="voltar_planejamento_classificacoes"
+        ):
+
+            st.session_state[
+                "planejamento_tela"
+            ] = "principal"
+
+            st.rerun()
+
+        planejamento_classificacoes()
 
     # ========================================================
     # FONTES DE RECURSOS
@@ -13601,7 +13685,7 @@ def modulo_planejamento():
         planejamento_reservas()
 
     # ========================================================
-    # CONSULTA
+    # CONSULTA ORÇAMENTÁRIA
     # ========================================================
 
     elif tela == "consulta":
@@ -13638,10 +13722,17 @@ def modulo_planejamento():
 
         planejamento_relatorios()
 
+    # ========================================================
+    # SEGURANÇA
+    # ========================================================
 
-# ============================================================
-# FICHA ORÇAMENTÁRIA - INCLUIR
-# ============================================================
+    else:
+
+        st.session_state[
+            "planejamento_tela"
+        ] = "principal"
+
+        st.rerun()
 
 def ficha_orcamentaria_incluir():
 
@@ -16332,6 +16423,778 @@ def planejamento_fichas_orcamentarias():
         icone="📄"
     )
 
+# ============================================================
+# CLASSIFICAÇÕES ORÇAMENTÁRIAS
+# ============================================================
+
+def planejamento_classificacoes():
+
+    st.subheader(
+        "🧾 Classificações Orçamentárias"
+    )
+
+    abas = st.tabs([
+        "🏷️ Funções",
+        "🔹 Subfunções",
+        "📘 Programas",
+        "🎯 Ações",
+        "💵 Naturezas da Despesa"
+    ])
+
+    with abas[0]:
+
+        cadastro_funcoes_orcamentarias()
+
+    with abas[1]:
+
+        cadastro_subfuncoes_orcamentarias()
+
+    with abas[2]:
+
+        cadastro_programas_orcamentarios()
+
+    with abas[3]:
+
+        cadastro_acoes_orcamentarias()
+
+    with abas[4]:
+
+        cadastro_naturezas_despesa()
+
+# ============================================================
+# FUNÇÕES ORÇAMENTÁRIAS
+# ============================================================
+
+def cadastro_funcoes_orcamentarias():
+
+    st.markdown(
+        "### 🏷️ Funções"
+    )
+
+    with st.form(
+        "form_funcao_orcamentaria",
+        clear_on_submit=True
+    ):
+
+        col1, col2 = st.columns(
+            [1, 4]
+        )
+
+        with col1:
+
+            codigo = st.text_input(
+                "Código *",
+                max_chars=10
+            )
+
+        with col2:
+
+            descricao = st.text_input(
+                "Descrição *",
+                max_chars=200
+            )
+
+        salvar = st.form_submit_button(
+            "💾 Cadastrar Função",
+            type="primary",
+            use_container_width=True
+        )
+
+    if salvar:
+
+        codigo = codigo.strip()
+        descricao = descricao.strip()
+
+        if not codigo or not descricao:
+
+            st.warning(
+                "⚠️ Informe código e descrição."
+            )
+
+        else:
+
+            existe = _sisget_fetchone(
+                """
+                SELECT id
+                FROM funcoes_orcamentarias
+                WHERE codigo = ?
+                """,
+                (
+                    codigo,
+                )
+            )
+
+            if existe:
+
+                st.warning(
+                    "⚠️ Esta função já está cadastrada."
+                )
+
+            else:
+
+                if _sisget_salvar(
+                    """
+                    INSERT INTO funcoes_orcamentarias
+                    (
+                        codigo,
+                        descricao,
+                        ativo
+                    )
+                    VALUES
+                    (
+                        ?,
+                        ?,
+                        TRUE
+                    )
+                    """,
+                    (
+                        codigo,
+                        descricao
+                    )
+                ):
+
+                    st.success(
+                        "✅ Função cadastrada."
+                    )
+
+                    st.rerun()
+
+    dados = _sisget_dataframe(
+        """
+        SELECT
+            id,
+            codigo AS "Código",
+            descricao AS "Descrição",
+            CASE
+                WHEN ativo THEN 'Ativa'
+                ELSE 'Inativa'
+            END AS "Situação"
+        FROM funcoes_orcamentarias
+        ORDER BY codigo
+        """
+    )
+
+    if not dados.empty:
+
+        st.dataframe(
+            dados,
+            use_container_width=True,
+            hide_index=True
+        )
+# ============================================================
+# SUBFUNÇÕES ORÇAMENTÁRIAS
+# ============================================================
+
+def cadastro_subfuncoes_orcamentarias():
+
+    st.markdown(
+        "### 🔹 Subfunções"
+    )
+
+    funcoes = _sisget_fetch(
+        """
+        SELECT
+            id,
+            codigo,
+            descricao
+        FROM funcoes_orcamentarias
+        WHERE ativo = TRUE
+        ORDER BY codigo
+        """
+    )
+
+    if not funcoes:
+
+        st.warning(
+            "⚠️ Cadastre primeiro uma Função."
+        )
+
+        return
+
+    mapa_funcoes = {
+        f"{codigo} - {descricao}": funcao_id
+        for funcao_id, codigo, descricao in funcoes
+    }
+
+    with st.form(
+        "form_subfuncao_orcamentaria",
+        clear_on_submit=True
+    ):
+
+        funcao_nome = st.selectbox(
+            "Função *",
+            list(mapa_funcoes.keys())
+        )
+
+        col1, col2 = st.columns(
+            [1, 4]
+        )
+
+        with col1:
+
+            codigo = st.text_input(
+                "Código *",
+                max_chars=10
+            )
+
+        with col2:
+
+            descricao = st.text_input(
+                "Descrição *",
+                max_chars=200
+            )
+
+        salvar = st.form_submit_button(
+            "💾 Cadastrar Subfunção",
+            type="primary",
+            use_container_width=True
+        )
+
+    if salvar:
+
+        funcao_id = mapa_funcoes[
+            funcao_nome
+        ]
+
+        codigo = codigo.strip()
+        descricao = descricao.strip()
+
+        if not codigo or not descricao:
+
+            st.warning(
+                "⚠️ Informe código e descrição."
+            )
+
+        else:
+
+            existe = _sisget_fetchone(
+                """
+                SELECT id
+                FROM subfuncoes_orcamentarias
+                WHERE funcao_id = ?
+                  AND codigo = ?
+                """,
+                (
+                    funcao_id,
+                    codigo
+                )
+            )
+
+            if existe:
+
+                st.warning(
+                    "⚠️ Esta Subfunção já está cadastrada."
+                )
+
+            else:
+
+                if _sisget_salvar(
+                    """
+                    INSERT INTO subfuncoes_orcamentarias
+                    (
+                        funcao_id,
+                        codigo,
+                        descricao,
+                        ativo
+                    )
+                    VALUES
+                    (
+                        ?,
+                        ?,
+                        ?,
+                        TRUE
+                    )
+                    """,
+                    (
+                        funcao_id,
+                        codigo,
+                        descricao
+                    )
+                ):
+
+                    st.success(
+                        "✅ Subfunção cadastrada."
+                    )
+
+                    st.rerun()
+
+    dados = _sisget_dataframe(
+        """
+        SELECT
+            s.id,
+            f.codigo || ' - ' || f.descricao
+                AS "Função",
+            s.codigo AS "Código",
+            s.descricao AS "Descrição",
+            CASE
+                WHEN s.ativo THEN 'Ativa'
+                ELSE 'Inativa'
+            END AS "Situação"
+
+        FROM subfuncoes_orcamentarias s
+
+        INNER JOIN funcoes_orcamentarias f
+            ON f.id = s.funcao_id
+
+        ORDER BY
+            f.codigo,
+            s.codigo
+        """
+    )
+
+    if not dados.empty:
+
+        st.dataframe(
+            dados,
+            use_container_width=True,
+            hide_index=True
+        )
+# ============================================================
+# PROGRAMAS ORÇAMENTÁRIOS
+# ============================================================
+
+def cadastro_programas_orcamentarios():
+
+    st.markdown(
+        "### 📘 Programas"
+    )
+
+    with st.form(
+        "form_programa_orcamentario",
+        clear_on_submit=True
+    ):
+
+        col1, col2 = st.columns(
+            [1, 1]
+        )
+
+        with col1:
+
+            exercicio = st.number_input(
+                "Exercício *",
+                min_value=2000,
+                max_value=2100,
+                value=datetime.now().year,
+                step=1
+            )
+
+        with col2:
+
+            codigo = st.text_input(
+                "Código *",
+                max_chars=20
+            )
+
+        descricao = st.text_input(
+            "Descrição *",
+            max_chars=250
+        )
+
+        salvar = st.form_submit_button(
+            "💾 Cadastrar Programa",
+            type="primary",
+            use_container_width=True
+        )
+
+    if salvar:
+
+        codigo = codigo.strip()
+        descricao = descricao.strip()
+
+        if not codigo or not descricao:
+
+            st.warning(
+                "⚠️ Informe código e descrição."
+            )
+
+        else:
+
+            existe = _sisget_fetchone(
+                """
+                SELECT id
+                FROM programas_orcamentarios
+                WHERE exercicio = ?
+                  AND codigo = ?
+                """,
+                (
+                    int(exercicio),
+                    codigo
+                )
+            )
+
+            if existe:
+
+                st.warning(
+                    "⚠️ Este Programa já está cadastrado."
+                )
+
+            else:
+
+                if _sisget_salvar(
+                    """
+                    INSERT INTO programas_orcamentarios
+                    (
+                        exercicio,
+                        codigo,
+                        descricao,
+                        ativo
+                    )
+                    VALUES
+                    (
+                        ?,
+                        ?,
+                        ?,
+                        TRUE
+                    )
+                    """,
+                    (
+                        int(exercicio),
+                        codigo,
+                        descricao
+                    )
+                ):
+
+                    st.success(
+                        "✅ Programa cadastrado."
+                    )
+
+                    st.rerun()
+
+    dados = _sisget_dataframe(
+        """
+        SELECT
+            id,
+            exercicio AS "Exercício",
+            codigo AS "Código",
+            descricao AS "Descrição",
+            CASE
+                WHEN ativo THEN 'Ativo'
+                ELSE 'Inativo'
+            END AS "Situação"
+        FROM programas_orcamentarios
+        ORDER BY
+            exercicio DESC,
+            codigo
+        """
+    )
+
+    if not dados.empty:
+
+        st.dataframe(
+            dados,
+            use_container_width=True,
+            hide_index=True
+        )
+# ============================================================
+# AÇÕES ORÇAMENTÁRIAS
+# ============================================================
+
+def cadastro_acoes_orcamentarias():
+
+    st.markdown(
+        "### 🎯 Ações"
+    )
+
+    programas = _sisget_fetch(
+        """
+        SELECT
+            id,
+            exercicio,
+            codigo,
+            descricao
+        FROM programas_orcamentarios
+        WHERE ativo = TRUE
+        ORDER BY
+            exercicio DESC,
+            codigo
+        """
+    )
+
+    if not programas:
+
+        st.warning(
+            "⚠️ Cadastre primeiro um Programa."
+        )
+
+        return
+
+    mapa_programas = {
+        (
+            f"{exercicio} - "
+            f"{codigo} - "
+            f"{descricao}"
+        ): programa_id
+        for (
+            programa_id,
+            exercicio,
+            codigo,
+            descricao
+        ) in programas
+    }
+
+    with st.form(
+        "form_acao_orcamentaria",
+        clear_on_submit=True
+    ):
+
+        programa_nome = st.selectbox(
+            "Programa *",
+            list(mapa_programas.keys())
+        )
+
+        col1, col2 = st.columns(
+            [1, 4]
+        )
+
+        with col1:
+
+            codigo = st.text_input(
+                "Código *",
+                max_chars=20
+            )
+
+        with col2:
+
+            descricao = st.text_input(
+                "Descrição *",
+                max_chars=250
+            )
+
+        salvar = st.form_submit_button(
+            "💾 Cadastrar Ação",
+            type="primary",
+            use_container_width=True
+        )
+
+    if salvar:
+
+        programa_id = mapa_programas[
+            programa_nome
+        ]
+
+        codigo = codigo.strip()
+        descricao = descricao.strip()
+
+        if not codigo or not descricao:
+
+            st.warning(
+                "⚠️ Informe código e descrição."
+            )
+
+        else:
+
+            existe = _sisget_fetchone(
+                """
+                SELECT id
+                FROM acoes_orcamentarias
+                WHERE programa_id = ?
+                  AND codigo = ?
+                """,
+                (
+                    programa_id,
+                    codigo
+                )
+            )
+
+            if existe:
+
+                st.warning(
+                    "⚠️ Esta Ação já está cadastrada."
+                )
+
+            else:
+
+                if _sisget_salvar(
+                    """
+                    INSERT INTO acoes_orcamentarias
+                    (
+                        programa_id,
+                        codigo,
+                        descricao,
+                        ativo
+                    )
+                    VALUES
+                    (
+                        ?,
+                        ?,
+                        ?,
+                        TRUE
+                    )
+                    """,
+                    (
+                        programa_id,
+                        codigo,
+                        descricao
+                    )
+                ):
+
+                    st.success(
+                        "✅ Ação cadastrada."
+                    )
+
+                    st.rerun()
+
+    dados = _sisget_dataframe(
+        """
+        SELECT
+            a.id,
+
+            p.exercicio
+                AS "Exercício",
+
+            p.codigo || ' - ' || p.descricao
+                AS "Programa",
+
+            a.codigo
+                AS "Código",
+
+            a.descricao
+                AS "Descrição",
+
+            CASE
+                WHEN a.ativo THEN 'Ativa'
+                ELSE 'Inativa'
+            END AS "Situação"
+
+        FROM acoes_orcamentarias a
+
+        INNER JOIN programas_orcamentarios p
+            ON p.id = a.programa_id
+
+        ORDER BY
+            p.exercicio DESC,
+            p.codigo,
+            a.codigo
+        """
+    )
+
+    if not dados.empty:
+
+        st.dataframe(
+            dados,
+            use_container_width=True,
+            hide_index=True
+        )
+# ============================================================
+# NATUREZAS DA DESPESA
+# ============================================================
+
+def cadastro_naturezas_despesa():
+
+    st.markdown(
+        "### 💵 Naturezas da Despesa"
+    )
+
+    with st.form(
+        "form_natureza_despesa",
+        clear_on_submit=True
+    ):
+
+        col1, col2 = st.columns(
+            [1, 4]
+        )
+
+        with col1:
+
+            codigo = st.text_input(
+                "Código *",
+                max_chars=30
+            )
+
+        with col2:
+
+            descricao = st.text_input(
+                "Descrição *",
+                max_chars=250
+            )
+
+        salvar = st.form_submit_button(
+            "💾 Cadastrar Natureza",
+            type="primary",
+            use_container_width=True
+        )
+
+    if salvar:
+
+        codigo = codigo.strip()
+        descricao = descricao.strip()
+
+        if not codigo or not descricao:
+
+            st.warning(
+                "⚠️ Informe código e descrição."
+            )
+
+        else:
+
+            existe = _sisget_fetchone(
+                """
+                SELECT id
+                FROM naturezas_despesa
+                WHERE codigo = ?
+                """,
+                (
+                    codigo,
+                )
+            )
+
+            if existe:
+
+                st.warning(
+                    "⚠️ Esta Natureza já está cadastrada."
+                )
+
+            else:
+
+                if _sisget_salvar(
+                    """
+                    INSERT INTO naturezas_despesa
+                    (
+                        codigo,
+                        descricao,
+                        ativo
+                    )
+                    VALUES
+                    (
+                        ?,
+                        ?,
+                        TRUE
+                    )
+                    """,
+                    (
+                        codigo,
+                        descricao
+                    )
+                ):
+
+                    st.success(
+                        "✅ Natureza da Despesa cadastrada."
+                    )
+
+                    st.rerun()
+
+    dados = _sisget_dataframe(
+        """
+        SELECT
+            id,
+            codigo AS "Código",
+            descricao AS "Descrição",
+            CASE
+                WHEN ativo THEN 'Ativa'
+                ELSE 'Inativa'
+            END AS "Situação"
+        FROM naturezas_despesa
+        ORDER BY codigo
+        """
+    )
+
+    if not dados.empty:
+
+        st.dataframe(
+            dados,
+            use_container_width=True,
+            hide_index=True
+        )
 def planejamento_saldos():
 
     st.subheader(
