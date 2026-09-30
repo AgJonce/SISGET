@@ -19307,7 +19307,8 @@ def sisget_proximo_codigo_programa(exercicio):
         proximo += 1
 
     return str(proximo)
-    def planejamento_saldos():
+
+def planejamento_saldos():
 
     st.subheader(
         "💰 Saldos Orçamentários"
