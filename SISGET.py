@@ -19203,7 +19203,50 @@ def cadastro_naturezas_despesa():
             use_container_width=True,
             hide_index=True
         )
-def planejamento_saldos():
+# ============================================================
+# PRÓXIMO CÓDIGO DO PROGRAMA
+# ============================================================
+
+def sisget_proximo_codigo_programa(exercicio):
+
+    dados = _sisget_fetch(
+        """
+        SELECT codigo
+        FROM programas_orcamentarios
+        WHERE exercicio = ?
+        ORDER BY codigo
+        """,
+        (
+            int(exercicio),
+        )
+    )
+
+    numeros_usados = set()
+
+    for registro in dados:
+
+        codigo = str(
+            registro[0] or ""
+        ).strip()
+
+        try:
+
+            numeros_usados.add(
+                int(codigo)
+            )
+
+        except (ValueError, TypeError):
+
+            pass
+
+    proximo = 1
+
+    while proximo in numeros_usados:
+
+        proximo += 1
+
+    return str(proximo)
+    def planejamento_saldos():
 
     st.subheader(
         "💰 Saldos Orçamentários"
