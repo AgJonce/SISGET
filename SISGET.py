@@ -13745,12 +13745,6 @@ def modulo_planejamento():
 
         st.rerun()
 
-# ============================================================
-# FICHAS ORÇAMENTÁRIAS - INCLUIR
-# CAMPOS DE CLASSIFICAÇÃO COM SELECTBOX
-# ============================================================
-
-
 # Substitua a def ficha_orcamentaria_incluir() antiga INTEIRA por esta.
 # Usa os helpers _sisget_fetch, _sisget_fetchone e _sisget_salvar já existentes.
 
@@ -14038,6 +14032,32 @@ def ficha_orcamentaria_incluir():
         st.session_state["sisget_mensagem_ficha_incluir"] = (
             f"✅ Ficha nº {numero_ficha} cadastrada com sucesso!"
         )
+
+        # ====================================================
+        # LIMPAR CAMPOS DA TELA APÓS SALVAR
+        # ====================================================
+
+        chaves_limpas = [
+            "sisget_ficha_v4_orgao",
+            "sisget_ficha_v4_funcao",
+            "sisget_ficha_v4_natureza",
+            "sisget_ficha_v4_numero",
+            "sisget_ficha_v4_descricao",
+            "sisget_ficha_v4_valor",
+            "sisget_ficha_v4_ativo",
+        ]
+
+        for chave in chaves_limpas:
+            st.session_state.pop(chave, None)
+
+        # As demais chaves são dinâmicas porque dependem dos IDs
+        # selecionados. Remove todas as chaves desta tela para que
+        # Entidade, Unidade, Exercício, Subfunção, Programa, Ação e
+        # Fonte também voltem ao estado inicial.
+        for chave in list(st.session_state.keys()):
+            if str(chave).startswith("sisget_ficha_v4_"):
+                st.session_state.pop(chave, None)
+
         st.rerun()
 
     def proximo_numero_ficha(ano, id_entidade):
