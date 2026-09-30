@@ -13762,15 +13762,30 @@ def ficha_orcamentaria_incluir():
     if mensagem:
         st.success(mensagem)
 
-    st.subheader("📄 Cadastro de Ficha de Despesa")
+    # ========================================================
+    # CONTROLE DE RESET DA TELA
+    # ========================================================
+
+    if "sisget_ficha_reset" not in st.session_state:
+        st.session_state["sisget_ficha_reset"] = 0
+
+    reset_ficha = st.session_state["sisget_ficha_reset"]
+
+    # ========================================================
+    # CABEÇALHO
+    # ========================================================
+
+    st.subheader(
+        "📄 Cadastro de Ficha de Despesa"
+    )
 
     st.caption(
-        "Selecione a estrutura orçamentária e informe "
-        "os dados da ficha."
+        "Selecione a estrutura orçamentária "
+        "e informe os dados da ficha."
     )
 
     # ========================================================
-    # FUNÇÃO AUXILIAR - SELECTBOX
+    # FUNÇÃO AUXILIAR DOS SELECTBOX
     # ========================================================
 
     def selecionar(
@@ -13785,7 +13800,9 @@ def ficha_orcamentaria_incluir():
 
         for registro in registros:
 
-            registro_id = int(registro[0])
+            registro_id = int(
+                registro[0]
+            )
 
             codigo = str(
                 registro[1]
@@ -13802,12 +13819,18 @@ def ficha_orcamentaria_incluir():
             mapa[registro_id] = {
                 "codigo": codigo,
                 "descricao": descricao,
-                "texto": f"{codigo} | {descricao}"
+                "texto": (
+                    f"{codigo} | {descricao}"
+                )
             }
 
         selecionado = st.selectbox(
             titulo,
-            options=[None] + list(mapa.keys()),
+            options=[
+                None
+            ] + list(
+                mapa.keys()
+            ),
             format_func=lambda valor: (
                 mensagem
                 if valor is None
@@ -13821,7 +13844,12 @@ def ficha_orcamentaria_incluir():
         )
 
         if selecionado is None:
-            return None, None, None
+
+            return (
+                None,
+                None,
+                None
+            )
 
         return (
             selecionado,
@@ -13830,7 +13858,7 @@ def ficha_orcamentaria_incluir():
         )
 
     # ========================================================
-    # ÓRGÃOS
+    # CARREGAR ÓRGÃOS
     # ========================================================
 
     orgaos = _sisget_fetch(
@@ -13857,13 +13885,17 @@ def ficha_orcamentaria_incluir():
     # ESTRUTURA ADMINISTRATIVA
     # ========================================================
 
-    with st.container(border=True):
+    with st.container(
+        border=True
+    ):
 
         st.markdown(
             "### 🏛️ Estrutura Administrativa"
         )
 
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3 = st.columns(
+            3
+        )
 
         # ====================================================
         # ÓRGÃO
@@ -13878,7 +13910,10 @@ def ficha_orcamentaria_incluir():
             ) = selecionar(
                 "Órgão *",
                 orgaos,
-                "sisget_ficha_v6_orgao",
+                (
+                    f"sisget_ficha_orgao_"
+                    f"{reset_ficha}"
+                ),
                 "Selecione o Órgão"
             )
 
@@ -13915,9 +13950,15 @@ def ficha_orcamentaria_incluir():
             ) = selecionar(
                 "Entidade *",
                 entidades,
-                f"sisget_ficha_v6_entidade_{orgao_id}",
+                (
+                    f"sisget_ficha_entidade_"
+                    f"{reset_ficha}_"
+                    f"{orgao_id}"
+                ),
                 "Selecione a Entidade",
-                desabilitado=orgao_id is None
+                desabilitado=(
+                    orgao_id is None
+                )
             )
 
         # ====================================================
@@ -13955,9 +13996,15 @@ def ficha_orcamentaria_incluir():
             ) = selecionar(
                 "Unidade Orçamentária *",
                 unidades,
-                f"sisget_ficha_v6_unidade_{entidade_id}",
+                (
+                    f"sisget_ficha_unidade_"
+                    f"{reset_ficha}_"
+                    f"{entidade_id}"
+                ),
                 "Selecione a Unidade Orçamentária",
-                desabilitado=entidade_id is None
+                desabilitado=(
+                    entidade_id is None
+                )
             )
 
     # ========================================================
@@ -14001,7 +14048,9 @@ def ficha_orcamentaria_incluir():
             registro[2] or ""
         )
 
-        mapa_exercicios[registro_id] = {
+        mapa_exercicios[
+            registro_id
+        ] = {
             "ano": ano,
             "descricao": descricao_exercicio,
             "texto": (
@@ -14011,7 +14060,9 @@ def ficha_orcamentaria_incluir():
             )
         }
 
-    with st.container(border=True):
+    with st.container(
+        border=True
+    ):
 
         st.markdown(
             "### 📅 Dados Orçamentários"
@@ -14032,7 +14083,8 @@ def ficha_orcamentaria_incluir():
                 ]["texto"]
             ),
             key=(
-                f"sisget_ficha_v6_exercicio_"
+                f"sisget_ficha_exercicio_"
+                f"{reset_ficha}_"
                 f"{entidade_id}"
             ),
             disabled=not bool(
@@ -14059,16 +14111,20 @@ def ficha_orcamentaria_incluir():
             )
 
     # ========================================================
-    # CLASSIFICAÇÃO FUNCIONAL PROGRAMÁTICA
+    # FUNCIONAL PROGRAMÁTICA
     # ========================================================
 
-    with st.container(border=True):
+    with st.container(
+        border=True
+    ):
 
         st.markdown(
             "### 📊 Funcional Programática"
         )
 
-        col1, col2 = st.columns(2)
+        col1, col2 = st.columns(
+            2
+        )
 
         # ====================================================
         # FUNÇÃO
@@ -14095,7 +14151,10 @@ def ficha_orcamentaria_incluir():
             ) = selecionar(
                 "Função *",
                 funcoes,
-                "sisget_ficha_v6_funcao",
+                (
+                    f"sisget_ficha_funcao_"
+                    f"{reset_ficha}"
+                ),
                 "Selecione a Função"
             )
 
@@ -14133,7 +14192,8 @@ def ficha_orcamentaria_incluir():
                 "Subfunção *",
                 subfuncoes,
                 (
-                    f"sisget_ficha_v6_subfuncao_"
+                    f"sisget_ficha_subfuncao_"
+                    f"{reset_ficha}_"
                     f"{funcao_id}"
                 ),
                 "Selecione a Subfunção",
@@ -14171,7 +14231,9 @@ def ficha_orcamentaria_incluir():
                 )
             )
 
-        col1, col2 = st.columns(2)
+        col1, col2 = st.columns(
+            2
+        )
 
         with col1:
 
@@ -14183,7 +14245,8 @@ def ficha_orcamentaria_incluir():
                 "Programa *",
                 programas,
                 (
-                    f"sisget_ficha_v6_programa_"
+                    f"sisget_ficha_programa_"
+                    f"{reset_ficha}_"
                     f"{entidade_id}_"
                     f"{exercicio_id}"
                 ),
@@ -14231,7 +14294,8 @@ def ficha_orcamentaria_incluir():
                 "Projeto / Atividade / Ação *",
                 acoes,
                 (
-                    f"sisget_ficha_v6_acao_"
+                    f"sisget_ficha_acao_"
+                    f"{reset_ficha}_"
                     f"{programa_id}"
                 ),
                 "Selecione a Ação",
@@ -14244,13 +14308,17 @@ def ficha_orcamentaria_incluir():
     # NATUREZA + FONTE
     # ========================================================
 
-    with st.container(border=True):
+    with st.container(
+        border=True
+    ):
 
         st.markdown(
             "### 💰 Classificação da Despesa"
         )
 
-        col1, col2 = st.columns(2)
+        col1, col2 = st.columns(
+            2
+        )
 
         # ====================================================
         # NATUREZA DA DESPESA
@@ -14277,7 +14345,10 @@ def ficha_orcamentaria_incluir():
             ) = selecionar(
                 "Natureza da Despesa *",
                 naturezas,
-                "sisget_ficha_v6_natureza",
+                (
+                    f"sisget_ficha_natureza_"
+                    f"{reset_ficha}"
+                ),
                 "Selecione a Natureza da Despesa"
             )
 
@@ -14320,7 +14391,8 @@ def ficha_orcamentaria_incluir():
                 "Fonte de Recurso *",
                 fontes,
                 (
-                    f"sisget_ficha_v6_fonte_"
+                    f"sisget_ficha_fonte_"
+                    f"{reset_ficha}_"
                     f"{entidade_id}_"
                     f"{exercicio_id}"
                 ),
@@ -14410,27 +14482,31 @@ def ficha_orcamentaria_incluir():
         classificacoes,
         use_container_width=True,
         hide_index=True,
-        key="sisget_ficha_v6_resumo"
+        key=(
+            f"sisget_ficha_resumo_"
+            f"{reset_ficha}"
+        )
     )
 
     # ========================================================
     # IDENTIFICAÇÃO E ORÇAMENTO
-    #
-    # IMPORTANTE:
-    # O BOTÃO DE SALVAR ESTÁ DENTRO DO FORM.
-    # PORTANTO O INSERT SÓ EXECUTA APÓS O CLIQUE.
     # ========================================================
 
     st.divider()
 
-    with st.container(border=True):
+    with st.container(
+        border=True
+    ):
 
         st.markdown(
             "### 📄 Identificação e Orçamento"
         )
 
         with st.form(
-            "sisget_form_ficha_v6",
+            (
+                f"sisget_form_ficha_"
+                f"{reset_ficha}"
+            ),
             clear_on_submit=False
         ):
 
@@ -14438,9 +14514,9 @@ def ficha_orcamentaria_incluir():
                 [1, 3]
             )
 
-            # ================================================
+            # =================================================
             # NÚMERO DA FICHA
-            # ================================================
+            # =================================================
 
             with col1:
 
@@ -14448,12 +14524,15 @@ def ficha_orcamentaria_incluir():
                     "Número da Ficha *",
                     placeholder="Ex.: 125",
                     max_chars=10,
-                    key="sisget_ficha_v6_numero"
+                    key=(
+                        f"sisget_ficha_numero_"
+                        f"{reset_ficha}"
+                    )
                 )
 
-            # ================================================
+            # =================================================
             # DESCRIÇÃO
-            # ================================================
+            # =================================================
 
             with col2:
 
@@ -14464,12 +14543,15 @@ def ficha_orcamentaria_incluir():
                         "Ex.: Manutenção das "
                         "Atividades do Gabinete"
                     ),
-                    key="sisget_ficha_v6_descricao"
+                    key=(
+                        f"sisget_ficha_descricao_"
+                        f"{reset_ficha}"
+                    )
                 )
 
-            # ================================================
+            # =================================================
             # VALOR
-            # ================================================
+            # =================================================
 
             valor_inicial = st.number_input(
                 "R$ Valor Inicial / Total Orçado",
@@ -14477,7 +14559,10 @@ def ficha_orcamentaria_incluir():
                 value=0.0,
                 step=100.0,
                 format="%.2f",
-                key="sisget_ficha_v6_valor"
+                key=(
+                    f"sisget_ficha_valor_"
+                    f"{reset_ficha}"
+                )
             )
 
             valor_formatado = (
@@ -14491,21 +14576,24 @@ def ficha_orcamentaria_incluir():
                 f"💰 R$ {valor_formatado}"
             )
 
-            # ================================================
+            # =================================================
             # ATIVO
-            # ================================================
+            # =================================================
 
             ativo = st.checkbox(
                 "Ficha ativa",
                 value=True,
-                key="sisget_ficha_v6_ativo"
+                key=(
+                    f"sisget_ficha_ativo_"
+                    f"{reset_ficha}"
+                )
             )
 
             st.divider()
 
-            # ================================================
-            # BOTÃO
-            # ================================================
+            # =================================================
+            # BOTÃO SALVAR
+            # =================================================
 
             salvar = st.form_submit_button(
                 "💾 Salvar Ficha",
@@ -14514,14 +14602,14 @@ def ficha_orcamentaria_incluir():
             )
 
     # ========================================================
-    # NÃO CLICOU EM SALVAR = NÃO FAZ NADA
+    # SE NÃO CLICOU EM SALVAR, PARA AQUI
     # ========================================================
 
     if not salvar:
         return
 
     # ========================================================
-    # NÚMERO DA FICHA
+    # VALIDAR NÚMERO DA FICHA
     # ========================================================
 
     numero_ficha_texto = (
@@ -14624,7 +14712,7 @@ def ficha_orcamentaria_incluir():
     )
 
     # ========================================================
-    # VALIDAR UNIDADE / ENTIDADE / ÓRGÃO
+    # VALIDAR ESTRUTURA ADMINISTRATIVA
     # ========================================================
 
     estrutura_valida = _sisget_fetchone(
@@ -14811,8 +14899,7 @@ def ficha_orcamentaria_incluir():
 
     # ========================================================
     # SALVAR
-    #
-    # ESTE É O ÚNICO INSERT DA FUNÇÃO
+    # ÚNICO INSERT DA FUNÇÃO
     # ========================================================
 
     sucesso = _sisget_salvar(
@@ -14880,7 +14967,7 @@ def ficha_orcamentaria_incluir():
     )
 
     # ========================================================
-    # SUCESSO
+    # SALVOU COM SUCESSO
     # ========================================================
 
     if sucesso:
@@ -14893,36 +14980,17 @@ def ficha_orcamentaria_incluir():
         )
 
         # ====================================================
-        # LIMPAR TODOS OS CAMPOS DA FICHA
-        # ====================================================
-
-        for chave in list(
-            st.session_state.keys()
-        ):
-
-            if str(chave).startswith(
-                "sisget_ficha_v6_"
-            ):
-
-                st.session_state.pop(
-                    chave,
-                    None
-                )
-
-        # ====================================================
-        # LIMPAR FORM
-        # ====================================================
-
-        st.session_state.pop(
-            "sisget_form_ficha_v6",
-            None
-        )
-
-        # ====================================================
-        # RECARREGAR
+        # MUDA A VERSÃO DOS WIDGETS
         #
-        # O ÓRGÃO VOLTA PARA:
-        # "Selecione o Órgão"
+        # ISSO FAZ TODOS NASCEREM NOVOS E LIMPOS
+        # ====================================================
+
+        st.session_state[
+            "sisget_ficha_reset"
+        ] += 1
+
+        # ====================================================
+        # RECARREGAR A TELA
         # ====================================================
 
         st.rerun()
