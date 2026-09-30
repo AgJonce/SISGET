@@ -14728,13 +14728,440 @@ def ficha_orcamentaria_imprimir():
             use_container_width=True,
             key="baixar_pdf_fichas_orcamentarias"
         )
-
 # ============================================================
 # FICHAS ORÇAMENTÁRIAS - INCLUIR
 # ============================================================
 
 def ficha_orcamentaria_incluir():
-    ...
+
+    st.subheader("➕ Incluir Ficha Orçamentária")
+
+    # ========================================================
+    # EXERCÍCIO
+    # ========================================================
+
+    exercicio = st.number_input(
+        "Exercício *",
+        min_value=2000,
+        max_value=2100,
+        value=datetime.now().year,
+        step=1,
+        key="ficha_incluir_exercicio"
+    )
+
+    st.markdown("---")
+
+    # ========================================================
+    # ÓRGÃOS
+    # ========================================================
+
+    orgaos = _sisget_fetch(
+        """
+        SELECT
+            id,
+            codigo,
+            nome
+        FROM orgaos
+        WHERE ativo = TRUE
+        ORDER BY codigo, nome
+        """
+    )
+
+    if not orgaos:
+
+        st.warning(
+            "⚠️ Nenhum Órgão ativo cadastrado."
+        )
+
+        return
+
+    mapa_orgaos = {
+        f"{codigo} - {nome}": orgao_id
+        for orgao_id, codigo, nome in orgaos
+    }
+
+    orgao_nome = st.selectbox(
+        "Órgão *",
+        list(mapa_orgaos.keys()),
+        key="ficha_orgao"
+    )
+
+    orgao_id = mapa_orgaos[
+        orgao_nome
+    ]
+
+    # ========================================================
+    # ENTIDADES DO ÓRGÃO
+    # ========================================================
+
+    entidades = _sisget_fetch(
+        """
+        SELECT
+            id,
+            codigo,
+            nome
+        FROM entidades
+        WHERE orgao_id = ?
+          AND ativo = TRUE
+        ORDER BY codigo, nome
+        """,
+        (
+            orgao_id,
+        )
+    )
+
+    if not entidades:
+
+        st.warning(
+            "⚠️ Nenhuma Entidade ativa vinculada "
+            "a este Órgão."
+        )
+
+        return
+
+    mapa_entidades = {
+        f"{codigo} - {nome}": entidade_id
+        for entidade_id, codigo, nome in entidades
+    }
+
+    entidade_nome = st.selectbox(
+        "Entidade *",
+        list(mapa_entidades.keys()),
+        key="ficha_entidade"
+    )
+
+    entidade_id = mapa_entidades[
+        entidade_nome
+    ]
+
+    # ========================================================
+    # UNIDADE ORÇAMENTÁRIA - CADASTRO BÁSICO
+    # ========================================================
+
+    unidades = _sisget_fetch(
+        """
+        SELECT
+            id,
+            codigo,
+            nome
+        FROM unidades_orcamentarias
+        WHERE orgao_id = ?
+          AND entidade_id = ?
+          AND ativo = TRUE
+        ORDER BY codigo, nome
+        """,
+        (
+            orgao_id,
+            entidade_id
+        )
+    )
+
+    if not unidades:
+
+        st.warning(
+            "⚠️ Esta Entidade não possui Unidade "
+            "Orçamentária ativa no Cadastro Básico."
+        )
+
+        return
+
+    mapa_unidades = {
+        f"{codigo} - {nome}": uo_id
+        for uo_id, codigo, nome in unidades
+    }
+
+    unidade_nome = st.selectbox(
+        "Unidade Orçamentária *",
+        list(mapa_unidades.keys()),
+        key="ficha_uo"
+    )
+
+    unidade_orcamentaria_id = mapa_unidades[
+        unidade_nome
+    ]
+
+    # ========================================================
+    # FONTES
+    # ========================================================
+
+    fontes = _sisget_fetch(
+        """
+        SELECT
+            id,
+            codigo,
+            descricao
+        FROM fontes_recursos
+        WHERE exercicio = ?
+          AND ativo = TRUE
+        ORDER BY codigo
+        """,
+        (
+            int(exercicio),
+        )
+    )
+
+    mapa_fontes = {
+        "Sem fonte definida": None
+    }
+
+    for fonte_id, codigo, descricao in fontes:
+
+        mapa_fontes[
+            f"{codigo} - {descricao}"
+        ] = fonte_id
+
+    # ========================================================
+    # SUGESTÃO DO PRÓXIMO NÚMERO
+    # ========================================================
+
+    ultimo = _sisget_fetchone(
+        """
+        SELECT
+            COALESCE(MAX(numero_ficha), 0)
+        FROM fichas_orcamentarias
+        WHERE exercicio = ?
+          AND entidade_id = ?
+        """,
+        (
+            int(exercicio),
+            entidade_id
+        )
+    )
+
+    proxima_ficha = 1
+
+    if ultimo:
+
+        proxima_ficha = int(
+            ultimo[0] or 0
+        ) + 1
+
+    # ========================================================
+    # FORMULÁRIO
+    # ========================================================
+
+    with st.form(
+        "form_ficha_orcamentaria_incluir"
+    ):
+
+        st.markdown(
+            "### 📄 Identificação"
+        )
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+
+            numero_ficha = st.number_input(
+                "Número da Ficha *",
+                min_value=1,
+                value=int(proxima_ficha),
+                step=1
+            )
+
+        with col2:
+
+            fonte_nome = st.selectbox(
+                "Fonte de Recursos",
+                list(mapa_fontes.keys())
+            )
+
+        # ====================================================
+        # CLASSIFICAÇÃO
+        # ====================================================
+
+        st.markdown(
+            "### 🧾 Classificação Orçamentária"
+        )
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+
+            funcao = st.text_input(
+                "Função",
+                max_chars=2,
+                placeholder="Ex.: 04"
+            )
+
+        with col2:
+
+            subfuncao = st.text_input(
+                "Subfunção",
+                max_chars=3,
+                placeholder="Ex.: 122"
+            )
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+
+            programa = st.text_input(
+                "Programa",
+                max_chars=20,
+                placeholder="Ex.: 0002"
+            )
+
+        with col2:
+
+            acao = st.text_input(
+                "Ação",
+                max_chars=20,
+                placeholder="Ex.: 2.015"
+            )
+
+        natureza_despesa = st.text_input(
+            "Natureza da Despesa",
+            max_chars=30,
+            placeholder="Ex.: 3.3.90.30.00"
+        )
+
+        descricao = st.text_input(
+            "Descrição da Ficha",
+            max_chars=250,
+            placeholder="Ex.: Material de Consumo"
+        )
+
+        # ====================================================
+        # VALORES
+        # ====================================================
+
+        st.markdown(
+            "### 💰 Dotação"
+        )
+
+        valor_inicial = st.number_input(
+            "Valor Inicial",
+            min_value=0.0,
+            value=0.0,
+            step=100.00,
+            format="%.2f"
+        )
+
+        st.caption(
+            "O valor atual será iniciado com o mesmo "
+            "valor da dotação inicial."
+        )
+
+        st.markdown("---")
+
+        salvar = st.form_submit_button(
+            "💾 Salvar Ficha",
+            type="primary",
+            use_container_width=True
+        )
+
+    # ========================================================
+    # SALVAR
+    # ========================================================
+
+    if salvar:
+
+        fonte_recurso_id = mapa_fontes[
+            fonte_nome
+        ]
+
+        duplicada = _sisget_fetchone(
+            """
+            SELECT id
+            FROM fichas_orcamentarias
+            WHERE exercicio = ?
+              AND entidade_id = ?
+              AND numero_ficha = ?
+            """,
+            (
+                int(exercicio),
+                entidade_id,
+                int(numero_ficha)
+            )
+        )
+
+        if duplicada:
+
+            st.warning(
+                "⚠️ Já existe uma ficha com este número "
+                "para esta Entidade neste exercício."
+            )
+
+            return
+
+        sucesso = _sisget_salvar(
+            """
+            INSERT INTO fichas_orcamentarias
+            (
+                exercicio,
+                numero_ficha,
+
+                orgao_id,
+                entidade_id,
+                unidade_orcamentaria_id,
+
+                funcao,
+                subfuncao,
+                programa,
+                acao,
+
+                natureza_despesa,
+                fonte_recurso_id,
+                descricao,
+
+                valor_inicial,
+                valor_atual,
+                valor_reservado,
+
+                ativo
+            )
+            VALUES
+            (
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                TRUE
+            )
+            """,
+            (
+                int(exercicio),
+                int(numero_ficha),
+
+                orgao_id,
+                entidade_id,
+                unidade_orcamentaria_id,
+
+                funcao.strip() or None,
+                subfuncao.strip() or None,
+                programa.strip() or None,
+                acao.strip() or None,
+
+                natureza_despesa.strip() or None,
+                fonte_recurso_id,
+                descricao.strip() or None,
+
+                float(valor_inicial),
+                float(valor_inicial),
+                0
+            )
+        )
+
+        if sucesso:
+
+            st.success(
+                f"✅ Ficha nº {int(numero_ficha)} "
+                "cadastrada com sucesso!"
+            )
+
+            st.rerun()
 
 
 # ============================================================
@@ -14742,15 +15169,611 @@ def ficha_orcamentaria_incluir():
 # ============================================================
 
 def ficha_orcamentaria_localizar():
-    ...
+
+    st.subheader(
+        "🔎 Localizar Fichas Orçamentárias"
+    )
+
+    col1, col2, col3 = st.columns(
+        [1, 2, 1]
+    )
+
+    with col1:
+
+        exercicio = st.number_input(
+            "Exercício",
+            min_value=2000,
+            max_value=2100,
+            value=datetime.now().year,
+            step=1,
+            key="ficha_localizar_exercicio"
+        )
+
+    with col2:
+
+        pesquisa = st.text_input(
+            "Ficha / descrição / unidade",
+            key="ficha_localizar_pesquisa"
+        )
+
+    with col3:
+
+        situacao = st.selectbox(
+            "Situação",
+            [
+                "Todas",
+                "Ativas",
+                "Inativas"
+            ],
+            key="ficha_localizar_situacao"
+        )
+
+    sql = """
+        SELECT
+            f.id,
+
+            f.numero_ficha
+                AS "Ficha",
+
+            o.codigo || ' - ' || o.nome
+                AS "Órgão",
+
+            e.codigo || ' - ' || e.nome
+                AS "Entidade",
+
+            u.codigo || ' - ' || u.nome
+                AS "Unidade Orçamentária",
+
+            COALESCE(
+                f.funcao,
+                ''
+            ) AS "Função",
+
+            COALESCE(
+                f.subfuncao,
+                ''
+            ) AS "Subfunção",
+
+            COALESCE(
+                f.programa,
+                ''
+            ) AS "Programa",
+
+            COALESCE(
+                f.acao,
+                ''
+            ) AS "Ação",
+
+            COALESCE(
+                f.natureza_despesa,
+                ''
+            ) AS "Natureza",
+
+            COALESCE(
+                fr.codigo,
+                ''
+            ) AS "Fonte",
+
+            COALESCE(
+                f.descricao,
+                ''
+            ) AS "Descrição",
+
+            f.valor_atual
+                AS "Valor Atual",
+
+            f.valor_reservado
+                AS "Reservado",
+
+            (
+                f.valor_atual
+                -
+                f.valor_reservado
+            ) AS "Disponível",
+
+            CASE
+                WHEN f.ativo = TRUE
+                    THEN 'Ativa'
+                ELSE 'Inativa'
+            END AS "Situação"
+
+        FROM fichas_orcamentarias f
+
+        INNER JOIN orgaos o
+            ON o.id = f.orgao_id
+
+        INNER JOIN entidades e
+            ON e.id = f.entidade_id
+
+        INNER JOIN unidades_orcamentarias u
+            ON u.id = f.unidade_orcamentaria_id
+
+        LEFT JOIN fontes_recursos fr
+            ON fr.id = f.fonte_recurso_id
+
+        WHERE f.exercicio = ?
+    """
+
+    parametros = [
+        int(exercicio)
+    ]
+
+    if pesquisa.strip():
+
+        termo = (
+            f"%{pesquisa.strip()}%"
+        )
+
+        sql += """
+            AND
+            (
+                CAST(
+                    f.numero_ficha AS TEXT
+                ) ILIKE ?
+
+                OR COALESCE(
+                    f.descricao,
+                    ''
+                ) ILIKE ?
+
+                OR u.nome ILIKE ?
+
+                OR u.codigo ILIKE ?
+            )
+        """
+
+        parametros.extend([
+            termo,
+            termo,
+            termo,
+            termo
+        ])
+
+    if situacao == "Ativas":
+
+        sql += """
+            AND f.ativo = TRUE
+        """
+
+    elif situacao == "Inativas":
+
+        sql += """
+            AND f.ativo = FALSE
+        """
+
+    sql += """
+        ORDER BY
+            o.codigo,
+            e.codigo,
+            u.codigo,
+            f.numero_ficha
+    """
+
+    df = _sisget_dataframe(
+        sql,
+        tuple(parametros)
+    )
+
+    if df.empty:
+
+        st.info(
+            "Nenhuma ficha encontrada."
+        )
+
+        return None
+
+    st.caption(
+        f"Total encontrado: {len(df)}"
+    )
+
+    return sisget_grid_localizar(
+        df=df,
+        chave="fichas_orcamentarias",
+        coluna_id="id",
+        altura=470
+    )
 
 
 # ============================================================
 # FICHAS ORÇAMENTÁRIAS - ALTERAR
 # ============================================================
 
-def ficha_orcamentaria_alterar(ficha_id):
-    ...
+def ficha_orcamentaria_alterar(
+    ficha_id
+):
+
+    registro = _sisget_fetchone(
+        """
+        SELECT
+            f.exercicio,
+            f.numero_ficha,
+
+            f.funcao,
+            f.subfuncao,
+            f.programa,
+            f.acao,
+
+            f.natureza_despesa,
+            f.fonte_recurso_id,
+            f.descricao,
+
+            f.valor_inicial,
+            f.valor_atual,
+            f.valor_reservado,
+
+            f.ativo,
+
+            o.codigo,
+            o.nome,
+
+            e.codigo,
+            e.nome,
+
+            u.codigo,
+            u.nome
+
+        FROM fichas_orcamentarias f
+
+        INNER JOIN orgaos o
+            ON o.id = f.orgao_id
+
+        INNER JOIN entidades e
+            ON e.id = f.entidade_id
+
+        INNER JOIN unidades_orcamentarias u
+            ON u.id = f.unidade_orcamentaria_id
+
+        WHERE f.id = ?
+        """,
+        (
+            ficha_id,
+        )
+    )
+
+    if not registro:
+
+        st.error(
+            "❌ Ficha Orçamentária não encontrada."
+        )
+
+        return
+
+    (
+        exercicio,
+        numero_ficha,
+
+        funcao_atual,
+        subfuncao_atual,
+        programa_atual,
+        acao_atual,
+
+        natureza_atual,
+        fonte_atual_id,
+        descricao_atual,
+
+        valor_inicial,
+        valor_atual,
+        valor_reservado,
+
+        ativo,
+
+        codigo_orgao,
+        nome_orgao,
+
+        codigo_entidade,
+        nome_entidade,
+
+        codigo_uo,
+        nome_uo
+
+    ) = registro
+
+    # ========================================================
+    # ESTRUTURA
+    # ========================================================
+
+    st.info(
+        f"""
+🏛️ **{codigo_orgao} - {nome_orgao}**
+
+🏢 **{codigo_entidade} - {nome_entidade}**
+
+💼 **{codigo_uo} - {nome_uo}**
+        """
+    )
+
+    # ========================================================
+    # VALORES
+    # ========================================================
+
+    saldo = (
+        float(valor_atual or 0)
+        -
+        float(valor_reservado or 0)
+    )
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    col1.metric(
+        "Dotação Inicial",
+        f"R$ {float(valor_inicial or 0):,.2f}"
+    )
+
+    col2.metric(
+        "Dotação Atual",
+        f"R$ {float(valor_atual or 0):,.2f}"
+    )
+
+    col3.metric(
+        "Reservado",
+        f"R$ {float(valor_reservado or 0):,.2f}"
+    )
+
+    col4.metric(
+        "Disponível",
+        f"R$ {saldo:,.2f}"
+    )
+
+    # ========================================================
+    # FONTES
+    # ========================================================
+
+    fontes = _sisget_fetch(
+        """
+        SELECT
+            id,
+            codigo,
+            descricao
+        FROM fontes_recursos
+        WHERE exercicio = ?
+        ORDER BY codigo
+        """,
+        (
+            int(exercicio),
+        )
+    )
+
+    mapa_fontes = {
+        "Sem fonte definida": None
+    }
+
+    for fonte_id, codigo, descricao in fontes:
+
+        mapa_fontes[
+            f"{codigo} - {descricao}"
+        ] = fonte_id
+
+    lista_fontes = list(
+        mapa_fontes.keys()
+    )
+
+    indice_fonte = 0
+
+    for indice, nome in enumerate(
+        lista_fontes
+    ):
+
+        if mapa_fontes[nome] == fonte_atual_id:
+
+            indice_fonte = indice
+
+            break
+
+    # ========================================================
+    # FORMULÁRIO
+    # ========================================================
+
+    with st.form(
+        f"form_alterar_ficha_{ficha_id}"
+    ):
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+
+            st.number_input(
+                "Exercício",
+                value=int(exercicio),
+                disabled=True
+            )
+
+        with col2:
+
+            st.number_input(
+                "Número da Ficha",
+                value=int(numero_ficha),
+                disabled=True
+            )
+
+        fonte_nome = st.selectbox(
+            "Fonte de Recursos",
+            lista_fontes,
+            index=indice_fonte
+        )
+
+        st.markdown(
+            "### 🧾 Classificação"
+        )
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+
+            funcao = st.text_input(
+                "Função",
+                value=funcao_atual or "",
+                max_chars=2
+            )
+
+        with col2:
+
+            subfuncao = st.text_input(
+                "Subfunção",
+                value=subfuncao_atual or "",
+                max_chars=3
+            )
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+
+            programa = st.text_input(
+                "Programa",
+                value=programa_atual or "",
+                max_chars=20
+            )
+
+        with col2:
+
+            acao = st.text_input(
+                "Ação",
+                value=acao_atual or "",
+                max_chars=20
+            )
+
+        natureza = st.text_input(
+            "Natureza da Despesa",
+            value=natureza_atual or "",
+            max_chars=30
+        )
+
+        descricao = st.text_input(
+            "Descrição",
+            value=descricao_atual or "",
+            max_chars=250
+        )
+
+        novo_valor_atual = st.number_input(
+            "Valor Atual",
+            min_value=0.0,
+            value=float(
+                valor_atual or 0
+            ),
+            step=100.00,
+            format="%.2f"
+        )
+
+        st.caption(
+            f"Valor atualmente reservado: "
+            f"R$ {float(valor_reservado or 0):,.2f}"
+        )
+
+        st.markdown("---")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+
+            salvar = st.form_submit_button(
+                "💾 Salvar Alterações",
+                type="primary",
+                use_container_width=True
+            )
+
+        with col2:
+
+            mudar_situacao = st.form_submit_button(
+                (
+                    "🚫 Inativar Ficha"
+                    if ativo
+                    else "✅ Ativar Ficha"
+                ),
+                use_container_width=True
+            )
+
+    # ========================================================
+    # SITUAÇÃO
+    # ========================================================
+
+    if mudar_situacao:
+
+        sucesso = _sisget_salvar(
+            """
+            UPDATE fichas_orcamentarias
+            SET ativo = ?
+            WHERE id = ?
+            """,
+            (
+                not ativo,
+                ficha_id
+            )
+        )
+
+        if sucesso:
+
+            st.session_state[
+                "sisget_id_fichas_orcamentarias"
+            ] = None
+
+            st.session_state[
+                "sisget_tela_fichas_orcamentarias"
+            ] = "localizar"
+
+            st.rerun()
+
+        return
+
+    # ========================================================
+    # ALTERAR
+    # ========================================================
+
+    if salvar:
+
+        if (
+            float(novo_valor_atual)
+            <
+            float(valor_reservado or 0)
+        ):
+
+            st.warning(
+                "⚠️ O valor atual não pode ser menor "
+                "que o valor já reservado."
+            )
+
+            return
+
+        fonte_recurso_id = mapa_fontes[
+            fonte_nome
+        ]
+
+        sucesso = _sisget_salvar(
+            """
+            UPDATE fichas_orcamentarias
+            SET
+                funcao = ?,
+                subfuncao = ?,
+                programa = ?,
+                acao = ?,
+                natureza_despesa = ?,
+                fonte_recurso_id = ?,
+                descricao = ?,
+                valor_atual = ?
+            WHERE id = ?
+            """,
+            (
+                funcao.strip() or None,
+                subfuncao.strip() or None,
+                programa.strip() or None,
+                acao.strip() or None,
+                natureza.strip() or None,
+                fonte_recurso_id,
+                descricao.strip() or None,
+                float(novo_valor_atual),
+                ficha_id
+            )
+        )
+
+        if sucesso:
+
+            st.session_state[
+                "sisget_id_fichas_orcamentarias"
+            ] = None
+
+            st.session_state[
+                "sisget_tela_fichas_orcamentarias"
+            ] = "localizar"
+
+            st.rerun()
 
 
 # ============================================================
@@ -14758,7 +15781,162 @@ def ficha_orcamentaria_alterar(ficha_id):
 # ============================================================
 
 def ficha_orcamentaria_excluir():
-    ...
+
+    st.subheader(
+        "🗑️ Excluir Ficha Orçamentária"
+    )
+
+    exercicio = st.number_input(
+        "Exercício",
+        min_value=2000,
+        max_value=2100,
+        value=datetime.now().year,
+        step=1,
+        key="ficha_excluir_exercicio"
+    )
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            f.id,
+
+            f.numero_ficha
+                AS "Ficha",
+
+            e.codigo || ' - ' || e.nome
+                AS "Entidade",
+
+            u.codigo || ' - ' || u.nome
+                AS "Unidade Orçamentária",
+
+            COALESCE(
+                f.descricao,
+                ''
+            ) AS "Descrição",
+
+            f.valor_atual
+                AS "Valor Atual",
+
+            f.valor_reservado
+                AS "Reservado"
+
+        FROM fichas_orcamentarias f
+
+        INNER JOIN entidades e
+            ON e.id = f.entidade_id
+
+        INNER JOIN unidades_orcamentarias u
+            ON u.id = f.unidade_orcamentaria_id
+
+        WHERE f.exercicio = ?
+
+        ORDER BY
+            f.numero_ficha
+        """,
+        (
+            int(exercicio),
+        )
+    )
+
+    if df.empty:
+
+        st.info(
+            "Nenhuma ficha cadastrada."
+        )
+
+        return
+
+    ficha_id = sisget_grid_localizar(
+        df=df,
+        chave="excluir_fichas_orcamentarias",
+        coluna_id="id",
+        altura=430
+    )
+
+    if not ficha_id:
+
+        st.caption(
+            "Dê duplo clique na ficha que deseja excluir."
+        )
+
+        return
+
+    registro = _sisget_fetchone(
+        """
+        SELECT
+            numero_ficha,
+            descricao,
+            valor_reservado
+        FROM fichas_orcamentarias
+        WHERE id = ?
+        """,
+        (
+            ficha_id,
+        )
+    )
+
+    if not registro:
+
+        return
+
+    numero_ficha = registro[0]
+    descricao = registro[1] or ""
+    reservado = float(
+        registro[2] or 0
+    )
+
+    st.markdown("---")
+
+    st.error(
+        f"⚠️ Ficha **{numero_ficha} - {descricao}**"
+    )
+
+    if reservado > 0:
+
+        st.warning(
+            "🔒 Esta ficha possui valor reservado "
+            "e não pode ser excluída."
+        )
+
+        return
+
+    confirmar = st.checkbox(
+        "Confirmo que desejo excluir esta ficha.",
+        key=f"confirmar_excluir_ficha_{ficha_id}"
+    )
+
+    if st.button(
+        "🗑️ Confirmar Exclusão",
+        type="primary",
+        use_container_width=True,
+        key=f"excluir_ficha_{ficha_id}"
+    ):
+
+        if not confirmar:
+
+            st.warning(
+                "⚠️ Marque a confirmação."
+            )
+
+            return
+
+        sucesso = _sisget_salvar(
+            """
+            DELETE FROM fichas_orcamentarias
+            WHERE id = ?
+            """,
+            (
+                ficha_id,
+            )
+        )
+
+        if sucesso:
+
+            st.session_state[
+                "sisget_tela_fichas_orcamentarias"
+            ] = "principal"
+
+            st.rerun()
 
 
 # ============================================================
@@ -14766,7 +15944,373 @@ def ficha_orcamentaria_excluir():
 # ============================================================
 
 def ficha_orcamentaria_imprimir():
-    ...
+
+    st.subheader(
+        "🖨️ Relatório de Fichas Orçamentárias"
+    )
+
+    exercicio = st.number_input(
+        "Exercício",
+        min_value=2000,
+        max_value=2100,
+        value=datetime.now().year,
+        step=1,
+        key="ficha_imprimir_exercicio"
+    )
+
+    dados = _sisget_fetch(
+        """
+        SELECT
+            f.numero_ficha,
+
+            u.codigo,
+            u.nome,
+
+            COALESCE(
+                f.natureza_despesa,
+                ''
+            ),
+
+            COALESCE(
+                fr.codigo,
+                ''
+            ),
+
+            COALESCE(
+                f.descricao,
+                ''
+            ),
+
+            f.valor_inicial,
+            f.valor_atual,
+            f.valor_reservado,
+
+            (
+                f.valor_atual
+                -
+                f.valor_reservado
+            ),
+
+            f.ativo
+
+        FROM fichas_orcamentarias f
+
+        INNER JOIN unidades_orcamentarias u
+            ON u.id = f.unidade_orcamentaria_id
+
+        LEFT JOIN fontes_recursos fr
+            ON fr.id = f.fonte_recurso_id
+
+        WHERE f.exercicio = ?
+
+        ORDER BY
+            u.codigo,
+            f.numero_ficha
+        """,
+        (
+            int(exercicio),
+        )
+    )
+
+    if not dados:
+
+        st.info(
+            "Nenhuma ficha encontrada."
+        )
+
+        return
+
+    visualizacao = []
+
+    for registro in dados:
+
+        visualizacao.append({
+
+            "Ficha":
+                registro[0],
+
+            "Unidade Orçamentária":
+                f"{registro[1]} - {registro[2]}",
+
+            "Natureza":
+                registro[3],
+
+            "Fonte":
+                registro[4],
+
+            "Descrição":
+                registro[5],
+
+            "Inicial":
+                float(registro[6] or 0),
+
+            "Atual":
+                float(registro[7] or 0),
+
+            "Reservado":
+                float(registro[8] or 0),
+
+            "Disponível":
+                float(registro[9] or 0),
+
+            "Situação":
+                (
+                    "Ativa"
+                    if registro[10]
+                    else "Inativa"
+                )
+        })
+
+    df = pd.DataFrame(
+        visualizacao
+    )
+
+    st.dataframe(
+        df,
+        use_container_width=True,
+        hide_index=True
+    )
+
+    # ========================================================
+    # TOTAIS
+    # ========================================================
+
+    total_atual = sum(
+        float(r[7] or 0)
+        for r in dados
+    )
+
+    total_reservado = sum(
+        float(r[8] or 0)
+        for r in dados
+    )
+
+    total_disponivel = sum(
+        float(r[9] or 0)
+        for r in dados
+    )
+
+    col1, col2, col3 = st.columns(3)
+
+    col1.metric(
+        "Dotação Atual",
+        f"R$ {total_atual:,.2f}"
+    )
+
+    col2.metric(
+        "Reservado",
+        f"R$ {total_reservado:,.2f}"
+    )
+
+    col3.metric(
+        "Disponível",
+        f"R$ {total_disponivel:,.2f}"
+    )
+
+    # ========================================================
+    # PDF
+    # ========================================================
+
+    if st.button(
+        "📄 Gerar PDF",
+        type="primary",
+        use_container_width=True,
+        key="gerar_pdf_fichas"
+    ):
+
+        buffer = BytesIO()
+
+        documento = SimpleDocTemplate(
+            buffer,
+            pagesize=A4,
+            rightMargin=0.7 * cm,
+            leftMargin=0.7 * cm,
+            topMargin=0.8 * cm,
+            bottomMargin=0.8 * cm
+        )
+
+        estilos = getSampleStyleSheet()
+
+        estilo_pequeno = ParagraphStyle(
+            "FichaTexto",
+            parent=estilos["Normal"],
+            fontSize=6,
+            leading=7
+        )
+
+        elementos = []
+
+        elementos.append(
+            Paragraph(
+                "SISGET - Sistema Integrado de Gestão Pública",
+                estilos["Heading1"]
+            )
+        )
+
+        elementos.append(
+            Paragraph(
+                f"Fichas Orçamentárias - Exercício {int(exercicio)}",
+                estilos["Heading2"]
+            )
+        )
+
+        elementos.append(
+            Spacer(
+                1,
+                0.4 * cm
+            )
+        )
+
+        tabela_dados = [[
+            "Ficha",
+            "Unidade Orçamentária",
+            "Natureza",
+            "Fonte",
+            "Descrição",
+            "Atual",
+            "Reservado",
+            "Disponível"
+        ]]
+
+        for registro in dados:
+
+            tabela_dados.append([
+
+                str(
+                    registro[0]
+                ),
+
+                Paragraph(
+                    f"{registro[1]} - {registro[2]}",
+                    estilo_pequeno
+                ),
+
+                str(
+                    registro[3] or ""
+                ),
+
+                str(
+                    registro[4] or ""
+                ),
+
+                Paragraph(
+                    str(
+                        registro[5] or ""
+                    ),
+                    estilo_pequeno
+                ),
+
+                f"{float(registro[7] or 0):,.2f}",
+
+                f"{float(registro[8] or 0):,.2f}",
+
+                f"{float(registro[9] or 0):,.2f}"
+            ])
+
+        tabela = Table(
+            tabela_dados,
+            colWidths=[
+                1.1 * cm,
+                4.1 * cm,
+                2.2 * cm,
+                1.4 * cm,
+                4.0 * cm,
+                2.0 * cm,
+                2.0 * cm,
+                2.0 * cm
+            ],
+            repeatRows=1
+        )
+
+        tabela.setStyle(
+            TableStyle([
+
+                (
+                    "BACKGROUND",
+                    (0, 0),
+                    (-1, 0),
+                    colors.lightgrey
+                ),
+
+                (
+                    "FONTNAME",
+                    (0, 0),
+                    (-1, 0),
+                    "Helvetica-Bold"
+                ),
+
+                (
+                    "GRID",
+                    (0, 0),
+                    (-1, -1),
+                    0.4,
+                    colors.grey
+                ),
+
+                (
+                    "VALIGN",
+                    (0, 0),
+                    (-1, -1),
+                    "MIDDLE"
+                ),
+
+                (
+                    "FONTSIZE",
+                    (0, 0),
+                    (-1, -1),
+                    6
+                )
+            ])
+        )
+
+        elementos.append(
+            tabela
+        )
+
+        elementos.append(
+            Spacer(
+                1,
+                0.5 * cm
+            )
+        )
+
+        elementos.append(
+            Paragraph(
+                f"Dotação Atual: R$ {total_atual:,.2f}",
+                estilos["Normal"]
+            )
+        )
+
+        elementos.append(
+            Paragraph(
+                f"Reservado: R$ {total_reservado:,.2f}",
+                estilos["Normal"]
+            )
+        )
+
+        elementos.append(
+            Paragraph(
+                f"Disponível: R$ {total_disponivel:,.2f}",
+                estilos["Normal"]
+            )
+        )
+
+        documento.build(
+            elementos
+        )
+
+        buffer.seek(0)
+
+        st.download_button(
+            "⬇️ Baixar PDF",
+            data=buffer,
+            file_name=(
+                f"fichas_orcamentarias_{int(exercicio)}.pdf"
+            ),
+            mime="application/pdf",
+            use_container_width=True,
+            key="baixar_pdf_fichas"
+        )
 
 
 # ============================================================
@@ -14778,18 +16322,15 @@ def planejamento_fichas_orcamentarias():
     sisget_tela_principal(
         titulo="Fichas Orçamentárias",
         chave="fichas_orcamentarias",
+
         func_incluir=ficha_orcamentaria_incluir,
         func_localizar=ficha_orcamentaria_localizar,
         func_alterar=ficha_orcamentaria_alterar,
         func_excluir=ficha_orcamentaria_excluir,
         func_imprimir=ficha_orcamentaria_imprimir,
+
         icone="📄"
     )
-
-
-# ============================================================
-# SALDOS ORÇAMENTÁRIOS
-# ============================================================
 
 def planejamento_saldos():
 
