@@ -14980,17 +14980,6 @@ def ficha_orcamentaria_incluir():
             entidade_id
         )
 
-    st.text_input(
-        "Número da Ficha (automático)",
-        value=(
-            str(numero_ficha)
-            if numero_ficha is not None
-            else "Aguardando Exercício"
-        ),
-        disabled=True,
-        key="ficha_nova_numero_visual"
-    )
-
 
     if salvar:
 
@@ -15291,38 +15280,6 @@ def ficha_orcamentaria_incluir():
             opcoes[selecionado]["codigo"]
         )
 
-    # ========================================================
-    # 1 - ÓRGÃO
-    # ========================================================
-
-    orgaos = _sisget_fetch(
-        """
-        SELECT id, codigo, nome
-        FROM orgaos
-        WHERE ativo = TRUE
-        ORDER BY codigo, nome
-        """
-    )
-
-    if not orgaos:
-
-        st.warning("Nenhum Órgão ativo cadastrado.")
-        return
-
-    orgao_id, _ = selecionar_cadastro(
-        "Órgão *",
-        orgaos,
-        "ficha_nova_orgao",
-        "Selecione um Órgão"
-    )
-
-    if orgao_id is None:
-        st.info("Selecione o Órgão para continuar.")
-        return
-
-    # ========================================================
-    # 2 - ENTIDADE
-    # ========================================================
 
     entidades = _sisget_fetch(
         """
