@@ -14706,32 +14706,6 @@ def ficha_orcamentaria_incluir():
             entidade_id
         )
 
-    st.text_input(
-        "Número da Ficha (automático)",
-        value=(
-            str(numero_ficha)
-            if numero_ficha is not None
-            else "Aguardando Exercício"
-        ),
-        disabled=True,
-        key="sisget_ficha_incluir_numero_v2"
-    )
-
-
-    if salvar:
-
-        if exercicio_id is None:
-
-            st.warning(
-                "Selecione um Exercício ativo e aberto."
-            )
-
-            return
-
-        # ====================================================
-        # VALIDAR CAMPOS OBRIGATÓRIOS
-        # ====================================================
-
         campos = {
             "Função": funcao_id,
             "Subfunção": subfuncao_id,
