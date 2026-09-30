@@ -15281,46 +15281,6 @@ def ficha_orcamentaria_incluir():
         )
 
 
-    # ========================================================
-    # 3 - UNIDADE ORÇAMENTÁRIA
-    # ========================================================
-
-    unidades = _sisget_fetch(
-        """
-        SELECT id, codigo, nome
-        FROM unidades_orcamentarias
-        WHERE entidade_id = ?
-          AND orgao_id = ?
-          AND ativo = TRUE
-        ORDER BY codigo, nome
-        """,
-        (
-            entidade_id,
-            orgao_id
-        )
-    )
-
-    unidade_id, _ = selecionar_cadastro(
-        "Unidade Orçamentária *",
-        unidades,
-        "ficha_nova_unidade",
-        "Selecione a Unidade Orçamentária"
-    )
-
-    if unidade_id is None:
-
-        if not unidades:
-            st.warning(
-                "Nenhuma Unidade Orçamentária ativa "
-                "vinculada à Entidade."
-            )
-
-        return
-
-    # ========================================================
-    # 4 - EXERCÍCIO
-    # ========================================================
-
     st.markdown("---")
 
     exercicios = _sisget_fetch(
