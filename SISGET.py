@@ -17183,6 +17183,10 @@ def planejamento_programas():
 # PROGRAMA ORÇAMENTÁRIO - INCLUIR
 # ============================================================
 
+# ============================================================
+# PROGRAMA ORÇAMENTÁRIO - INCLUIR
+# ============================================================
+
 def programa_orcamentario_incluir():
 
     st.subheader(
@@ -17228,116 +17232,9 @@ def programa_orcamentario_incluir():
         entidade_nome
     ]
 
-# ========================================================
-# EXERCÍCIOS DA ENTIDADE
-# ========================================================
-
-exercicios = _sisget_fetch(
-    """
-    SELECT
-        id,
-        ano,
-        descricao
-    FROM exercicios
-    WHERE entidade_id = ?
-      AND ativo = TRUE
-      AND encerrado = FALSE
-    ORDER BY ano DESC
-    """,
-    (
-        entidade_id,
-    )
-)
-
-# ========================================================
-# CRIAR EXERCÍCIO AUTOMATICAMENTE SE NÃO EXISTIR
-# ========================================================
-
-if not exercicios:
-
-    ano_atual = datetime.now().year
-
-    exercicio_existente = _sisget_fetchone(
-        """
-        SELECT id
-        FROM exercicios
-        WHERE entidade_id = ?
-          AND ano = ?
-        """,
-        (
-            entidade_id,
-            ano_atual
-        )
-    )
-
-    if exercicio_existente:
-
-        exercicio_id = exercicio_existente[0]
-
-        _sisget_salvar(
-            """
-            UPDATE exercicios
-            SET
-                ativo = TRUE,
-                encerrado = FALSE,
-                atualizado_em = CURRENT_TIMESTAMP
-            WHERE id = ?
-            """,
-            (
-                exercicio_id,
-            )
-        )
-
-    else:
-
-        resultado = _sisget_salvar_retorno(
-            """
-            INSERT INTO exercicios
-            (
-                entidade_id,
-                ano,
-                descricao,
-                data_inicio,
-                data_fim,
-                encerrado,
-                ativo,
-                criado_em,
-                atualizado_em
-            )
-            VALUES
-            (
-                ?,
-                ?,
-                ?,
-                ?,
-                ?,
-                FALSE,
-                TRUE,
-                CURRENT_TIMESTAMP,
-                CURRENT_TIMESTAMP
-            )
-            RETURNING id
-            """,
-            (
-                entidade_id,
-                ano_atual,
-                f"Exercício {ano_atual}",
-                f"{ano_atual}-01-01",
-                f"{ano_atual}-12-31"
-            )
-        )
-
-        if not resultado:
-
-            st.error(
-                "❌ Não foi possível criar o exercício automaticamente."
-            )
-
-            return
-
-    # ====================================================
-    # RECARREGAR EXERCÍCIOS
-    # ====================================================
+    # ========================================================
+    # EXERCÍCIOS DA ENTIDADE
+    # ========================================================
 
     exercicios = _sisget_fetch(
         """
@@ -17355,6 +17252,138 @@ if not exercicios:
             entidade_id,
         )
     )
+
+    # ========================================================
+    # CRIAR EXERCÍCIO AUTOMATICAMENTE SE NÃO EXISTIR
+    # ========================================================
+
+    if not exercicios:
+
+        ano_atual = datetime.now().year
+
+        exercicio_existente = _sisget_fetchone(
+            """
+            SELECT
+                id
+            FROM exercicios
+            WHERE entidade_id = ?
+              AND ano = ?
+            """,
+            (
+                entidade_id,
+                ano_atual
+            )
+        )
+
+        if exercicio_existente:
+
+            exercicio_id_existente = exercicio_existente[0]
+
+            sucesso = _sisget_salvar(
+                """
+                UPDATE exercicios
+                SET
+                    ativo = TRUE,
+                    encerrado = FALSE,
+                    atualizado_em = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (
+                    exercicio_id_existente,
+                )
+            )
+
+            if not sucesso:
+
+                st.error(
+                    "❌ Não foi possível reabrir o exercício existente."
+                )
+
+                return
+
+        else:
+
+            resultado = _sisget_salvar_retorno(
+                """
+                INSERT INTO exercicios
+                (
+                    entidade_id,
+                    ano,
+                    descricao,
+                    data_inicio,
+                    data_fim,
+                    encerrado,
+                    ativo,
+                    criado_em,
+                    atualizado_em
+                )
+                VALUES
+                (
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    FALSE,
+                    TRUE,
+                    CURRENT_TIMESTAMP,
+                    CURRENT_TIMESTAMP
+                )
+                RETURNING id
+                """,
+                (
+                    entidade_id,
+                    ano_atual,
+                    f"Exercício {ano_atual}",
+                    f"{ano_atual}-01-01",
+                    f"{ano_atual}-12-31"
+                )
+            )
+
+            if not resultado:
+
+                st.error(
+                    "❌ Não foi possível criar o exercício automaticamente."
+                )
+
+                return
+
+        # ====================================================
+        # RECARREGAR EXERCÍCIOS
+        # ====================================================
+
+        exercicios = _sisget_fetch(
+            """
+            SELECT
+                id,
+                ano,
+                descricao
+            FROM exercicios
+            WHERE entidade_id = ?
+              AND ativo = TRUE
+              AND encerrado = FALSE
+            ORDER BY ano DESC
+            """,
+            (
+                entidade_id,
+            )
+        )
+
+    # ========================================================
+    # GARANTIA
+    # ========================================================
+
+    if not exercicios:
+
+        st.error(
+            "❌ Nenhum exercício ativo e aberto foi encontrado."
+        )
+
+        return
+
+    # ========================================================
+    # MAPA DOS EXERCÍCIOS
+    # ========================================================
 
     mapa_exercicios = {}
 
@@ -17387,12 +17416,13 @@ if not exercicios:
     ]
 
     # ========================================================
-    # PRÓXIMO CÓDIGO AUTOMÁTICO
+    # PRÓXIMO CÓDIGO AUTOMÁTICO DO PROGRAMA
     # ========================================================
 
-    dados_codigos = _sisget_fetch(
+    codigos = _sisget_fetch(
         """
-        SELECT codigo
+        SELECT
+            codigo
         FROM programas
         WHERE entidade_id = ?
           AND exercicio_id = ?
@@ -17406,7 +17436,7 @@ if not exercicios:
 
     usados = set()
 
-    for registro in dados_codigos:
+    for registro in codigos:
 
         try:
 
@@ -17433,7 +17463,7 @@ if not exercicios:
     ).zfill(4)
 
     # ========================================================
-    # FORM
+    # FORMULÁRIO
     # ========================================================
 
     with st.form(
@@ -17471,8 +17501,6 @@ if not exercicios:
             value=True
         )
 
-        st.markdown("---")
-
         salvar = st.form_submit_button(
             "💾 Salvar Programa",
             type="primary",
@@ -17497,12 +17525,13 @@ if not exercicios:
             return
 
         # ====================================================
-        # RECALCULAR CÓDIGO
+        # RECALCULAR CÓDIGO NO MOMENTO DE SALVAR
         # ====================================================
 
-        dados_codigos = _sisget_fetch(
+        codigos = _sisget_fetch(
             """
-            SELECT codigo
+            SELECT
+                codigo
             FROM programas
             WHERE entidade_id = ?
               AND exercicio_id = ?
@@ -17515,7 +17544,7 @@ if not exercicios:
 
         usados = set()
 
-        for registro in dados_codigos:
+        for registro in codigos:
 
             try:
 
