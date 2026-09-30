@@ -17688,6 +17688,10 @@ def planejamento_acoes():
 # AÇÃO ORÇAMENTÁRIA - INCLUIR
 # ============================================================
 
+# ============================================================
+# AÇÃO ORÇAMENTÁRIA - INCLUIR
+# ============================================================
+
 def acao_orcamentaria_incluir():
 
     st.subheader(
@@ -17695,24 +17699,23 @@ def acao_orcamentaria_incluir():
     )
 
     # ========================================================
-    # PROGRAMAS ATIVOS
-    # JÁ TRAZENDO ENTIDADE E EXERCÍCIO
+    # BUSCAR PROGRAMAS CADASTRADOS
     # ========================================================
 
     programas = _sisget_fetch(
         """
         SELECT
             p.id,
-
             p.entidade_id,
+            p.exercicio_id,
+
+            p.codigo,
+            p.nome,
+
             e.codigo,
             e.nome,
 
-            p.exercicio_id,
-            ex.ano,
-
-            p.codigo,
-            p.nome
+            ex.ano
 
         FROM programas p
 
@@ -17733,10 +17736,15 @@ def acao_orcamentaria_incluir():
         """
     )
 
+    # ========================================================
+    # NENHUM PROGRAMA
+    # ========================================================
+
     if not programas:
 
         st.warning(
-            "⚠️ Nenhum Programa ativo cadastrado."
+            "⚠️ Nenhum Programa ativo foi encontrado "
+            "para vincular à Ação."
         )
 
         return
@@ -17749,20 +17757,20 @@ def acao_orcamentaria_incluir():
 
     for (
         programa_id,
-
         entidade_id,
+        exercicio_id,
+
+        codigo_programa,
+        nome_programa,
+
         codigo_entidade,
         nome_entidade,
 
-        exercicio_id,
-        ano_exercicio,
-
-        codigo_programa,
-        nome_programa
+        ano_exercicio
 
     ) in programas:
 
-        descricao_programa = (
+        texto = (
             f"{ano_exercicio}"
             f" | "
             f"{codigo_entidade} - {nome_entidade}"
@@ -17771,32 +17779,35 @@ def acao_orcamentaria_incluir():
         )
 
         mapa_programas[
-            descricao_programa
+            texto
         ] = {
             "programa_id": programa_id,
             "entidade_id": entidade_id,
             "exercicio_id": exercicio_id,
-            "ano": ano_exercicio,
+
+            "codigo_programa": codigo_programa,
+            "nome_programa": nome_programa,
+
             "codigo_entidade": codigo_entidade,
             "nome_entidade": nome_entidade,
-            "codigo_programa": codigo_programa,
-            "nome_programa": nome_programa
+
+            "ano": ano_exercicio
         }
 
     # ========================================================
-    # SELECIONAR PROGRAMA
+    # SELEÇÃO DO PROGRAMA
     # ========================================================
 
-    programa_selecionado = st.selectbox(
+    programa_nome = st.selectbox(
         "Programa *",
         list(
             mapa_programas.keys()
         ),
-        key="acao_programa"
+        key="acao_programa_selecionado"
     )
 
     dados_programa = mapa_programas[
-        programa_selecionado
+        programa_nome
     ]
 
     programa_id = dados_programa[
@@ -17812,11 +17823,11 @@ def acao_orcamentaria_incluir():
     ]
 
     # ========================================================
-    # DADOS AUTOMÁTICOS
+    # MOSTRAR VÍNCULOS AUTOMÁTICOS
     # ========================================================
 
     st.markdown(
-        "### 🔗 Dados vinculados automaticamente"
+        "### 🔗 Vinculação automática"
     )
 
     col1, col2 = st.columns(2)
@@ -17830,7 +17841,7 @@ def acao_orcamentaria_incluir():
                 f"{dados_programa['nome_entidade']}"
             ),
             disabled=True,
-            key="acao_entidade_automatica"
+            key="acao_entidade_vinculada"
         )
 
     with col2:
@@ -17843,7 +17854,7 @@ def acao_orcamentaria_incluir():
                 ]
             ),
             disabled=True,
-            key="acao_exercicio_automatico"
+            key="acao_exercicio_vinculado"
         )
 
     st.text_input(
@@ -17853,8 +17864,56 @@ def acao_orcamentaria_incluir():
             f"{dados_programa['nome_programa']}"
         ),
         disabled=True,
-        key="acao_programa_automatico"
+        key="acao_programa_vinculado"
     )
+
+    # ========================================================
+    # PRÓXIMO CÓDIGO AUTOMÁTICO DA AÇÃO
+    # ========================================================
+
+    codigos = _sisget_fetch(
+        """
+        SELECT codigo
+        FROM acoes_orcamentarias
+        WHERE entidade_id = ?
+          AND exercicio_id = ?
+          AND programa_id = ?
+        ORDER BY codigo
+        """,
+        (
+            entidade_id,
+            exercicio_id,
+            programa_id
+        )
+    )
+
+    usados = set()
+
+    for registro in codigos:
+
+        try:
+
+            usados.add(
+                int(
+                    str(
+                        registro[0]
+                    ).strip()
+                )
+            )
+
+        except (ValueError, TypeError):
+
+            pass
+
+    proximo = 1
+
+    while proximo in usados:
+
+        proximo += 1
+
+    codigo_automatico = str(
+        proximo
+    ).zfill(4)
 
     st.markdown("---")
 
@@ -17868,15 +17927,15 @@ def acao_orcamentaria_incluir():
     ):
 
         col1, col2 = st.columns(
-            [1, 3]
+            [1, 4]
         )
 
         with col1:
 
-            codigo = st.text_input(
-                "Código da Ação *",
-                max_chars=20,
-                placeholder="Ex.: 2001"
+            st.text_input(
+                "Código da Ação",
+                value=codigo_automatico,
+                disabled=True
             )
 
         with col2:
@@ -17909,8 +17968,6 @@ def acao_orcamentaria_incluir():
             value=True
         )
 
-        st.markdown("---")
-
         salvar = st.form_submit_button(
             "💾 Salvar Ação",
             type="primary",
@@ -17923,17 +17980,8 @@ def acao_orcamentaria_incluir():
 
     if salvar:
 
-        codigo = codigo.strip()
         nome = nome.strip()
         descricao = descricao.strip()
-
-        if not codigo:
-
-            st.warning(
-                "⚠️ Informe o código da Ação."
-            )
-
-            return
 
         if not nome:
 
@@ -17944,39 +17992,54 @@ def acao_orcamentaria_incluir():
             return
 
         # ====================================================
-        # VERIFICAR DUPLICIDADE
+        # RECALCULAR O CÓDIGO
         # ====================================================
 
-        existe = _sisget_fetchone(
+        codigos = _sisget_fetch(
             """
-            SELECT id
-
+            SELECT codigo
             FROM acoes_orcamentarias
-
             WHERE entidade_id = ?
               AND exercicio_id = ?
               AND programa_id = ?
-              AND codigo = ?
             """,
             (
                 entidade_id,
                 exercicio_id,
-                programa_id,
-                codigo
+                programa_id
             )
         )
 
-        if existe:
+        usados = set()
 
-            st.warning(
-                "⚠️ Já existe uma Ação com este código "
-                "neste Programa."
-            )
+        for registro in codigos:
 
-            return
+            try:
+
+                usados.add(
+                    int(
+                        str(
+                            registro[0]
+                        ).strip()
+                    )
+                )
+
+            except (ValueError, TypeError):
+
+                pass
+
+        proximo = 1
+
+        while proximo in usados:
+
+            proximo += 1
+
+        codigo = str(
+            proximo
+        ).zfill(4)
 
         # ====================================================
-        # INSERT
+        # INSERT CORRETO
         # ====================================================
 
         sucesso = _sisget_salvar(
@@ -18026,7 +18089,6 @@ def acao_orcamentaria_incluir():
             )
 
             st.rerun()
-
 
 def acao_orcamentaria_localizar():
 
