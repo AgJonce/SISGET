@@ -17426,71 +17426,347 @@ def planejamento_acoes():
     )
 
 
+# ============================================================
+# AÇÃO ORÇAMENTÁRIA - INCLUIR
+# ============================================================
+
 def acao_orcamentaria_incluir():
+
+    st.subheader(
+        "🎯 Incluir Ação Orçamentária"
+    )
+
+    # ========================================================
+    # PROGRAMAS ATIVOS
+    # JÁ TRAZENDO ENTIDADE E EXERCÍCIO
+    # ========================================================
 
     programas = _sisget_fetch(
         """
-        SELECT id, exercicio, codigo, descricao
-        FROM programas_orcamentarios
-        WHERE ativo = TRUE
-        ORDER BY exercicio DESC, codigo
+        SELECT
+            p.id,
+
+            p.entidade_id,
+            e.codigo,
+            e.nome,
+
+            p.exercicio_id,
+            ex.ano,
+
+            p.codigo,
+            p.nome
+
+        FROM programas p
+
+        INNER JOIN entidades e
+            ON e.id = p.entidade_id
+
+        INNER JOIN exercicios ex
+            ON ex.id = p.exercicio_id
+
+        WHERE p.ativo = TRUE
+          AND e.ativo = TRUE
+          AND ex.ativo = TRUE
+
+        ORDER BY
+            ex.ano DESC,
+            e.codigo,
+            p.codigo
         """
     )
 
     if not programas:
-        st.warning("⚠️ Cadastre um Programa primeiro.")
+
+        st.warning(
+            "⚠️ Nenhum Programa ativo cadastrado."
+        )
+
         return
 
-    mapa = {
-        f"{exercicio} - {codigo} - {descricao}": id_
-        for id_, exercicio, codigo, descricao in programas
-    }
+    # ========================================================
+    # MAPA DOS PROGRAMAS
+    # ========================================================
+
+    mapa_programas = {}
+
+    for (
+        programa_id,
+
+        entidade_id,
+        codigo_entidade,
+        nome_entidade,
+
+        exercicio_id,
+        ano_exercicio,
+
+        codigo_programa,
+        nome_programa
+
+    ) in programas:
+
+        descricao_programa = (
+            f"{ano_exercicio}"
+            f" | "
+            f"{codigo_entidade} - {nome_entidade}"
+            f" | "
+            f"{codigo_programa} - {nome_programa}"
+        )
+
+        mapa_programas[
+            descricao_programa
+        ] = {
+            "programa_id": programa_id,
+            "entidade_id": entidade_id,
+            "exercicio_id": exercicio_id,
+            "ano": ano_exercicio,
+            "codigo_entidade": codigo_entidade,
+            "nome_entidade": nome_entidade,
+            "codigo_programa": codigo_programa,
+            "nome_programa": nome_programa
+        }
+
+    # ========================================================
+    # SELECIONAR PROGRAMA
+    # ========================================================
+
+    programa_selecionado = st.selectbox(
+        "Programa *",
+        list(
+            mapa_programas.keys()
+        ),
+        key="acao_programa"
+    )
+
+    dados_programa = mapa_programas[
+        programa_selecionado
+    ]
+
+    programa_id = dados_programa[
+        "programa_id"
+    ]
+
+    entidade_id = dados_programa[
+        "entidade_id"
+    ]
+
+    exercicio_id = dados_programa[
+        "exercicio_id"
+    ]
+
+    # ========================================================
+    # DADOS AUTOMÁTICOS
+    # ========================================================
+
+    st.markdown(
+        "### 🔗 Dados vinculados automaticamente"
+    )
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        st.text_input(
+            "Entidade",
+            value=(
+                f"{dados_programa['codigo_entidade']} - "
+                f"{dados_programa['nome_entidade']}"
+            ),
+            disabled=True,
+            key="acao_entidade_automatica"
+        )
+
+    with col2:
+
+        st.text_input(
+            "Exercício",
+            value=str(
+                dados_programa[
+                    "ano"
+                ]
+            ),
+            disabled=True,
+            key="acao_exercicio_automatico"
+        )
+
+    st.text_input(
+        "Programa Vinculado",
+        value=(
+            f"{dados_programa['codigo_programa']} - "
+            f"{dados_programa['nome_programa']}"
+        ),
+        disabled=True,
+        key="acao_programa_automatico"
+    )
+
+    st.markdown("---")
+
+    # ========================================================
+    # FORMULÁRIO
+    # ========================================================
 
     with st.form(
-        "form_acao_incluir",
+        "form_acao_orcamentaria_incluir",
         clear_on_submit=True
     ):
 
-        programa = st.selectbox(
-            "Programa *",
-            list(mapa.keys())
+        col1, col2 = st.columns(
+            [1, 3]
         )
 
-        codigo = st.text_input(
-            "Código *"
+        with col1:
+
+            codigo = st.text_input(
+                "Código da Ação *",
+                max_chars=20,
+                placeholder="Ex.: 2001"
+            )
+
+        with col2:
+
+            nome = st.text_input(
+                "Nome da Ação *",
+                max_chars=250,
+                placeholder=(
+                    "Ex.: Manutenção das "
+                    "Atividades Administrativas"
+                )
+            )
+
+        tipo = st.selectbox(
+            "Tipo da Ação *",
+            [
+                "Atividade",
+                "Projeto",
+                "Operação Especial"
+            ]
         )
 
-        descricao = st.text_input(
-            "Descrição *"
+        descricao = st.text_area(
+            "Descrição",
+            height=120
         )
+
+        ativo = st.checkbox(
+            "Ação ativa",
+            value=True
+        )
+
+        st.markdown("---")
 
         salvar = st.form_submit_button(
-            "💾 Salvar",
+            "💾 Salvar Ação",
             type="primary",
             use_container_width=True
         )
 
+    # ========================================================
+    # SALVAR
+    # ========================================================
+
     if salvar:
 
-        if _sisget_salvar(
+        codigo = codigo.strip()
+        nome = nome.strip()
+        descricao = descricao.strip()
+
+        if not codigo:
+
+            st.warning(
+                "⚠️ Informe o código da Ação."
+            )
+
+            return
+
+        if not nome:
+
+            st.warning(
+                "⚠️ Informe o nome da Ação."
+            )
+
+            return
+
+        # ====================================================
+        # VERIFICAR DUPLICIDADE
+        # ====================================================
+
+        existe = _sisget_fetchone(
+            """
+            SELECT id
+
+            FROM acoes_orcamentarias
+
+            WHERE entidade_id = ?
+              AND exercicio_id = ?
+              AND programa_id = ?
+              AND codigo = ?
+            """,
+            (
+                entidade_id,
+                exercicio_id,
+                programa_id,
+                codigo
+            )
+        )
+
+        if existe:
+
+            st.warning(
+                "⚠️ Já existe uma Ação com este código "
+                "neste Programa."
+            )
+
+            return
+
+        # ====================================================
+        # INSERT
+        # ====================================================
+
+        sucesso = _sisget_salvar(
             """
             INSERT INTO acoes_orcamentarias
             (
+                entidade_id,
+                exercicio_id,
                 programa_id,
+
                 codigo,
+                nome,
+                tipo,
                 descricao,
                 ativo
             )
-            VALUES (?, ?, ?, TRUE)
+            VALUES
+            (
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?
+            )
             """,
             (
-                mapa[programa],
-                codigo.strip(),
-                descricao.strip()
-            )
-        ):
+                entidade_id,
+                exercicio_id,
+                programa_id,
 
-            st.success("✅ Ação cadastrada.")
+                codigo,
+                nome,
+                tipo,
+                descricao or None,
+                ativo
+            )
+        )
+
+        if sucesso:
+
+            st.success(
+                f"✅ Ação {codigo} - {nome} "
+                "cadastrada com sucesso!"
+            )
+
             st.rerun()
 
 
