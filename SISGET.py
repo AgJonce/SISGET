@@ -15061,47 +15061,6 @@ def ficha_orcamentaria_incluir():
         key="ficha_nova_numero_visual"
     )
 
-    # ========================================================
-    # 9 - DADOS FINANCEIROS
-    # ========================================================
-
-    st.divider()
-
-    st.markdown("### 💰 Dados Financeiros")
-
-    with st.form(
-        "form_ficha_orcamentaria_incluir",
-        clear_on_submit=True
-    ):
-
-        descricao = st.text_input(
-            "Descrição da Ficha",
-            max_chars=250,
-            placeholder="Ex.: Material de Consumo"
-        )
-
-        valor_inicial = st.number_input(
-            "Valor Inicial (R$)",
-            min_value=0.0,
-            value=0.0,
-            step=100.0,
-            format="%.2f"
-        )
-
-        ativo = st.checkbox(
-            "Ficha ativa",
-            value=True
-        )
-
-        salvar = st.form_submit_button(
-            "💾 Salvar Ficha Orçamentária",
-            type="primary",
-            use_container_width=True
-        )
-
-    # ========================================================
-    # 10 - VALIDAÇÕES E SALVAMENTO
-    # ========================================================
 
     if salvar:
 
