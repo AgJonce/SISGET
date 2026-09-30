@@ -14538,12 +14538,99 @@ def planejamento_fontes_recursos():
         func_imprimir=fonte_recurso_imprimir,
         icone="💧"
     )
-
-
 # ============================================================
-# FUNÇÃO AUXILIAR - EXERCÍCIOS CADASTRADOS
+# FONTES DE RECURSOS - LOCALIZAR
 # ============================================================
 
+def fonte_recurso_localizar():
+
+    st.subheader("🔎 Localizar Fontes de Recursos")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        pesquisa = st.text_input(
+            "Pesquisar Código ou Descrição",
+            key="fonte_localizar_pesquisa"
+        )
+
+    with col2:
+
+        situacao = st.selectbox(
+            "Situação",
+            ["Todos", "Ativos", "Inativos"],
+            key="fonte_localizar_situacao"
+        )
+
+    sql = """
+        SELECT
+            f.id,
+            f.exercicio AS "Exercício",
+            e.nome AS "Entidade",
+            f.codigo AS "Código",
+            f.descricao AS "Descrição",
+
+            CASE
+                WHEN f.ativo = TRUE THEN 'Ativo'
+                ELSE 'Inativo'
+            END AS "Situação"
+
+        FROM fontes_recursos f
+
+        LEFT JOIN entidades e
+            ON e.id = f.entidade_id
+
+        WHERE 1 = 1
+    """
+
+    parametros = []
+
+    if pesquisa.strip():
+
+        sql += """
+            AND (
+                f.codigo ILIKE ?
+                OR f.descricao ILIKE ?
+            )
+        """
+
+        termo = f"%{pesquisa.strip()}%"
+
+        parametros.extend([termo, termo])
+
+    if situacao == "Ativos":
+
+        sql += " AND f.ativo = TRUE"
+
+    elif situacao == "Inativos":
+
+        sql += " AND f.ativo = FALSE"
+
+    sql += """
+        ORDER BY f.exercicio DESC, f.codigo
+    """
+
+    df = _sisget_dataframe(
+        sql,
+        tuple(parametros)
+    )
+
+    if df.empty:
+
+        st.info("Nenhuma Fonte de Recurso encontrada.")
+        return None
+
+    st.caption(
+        "Dê duplo clique em uma Fonte para alterar."
+    )
+
+    return sisget_grid_localizar(
+        df=df,
+        chave="localizar_fontes_recursos",
+        coluna_id="id",
+        altura=420
+    )
 def fonte_recurso_exercicios():
 
     dados = _sisget_fetch(
