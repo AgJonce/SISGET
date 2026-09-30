@@ -14729,20 +14729,63 @@ def ficha_orcamentaria_imprimir():
             key="baixar_pdf_fichas_orcamentarias"
         )
 
+# ============================================================
+# FICHAS ORÇAMENTÁRIAS - INCLUIR
+# ============================================================
+
+def ficha_orcamentaria_incluir():
+    ...
+
+
+# ============================================================
+# FICHAS ORÇAMENTÁRIAS - LOCALIZAR
+# ============================================================
+
+def ficha_orcamentaria_localizar():
+    ...
+
+
+# ============================================================
+# FICHAS ORÇAMENTÁRIAS - ALTERAR
+# ============================================================
+
+def ficha_orcamentaria_alterar(ficha_id):
+    ...
+
+
+# ============================================================
+# FICHAS ORÇAMENTÁRIAS - EXCLUIR
+# ============================================================
+
+def ficha_orcamentaria_excluir():
+    ...
+
+
+# ============================================================
+# FICHAS ORÇAMENTÁRIAS - IMPRIMIR
+# ============================================================
+
+def ficha_orcamentaria_imprimir():
+    ...
+
+
+# ============================================================
+# FICHAS ORÇAMENTÁRIAS - TELA PRINCIPAL
+# ============================================================
+
 def planejamento_fichas_orcamentarias():
 
     sisget_tela_principal(
         titulo="Fichas Orçamentárias",
         chave="fichas_orcamentarias",
-
         func_incluir=ficha_orcamentaria_incluir,
         func_localizar=ficha_orcamentaria_localizar,
         func_alterar=ficha_orcamentaria_alterar,
         func_excluir=ficha_orcamentaria_excluir,
         func_imprimir=ficha_orcamentaria_imprimir,
-
         icone="📄"
     )
+
 
 # ============================================================
 # SALDOS ORÇAMENTÁRIOS
@@ -14806,10 +14849,10 @@ def planejamento_relatorios():
         "Aqui serão gerados os relatórios orçamentários."
     )
 
+
 # ============================================================
 # SISCOM
 # ============================================================
-
 def modulo_siscom():
 
     modulo_em_desenvolvimento(
