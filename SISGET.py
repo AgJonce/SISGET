@@ -16427,11 +16427,13 @@ def planejamento_fichas_orcamentarias():
 # CLASSIFICAÇÕES ORÇAMENTÁRIAS
 # ============================================================
 
+# ============================================================
+# CLASSIFICAÇÕES ORÇAMENTÁRIAS
+# ============================================================
+
 def planejamento_classificacoes():
 
-    st.subheader(
-        "🧾 Classificações Orçamentárias"
-    )
+    st.subheader("🧾 Classificações Orçamentárias")
 
     abas = st.tabs([
         "🏷️ Funções",
@@ -16442,29 +16444,1748 @@ def planejamento_classificacoes():
     ])
 
     with abas[0]:
-
-        cadastro_funcoes_orcamentarias()
+        planejamento_funcoes()
 
     with abas[1]:
-
-        cadastro_subfuncoes_orcamentarias()
+        planejamento_subfuncoes()
 
     with abas[2]:
-
-        cadastro_programas_orcamentarios()
+        planejamento_programas()
 
     with abas[3]:
-
-        cadastro_acoes_orcamentarias()
+        planejamento_acoes()
 
     with abas[4]:
-
-        cadastro_naturezas_despesa()
-
+        planejamento_naturezas()
 # ============================================================
-# FUNÇÕES ORÇAMENTÁRIAS
+# FUNÇÕES - TELA PRINCIPAL
 # ============================================================
 
+def planejamento_funcoes():
+
+    sisget_tela_principal(
+        titulo="Funções Orçamentárias",
+        chave="funcoes_orcamentarias",
+        func_incluir=funcao_orcamentaria_incluir,
+        func_localizar=funcao_orcamentaria_localizar,
+        func_alterar=funcao_orcamentaria_alterar,
+        func_excluir=funcao_orcamentaria_excluir,
+        func_imprimir=funcao_orcamentaria_imprimir,
+        icone="🏷️"
+    )
+
+
+# ============================================================
+# FUNÇÃO - INCLUIR
+# ============================================================
+
+def funcao_orcamentaria_incluir():
+
+    with st.form(
+        "form_funcao_incluir",
+        clear_on_submit=True
+    ):
+
+        col1, col2 = st.columns([1, 4])
+
+        codigo = col1.text_input(
+            "Código *",
+            max_chars=10
+        )
+
+        descricao = col2.text_input(
+            "Descrição *",
+            max_chars=200
+        )
+
+        salvar = st.form_submit_button(
+            "💾 Salvar",
+            type="primary",
+            use_container_width=True
+        )
+
+    if salvar:
+
+        codigo = codigo.strip()
+        descricao = descricao.strip()
+
+        if not codigo or not descricao:
+            st.warning("⚠️ Informe código e descrição.")
+            return
+
+        existe = _sisget_fetchone(
+            """
+            SELECT id
+            FROM funcoes_orcamentarias
+            WHERE codigo = ?
+            """,
+            (codigo,)
+        )
+
+        if existe:
+            st.warning("⚠️ Esta Função já está cadastrada.")
+            return
+
+        if _sisget_salvar(
+            """
+            INSERT INTO funcoes_orcamentarias
+            (
+                codigo,
+                descricao,
+                ativo
+            )
+            VALUES (?, ?, TRUE)
+            """,
+            (
+                codigo,
+                descricao
+            )
+        ):
+
+            st.success("✅ Função cadastrada com sucesso!")
+            st.rerun()
+
+
+# ============================================================
+# FUNÇÃO - LOCALIZAR
+# ============================================================
+
+def funcao_orcamentaria_localizar():
+
+    pesquisa = st.text_input(
+        "🔎 Código ou descrição",
+        key="buscar_funcao_orc"
+    )
+
+    sql = """
+        SELECT
+            id,
+            codigo AS "Código",
+            descricao AS "Descrição",
+            CASE
+                WHEN ativo THEN 'Ativa'
+                ELSE 'Inativa'
+            END AS "Situação"
+        FROM funcoes_orcamentarias
+        WHERE 1 = 1
+    """
+
+    parametros = []
+
+    if pesquisa.strip():
+
+        termo = f"%{pesquisa.strip()}%"
+
+        sql += """
+            AND
+            (
+                codigo ILIKE ?
+                OR descricao ILIKE ?
+            )
+        """
+
+        parametros.extend([
+            termo,
+            termo
+        ])
+
+    sql += " ORDER BY codigo"
+
+    df = _sisget_dataframe(
+        sql,
+        tuple(parametros)
+    )
+
+    if df.empty:
+        st.info("Nenhuma Função encontrada.")
+        return None
+
+    return sisget_grid_localizar(
+        df=df,
+        chave="funcoes_orcamentarias",
+        coluna_id="id",
+        altura=420
+    )
+
+
+# ============================================================
+# FUNÇÃO - ALTERAR
+# ============================================================
+
+def funcao_orcamentaria_alterar(funcao_id):
+
+    registro = _sisget_fetchone(
+        """
+        SELECT
+            codigo,
+            descricao,
+            ativo
+        FROM funcoes_orcamentarias
+        WHERE id = ?
+        """,
+        (funcao_id,)
+    )
+
+    if not registro:
+        st.error("❌ Função não encontrada.")
+        return
+
+    codigo_atual, descricao_atual, ativo = registro
+
+    with st.form(
+        f"form_funcao_alterar_{funcao_id}"
+    ):
+
+        codigo = st.text_input(
+            "Código *",
+            value=codigo_atual or ""
+        )
+
+        descricao = st.text_input(
+            "Descrição *",
+            value=descricao_atual or ""
+        )
+
+        col1, col2 = st.columns(2)
+
+        salvar = col1.form_submit_button(
+            "💾 Salvar Alterações",
+            type="primary",
+            use_container_width=True
+        )
+
+        status = col2.form_submit_button(
+            "🚫 Inativar" if ativo else "✅ Ativar",
+            use_container_width=True
+        )
+
+    if status:
+
+        if _sisget_salvar(
+            """
+            UPDATE funcoes_orcamentarias
+            SET ativo = ?
+            WHERE id = ?
+            """,
+            (
+                not ativo,
+                funcao_id
+            )
+        ):
+
+            st.session_state[
+                "sisget_tela_funcoes_orcamentarias"
+            ] = "localizar"
+
+            st.rerun()
+
+    if salvar:
+
+        codigo = codigo.strip()
+        descricao = descricao.strip()
+
+        if not codigo or not descricao:
+            st.warning("⚠️ Informe código e descrição.")
+            return
+
+        duplicado = _sisget_fetchone(
+            """
+            SELECT id
+            FROM funcoes_orcamentarias
+            WHERE codigo = ?
+              AND id <> ?
+            """,
+            (
+                codigo,
+                funcao_id
+            )
+        )
+
+        if duplicado:
+            st.warning("⚠️ Já existe outra Função com este código.")
+            return
+
+        if _sisget_salvar(
+            """
+            UPDATE funcoes_orcamentarias
+            SET
+                codigo = ?,
+                descricao = ?
+            WHERE id = ?
+            """,
+            (
+                codigo,
+                descricao,
+                funcao_id
+            )
+        ):
+
+            st.session_state[
+                "sisget_tela_funcoes_orcamentarias"
+            ] = "localizar"
+
+            st.rerun()
+
+
+# ============================================================
+# FUNÇÃO - EXCLUIR
+# ============================================================
+
+def funcao_orcamentaria_excluir():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            id,
+            codigo AS "Código",
+            descricao AS "Descrição"
+        FROM funcoes_orcamentarias
+        ORDER BY codigo
+        """
+    )
+
+    if df.empty:
+        st.info("Nenhuma Função cadastrada.")
+        return
+
+    funcao_id = sisget_grid_localizar(
+        df=df,
+        chave="excluir_funcoes_orcamentarias",
+        coluna_id="id",
+        altura=420
+    )
+
+    if not funcao_id:
+        st.caption("Dê duplo clique na Função que deseja excluir.")
+        return
+
+    dependencias = _sisget_fetchone(
+        """
+        SELECT COUNT(*)
+        FROM subfuncoes_orcamentarias
+        WHERE funcao_id = ?
+        """,
+        (funcao_id,)
+    )
+
+    if dependencias and dependencias[0] > 0:
+
+        st.warning(
+            "⚠️ Esta Função possui Subfunções vinculadas "
+            "e não pode ser excluída."
+        )
+        return
+
+    confirmar = st.checkbox(
+        "Confirmo a exclusão desta Função.",
+        key=f"confirmar_funcao_{funcao_id}"
+    )
+
+    if st.button(
+        "🗑️ Confirmar Exclusão",
+        type="primary",
+        use_container_width=True,
+        key=f"excluir_funcao_{funcao_id}"
+    ):
+
+        if not confirmar:
+            st.warning("⚠️ Marque a confirmação.")
+            return
+
+        if _sisget_salvar(
+            """
+            DELETE FROM funcoes_orcamentarias
+            WHERE id = ?
+            """,
+            (funcao_id,)
+        ):
+
+            st.rerun()
+
+
+# ============================================================
+# FUNÇÃO - IMPRIMIR
+# ============================================================
+
+def funcao_orcamentaria_imprimir():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            codigo AS "Código",
+            descricao AS "Descrição",
+            CASE
+                WHEN ativo THEN 'Ativa'
+                ELSE 'Inativa'
+            END AS "Situação"
+        FROM funcoes_orcamentarias
+        ORDER BY codigo
+        """
+    )
+
+    sisget_relatorio_classificacao(
+        "Funções Orçamentárias",
+        df,
+        "funcoes_orcamentarias.pdf"
+    )
+
+# ============================================================
+# SUBFUNÇÕES - TELA PRINCIPAL
+# ============================================================
+
+def planejamento_subfuncoes():
+
+    sisget_tela_principal(
+        titulo="Subfunções Orçamentárias",
+        chave="subfuncoes_orcamentarias",
+        func_incluir=subfuncao_orcamentaria_incluir,
+        func_localizar=subfuncao_orcamentaria_localizar,
+        func_alterar=subfuncao_orcamentaria_alterar,
+        func_excluir=subfuncao_orcamentaria_excluir,
+        func_imprimir=subfuncao_orcamentaria_imprimir,
+        icone="🔹"
+    )
+
+
+def subfuncao_orcamentaria_incluir():
+
+    funcoes = _sisget_fetch(
+        """
+        SELECT id, codigo, descricao
+        FROM funcoes_orcamentarias
+        WHERE ativo = TRUE
+        ORDER BY codigo
+        """
+    )
+
+    if not funcoes:
+        st.warning("⚠️ Cadastre uma Função primeiro.")
+        return
+
+    mapa = {
+        f"{codigo} - {descricao}": id_
+        for id_, codigo, descricao in funcoes
+    }
+
+    with st.form(
+        "form_subfuncao_incluir",
+        clear_on_submit=True
+    ):
+
+        funcao_nome = st.selectbox(
+            "Função *",
+            list(mapa.keys())
+        )
+
+        col1, col2 = st.columns([1, 4])
+
+        codigo = col1.text_input("Código *")
+        descricao = col2.text_input("Descrição *")
+
+        salvar = st.form_submit_button(
+            "💾 Salvar",
+            type="primary",
+            use_container_width=True
+        )
+
+    if salvar:
+
+        funcao_id = mapa[funcao_nome]
+
+        codigo = codigo.strip()
+        descricao = descricao.strip()
+
+        if not codigo or not descricao:
+            st.warning("⚠️ Informe código e descrição.")
+            return
+
+        existe = _sisget_fetchone(
+            """
+            SELECT id
+            FROM subfuncoes_orcamentarias
+            WHERE funcao_id = ?
+              AND codigo = ?
+            """,
+            (
+                funcao_id,
+                codigo
+            )
+        )
+
+        if existe:
+            st.warning("⚠️ Subfunção já cadastrada.")
+            return
+
+        if _sisget_salvar(
+            """
+            INSERT INTO subfuncoes_orcamentarias
+            (
+                funcao_id,
+                codigo,
+                descricao,
+                ativo
+            )
+            VALUES (?, ?, ?, TRUE)
+            """,
+            (
+                funcao_id,
+                codigo,
+                descricao
+            )
+        ):
+
+            st.success("✅ Subfunção cadastrada.")
+            st.rerun()
+
+
+def subfuncao_orcamentaria_localizar():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            s.id,
+            f.codigo || ' - ' || f.descricao
+                AS "Função",
+            s.codigo AS "Código",
+            s.descricao AS "Descrição",
+            CASE
+                WHEN s.ativo THEN 'Ativa'
+                ELSE 'Inativa'
+            END AS "Situação"
+
+        FROM subfuncoes_orcamentarias s
+
+        INNER JOIN funcoes_orcamentarias f
+            ON f.id = s.funcao_id
+
+        ORDER BY
+            f.codigo,
+            s.codigo
+        """
+    )
+
+    if df.empty:
+        st.info("Nenhuma Subfunção encontrada.")
+        return None
+
+    return sisget_grid_localizar(
+        df=df,
+        chave="subfuncoes_orcamentarias",
+        coluna_id="id",
+        altura=420
+    )
+
+
+def subfuncao_orcamentaria_alterar(subfuncao_id):
+
+    registro = _sisget_fetchone(
+        """
+        SELECT
+            funcao_id,
+            codigo,
+            descricao,
+            ativo
+        FROM subfuncoes_orcamentarias
+        WHERE id = ?
+        """,
+        (subfuncao_id,)
+    )
+
+    if not registro:
+        st.error("❌ Subfunção não encontrada.")
+        return
+
+    funcao_atual, codigo_atual, descricao_atual, ativo = registro
+
+    funcoes = _sisget_fetch(
+        """
+        SELECT id, codigo, descricao
+        FROM funcoes_orcamentarias
+        ORDER BY codigo
+        """
+    )
+
+    mapa = {
+        f"{codigo} - {descricao}": id_
+        for id_, codigo, descricao in funcoes
+    }
+
+    nomes = list(mapa.keys())
+
+    indice = 0
+
+    for i, nome in enumerate(nomes):
+        if mapa[nome] == funcao_atual:
+            indice = i
+            break
+
+    with st.form(
+        f"form_subfuncao_alterar_{subfuncao_id}"
+    ):
+
+        funcao_nome = st.selectbox(
+            "Função *",
+            nomes,
+            index=indice
+        )
+
+        codigo = st.text_input(
+            "Código *",
+            value=codigo_atual or ""
+        )
+
+        descricao = st.text_input(
+            "Descrição *",
+            value=descricao_atual or ""
+        )
+
+        col1, col2 = st.columns(2)
+
+        salvar = col1.form_submit_button(
+            "💾 Salvar Alterações",
+            type="primary",
+            use_container_width=True
+        )
+
+        status = col2.form_submit_button(
+            "🚫 Inativar" if ativo else "✅ Ativar",
+            use_container_width=True
+        )
+
+    if status:
+
+        if _sisget_salvar(
+            """
+            UPDATE subfuncoes_orcamentarias
+            SET ativo = ?
+            WHERE id = ?
+            """,
+            (
+                not ativo,
+                subfuncao_id
+            )
+        ):
+
+            st.session_state[
+                "sisget_tela_subfuncoes_orcamentarias"
+            ] = "localizar"
+
+            st.rerun()
+
+    if salvar:
+
+        if _sisget_salvar(
+            """
+            UPDATE subfuncoes_orcamentarias
+            SET
+                funcao_id = ?,
+                codigo = ?,
+                descricao = ?
+            WHERE id = ?
+            """,
+            (
+                mapa[funcao_nome],
+                codigo.strip(),
+                descricao.strip(),
+                subfuncao_id
+            )
+        ):
+
+            st.session_state[
+                "sisget_tela_subfuncoes_orcamentarias"
+            ] = "localizar"
+
+            st.rerun()
+
+
+def subfuncao_orcamentaria_excluir():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            s.id,
+            f.codigo AS "Função",
+            s.codigo AS "Código",
+            s.descricao AS "Descrição"
+        FROM subfuncoes_orcamentarias s
+        INNER JOIN funcoes_orcamentarias f
+            ON f.id = s.funcao_id
+        ORDER BY f.codigo, s.codigo
+        """
+    )
+
+    if df.empty:
+        st.info("Nenhuma Subfunção cadastrada.")
+        return
+
+    registro_id = sisget_grid_localizar(
+        df=df,
+        chave="excluir_subfuncoes",
+        coluna_id="id",
+        altura=420
+    )
+
+    if not registro_id:
+        st.caption("Dê duplo clique na Subfunção.")
+        return
+
+    if st.button(
+        "🗑️ Confirmar Exclusão",
+        type="primary",
+        use_container_width=True,
+        key=f"excluir_subfuncao_{registro_id}"
+    ):
+
+        if _sisget_salvar(
+            """
+            DELETE FROM subfuncoes_orcamentarias
+            WHERE id = ?
+            """,
+            (registro_id,)
+        ):
+
+            st.rerun()
+
+# ============================================================
+# PROGRAMAS
+# ============================================================
+
+def planejamento_programas():
+
+    sisget_tela_principal(
+        titulo="Programas Orçamentários",
+        chave="programas_orcamentarios",
+        func_incluir=programa_orcamentario_incluir,
+        func_localizar=programa_orcamentario_localizar,
+        func_alterar=programa_orcamentario_alterar,
+        func_excluir=programa_orcamentario_excluir,
+        func_imprimir=programa_orcamentario_imprimir,
+        icone="📘"
+    )
+
+
+def programa_orcamentario_incluir():
+
+    with st.form(
+        "form_programa_incluir",
+        clear_on_submit=True
+    ):
+
+        col1, col2 = st.columns([1, 1])
+
+        exercicio = col1.number_input(
+            "Exercício *",
+            2000,
+            2100,
+            datetime.now().year
+        )
+
+        codigo = col2.text_input(
+            "Código *"
+        )
+
+        descricao = st.text_input(
+            "Descrição *"
+        )
+
+        salvar = st.form_submit_button(
+            "💾 Salvar",
+            type="primary",
+            use_container_width=True
+        )
+
+    if salvar:
+
+        if _sisget_salvar(
+            """
+            INSERT INTO programas_orcamentarios
+            (
+                exercicio,
+                codigo,
+                descricao,
+                ativo
+            )
+            VALUES (?, ?, ?, TRUE)
+            """,
+            (
+                int(exercicio),
+                codigo.strip(),
+                descricao.strip()
+            )
+        ):
+
+            st.success("✅ Programa cadastrado.")
+            st.rerun()
+
+
+def programa_orcamentario_localizar():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            id,
+            exercicio AS "Exercício",
+            codigo AS "Código",
+            descricao AS "Descrição",
+            CASE
+                WHEN ativo THEN 'Ativo'
+                ELSE 'Inativo'
+            END AS "Situação"
+        FROM programas_orcamentarios
+        ORDER BY exercicio DESC, codigo
+        """
+    )
+
+    if df.empty:
+        st.info("Nenhum Programa encontrado.")
+        return None
+
+    return sisget_grid_localizar(
+        df=df,
+        chave="programas_orcamentarios",
+        coluna_id="id",
+        altura=420
+    )
+
+
+def programa_orcamentario_alterar(programa_id):
+
+    registro = _sisget_fetchone(
+        """
+        SELECT
+            exercicio,
+            codigo,
+            descricao,
+            ativo
+        FROM programas_orcamentarios
+        WHERE id = ?
+        """,
+        (programa_id,)
+    )
+
+    if not registro:
+        return
+
+    exercicio, codigo_atual, descricao_atual, ativo = registro
+
+    with st.form(
+        f"form_programa_alterar_{programa_id}"
+    ):
+
+        st.number_input(
+            "Exercício",
+            value=int(exercicio),
+            disabled=True
+        )
+
+        codigo = st.text_input(
+            "Código *",
+            value=codigo_atual or ""
+        )
+
+        descricao = st.text_input(
+            "Descrição *",
+            value=descricao_atual or ""
+        )
+
+        col1, col2 = st.columns(2)
+
+        salvar = col1.form_submit_button(
+            "💾 Salvar Alterações",
+            type="primary",
+            use_container_width=True
+        )
+
+        status = col2.form_submit_button(
+            "🚫 Inativar" if ativo else "✅ Ativar",
+            use_container_width=True
+        )
+
+    if status:
+
+        _sisget_salvar(
+            """
+            UPDATE programas_orcamentarios
+            SET ativo = ?
+            WHERE id = ?
+            """,
+            (
+                not ativo,
+                programa_id
+            )
+        )
+
+        st.rerun()
+
+    if salvar:
+
+        if _sisget_salvar(
+            """
+            UPDATE programas_orcamentarios
+            SET
+                codigo = ?,
+                descricao = ?
+            WHERE id = ?
+            """,
+            (
+                codigo.strip(),
+                descricao.strip(),
+                programa_id
+            )
+        ):
+
+            st.rerun()
+
+
+def programa_orcamentario_excluir():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            id,
+            exercicio AS "Exercício",
+            codigo AS "Código",
+            descricao AS "Descrição"
+        FROM programas_orcamentarios
+        ORDER BY exercicio DESC, codigo
+        """
+    )
+
+    if df.empty:
+        return
+
+    programa_id = sisget_grid_localizar(
+        df=df,
+        chave="excluir_programa",
+        coluna_id="id",
+        altura=420
+    )
+
+    if not programa_id:
+        return
+
+    filhos = _sisget_fetchone(
+        """
+        SELECT COUNT(*)
+        FROM acoes_orcamentarias
+        WHERE programa_id = ?
+        """,
+        (programa_id,)
+    )
+
+    if filhos and filhos[0] > 0:
+
+        st.warning(
+            "⚠️ Este Programa possui Ações vinculadas."
+        )
+        return
+
+    if st.button(
+        "🗑️ Confirmar Exclusão",
+        type="primary",
+        use_container_width=True,
+        key=f"excluir_programa_{programa_id}"
+    ):
+
+        if _sisget_salvar(
+            """
+            DELETE FROM programas_orcamentarios
+            WHERE id = ?
+            """,
+            (programa_id,)
+        ):
+
+            st.rerun()
+
+# ============================================================
+# AÇÕES
+# ============================================================
+
+def planejamento_acoes():
+
+    sisget_tela_principal(
+        titulo="Ações Orçamentárias",
+        chave="acoes_orcamentarias",
+        func_incluir=acao_orcamentaria_incluir,
+        func_localizar=acao_orcamentaria_localizar,
+        func_alterar=acao_orcamentaria_alterar,
+        func_excluir=acao_orcamentaria_excluir,
+        func_imprimir=acao_orcamentaria_imprimir,
+        icone="🎯"
+    )
+
+
+def acao_orcamentaria_incluir():
+
+    programas = _sisget_fetch(
+        """
+        SELECT id, exercicio, codigo, descricao
+        FROM programas_orcamentarios
+        WHERE ativo = TRUE
+        ORDER BY exercicio DESC, codigo
+        """
+    )
+
+    if not programas:
+        st.warning("⚠️ Cadastre um Programa primeiro.")
+        return
+
+    mapa = {
+        f"{exercicio} - {codigo} - {descricao}": id_
+        for id_, exercicio, codigo, descricao in programas
+    }
+
+    with st.form(
+        "form_acao_incluir",
+        clear_on_submit=True
+    ):
+
+        programa = st.selectbox(
+            "Programa *",
+            list(mapa.keys())
+        )
+
+        codigo = st.text_input(
+            "Código *"
+        )
+
+        descricao = st.text_input(
+            "Descrição *"
+        )
+
+        salvar = st.form_submit_button(
+            "💾 Salvar",
+            type="primary",
+            use_container_width=True
+        )
+
+    if salvar:
+
+        if _sisget_salvar(
+            """
+            INSERT INTO acoes_orcamentarias
+            (
+                programa_id,
+                codigo,
+                descricao,
+                ativo
+            )
+            VALUES (?, ?, ?, TRUE)
+            """,
+            (
+                mapa[programa],
+                codigo.strip(),
+                descricao.strip()
+            )
+        ):
+
+            st.success("✅ Ação cadastrada.")
+            st.rerun()
+
+
+def acao_orcamentaria_localizar():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            a.id,
+            p.exercicio AS "Exercício",
+            p.codigo || ' - ' || p.descricao
+                AS "Programa",
+            a.codigo AS "Código",
+            a.descricao AS "Descrição",
+            CASE
+                WHEN a.ativo THEN 'Ativa'
+                ELSE 'Inativa'
+            END AS "Situação"
+
+        FROM acoes_orcamentarias a
+
+        INNER JOIN programas_orcamentarios p
+            ON p.id = a.programa_id
+
+        ORDER BY
+            p.exercicio DESC,
+            p.codigo,
+            a.codigo
+        """
+    )
+
+    if df.empty:
+        return None
+
+    return sisget_grid_localizar(
+        df=df,
+        chave="acoes_orcamentarias",
+        coluna_id="id",
+        altura=420
+    )
+
+
+def acao_orcamentaria_alterar(acao_id):
+
+    registro = _sisget_fetchone(
+        """
+        SELECT
+            programa_id,
+            codigo,
+            descricao,
+            ativo
+        FROM acoes_orcamentarias
+        WHERE id = ?
+        """,
+        (acao_id,)
+    )
+
+    if not registro:
+        return
+
+    programa_id, codigo_atual, descricao_atual, ativo = registro
+
+    programas = _sisget_fetch(
+        """
+        SELECT id, exercicio, codigo, descricao
+        FROM programas_orcamentarios
+        ORDER BY exercicio DESC, codigo
+        """
+    )
+
+    mapa = {
+        f"{exercicio} - {codigo} - {descricao}": id_
+        for id_, exercicio, codigo, descricao in programas
+    }
+
+    nomes = list(mapa.keys())
+
+    indice = 0
+
+    for i, nome in enumerate(nomes):
+        if mapa[nome] == programa_id:
+            indice = i
+            break
+
+    with st.form(
+        f"form_acao_alterar_{acao_id}"
+    ):
+
+        programa = st.selectbox(
+            "Programa *",
+            nomes,
+            index=indice
+        )
+
+        codigo = st.text_input(
+            "Código *",
+            value=codigo_atual or ""
+        )
+
+        descricao = st.text_input(
+            "Descrição *",
+            value=descricao_atual or ""
+        )
+
+        col1, col2 = st.columns(2)
+
+        salvar = col1.form_submit_button(
+            "💾 Salvar Alterações",
+            type="primary",
+            use_container_width=True
+        )
+
+        status = col2.form_submit_button(
+            "🚫 Inativar" if ativo else "✅ Ativar",
+            use_container_width=True
+        )
+
+    if status:
+
+        _sisget_salvar(
+            """
+            UPDATE acoes_orcamentarias
+            SET ativo = ?
+            WHERE id = ?
+            """,
+            (
+                not ativo,
+                acao_id
+            )
+        )
+
+        st.rerun()
+
+    if salvar:
+
+        if _sisget_salvar(
+            """
+            UPDATE acoes_orcamentarias
+            SET
+                programa_id = ?,
+                codigo = ?,
+                descricao = ?
+            WHERE id = ?
+            """,
+            (
+                mapa[programa],
+                codigo.strip(),
+                descricao.strip(),
+                acao_id
+            )
+        ):
+
+            st.rerun()
+
+
+def acao_orcamentaria_excluir():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            a.id,
+            p.codigo AS "Programa",
+            a.codigo AS "Código",
+            a.descricao AS "Descrição"
+        FROM acoes_orcamentarias a
+        INNER JOIN programas_orcamentarios p
+            ON p.id = a.programa_id
+        ORDER BY p.codigo, a.codigo
+        """
+    )
+
+    if df.empty:
+        return
+
+    acao_id = sisget_grid_localizar(
+        df=df,
+        chave="excluir_acao",
+        coluna_id="id",
+        altura=420
+    )
+
+    if not acao_id:
+        return
+
+    if st.button(
+        "🗑️ Confirmar Exclusão",
+        type="primary",
+        use_container_width=True,
+        key=f"excluir_acao_{acao_id}"
+    ):
+
+        if _sisget_salvar(
+            """
+            DELETE FROM acoes_orcamentarias
+            WHERE id = ?
+            """,
+            (acao_id,)
+        ):
+
+            st.rerun()
+
+# ============================================================
+# NATUREZAS DA DESPESA
+# ============================================================
+
+def planejamento_naturezas():
+
+    sisget_tela_principal(
+        titulo="Naturezas da Despesa",
+        chave="naturezas_despesa",
+        func_incluir=natureza_despesa_incluir,
+        func_localizar=natureza_despesa_localizar,
+        func_alterar=natureza_despesa_alterar,
+        func_excluir=natureza_despesa_excluir,
+        func_imprimir=natureza_despesa_imprimir,
+        icone="💵"
+    )
+
+
+def natureza_despesa_incluir():
+
+    with st.form(
+        "form_natureza_incluir",
+        clear_on_submit=True
+    ):
+
+        codigo = st.text_input(
+            "Código *",
+            placeholder="Ex.: 3.3.90.30.00"
+        )
+
+        descricao = st.text_input(
+            "Descrição *",
+            placeholder="Ex.: Material de Consumo"
+        )
+
+        salvar = st.form_submit_button(
+            "💾 Salvar",
+            type="primary",
+            use_container_width=True
+        )
+
+    if salvar:
+
+        codigo = codigo.strip()
+        descricao = descricao.strip()
+
+        if not codigo or not descricao:
+            st.warning("⚠️ Informe código e descrição.")
+            return
+
+        if _sisget_salvar(
+            """
+            INSERT INTO naturezas_despesa
+            (
+                codigo,
+                descricao,
+                ativo
+            )
+            VALUES (?, ?, TRUE)
+            """,
+            (
+                codigo,
+                descricao
+            )
+        ):
+
+            st.success("✅ Natureza cadastrada.")
+            st.rerun()
+
+
+def natureza_despesa_localizar():
+
+    pesquisa = st.text_input(
+        "🔎 Código ou descrição",
+        key="buscar_natureza"
+    )
+
+    sql = """
+        SELECT
+            id,
+            codigo AS "Código",
+            descricao AS "Descrição",
+            CASE
+                WHEN ativo THEN 'Ativa'
+                ELSE 'Inativa'
+            END AS "Situação"
+        FROM naturezas_despesa
+        WHERE 1 = 1
+    """
+
+    parametros = []
+
+    if pesquisa.strip():
+
+        termo = f"%{pesquisa.strip()}%"
+
+        sql += """
+            AND
+            (
+                codigo ILIKE ?
+                OR descricao ILIKE ?
+            )
+        """
+
+        parametros.extend([
+            termo,
+            termo
+        ])
+
+    sql += " ORDER BY codigo"
+
+    df = _sisget_dataframe(
+        sql,
+        tuple(parametros)
+    )
+
+    if df.empty:
+        return None
+
+    return sisget_grid_localizar(
+        df=df,
+        chave="naturezas_despesa",
+        coluna_id="id",
+        altura=420
+    )
+
+
+def natureza_despesa_alterar(natureza_id):
+
+    registro = _sisget_fetchone(
+        """
+        SELECT
+            codigo,
+            descricao,
+            ativo
+        FROM naturezas_despesa
+        WHERE id = ?
+        """,
+        (natureza_id,)
+    )
+
+    if not registro:
+        return
+
+    codigo_atual, descricao_atual, ativo = registro
+
+    with st.form(
+        f"form_natureza_alterar_{natureza_id}"
+    ):
+
+        codigo = st.text_input(
+            "Código *",
+            value=codigo_atual or ""
+        )
+
+        descricao = st.text_input(
+            "Descrição *",
+            value=descricao_atual or ""
+        )
+
+        col1, col2 = st.columns(2)
+
+        salvar = col1.form_submit_button(
+            "💾 Salvar Alterações",
+            type="primary",
+            use_container_width=True
+        )
+
+        status = col2.form_submit_button(
+            "🚫 Inativar" if ativo else "✅ Ativar",
+            use_container_width=True
+        )
+
+    if status:
+
+        _sisget_salvar(
+            """
+            UPDATE naturezas_despesa
+            SET ativo = ?
+            WHERE id = ?
+            """,
+            (
+                not ativo,
+                natureza_id
+            )
+        )
+
+        st.rerun()
+
+    if salvar:
+
+        if _sisget_salvar(
+            """
+            UPDATE naturezas_despesa
+            SET
+                codigo = ?,
+                descricao = ?
+            WHERE id = ?
+            """,
+            (
+                codigo.strip(),
+                descricao.strip(),
+                natureza_id
+            )
+        ):
+
+            st.rerun()
+
+
+def natureza_despesa_excluir():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            id,
+            codigo AS "Código",
+            descricao AS "Descrição"
+        FROM naturezas_despesa
+        ORDER BY codigo
+        """
+    )
+
+    if df.empty:
+        return
+
+    natureza_id = sisget_grid_localizar(
+        df=df,
+        chave="excluir_natureza",
+        coluna_id="id",
+        altura=420
+    )
+
+    if not natureza_id:
+        return
+
+    if st.button(
+        "🗑️ Confirmar Exclusão",
+        type="primary",
+        use_container_width=True,
+        key=f"excluir_natureza_{natureza_id}"
+    ):
+
+        if _sisget_salvar(
+            """
+            DELETE FROM naturezas_despesa
+            WHERE id = ?
+            """,
+            (natureza_id,)
+        ):
+
+            st.rerun()
+
+# ============================================================
+# RELATÓRIO GENÉRICO DAS CLASSIFICAÇÕES
+# ============================================================
+
+def sisget_relatorio_classificacao(
+    titulo,
+    df,
+    nome_arquivo
+):
+
+    if df.empty:
+
+        st.info(
+            "Nenhum registro encontrado."
+        )
+
+        return
+
+    st.dataframe(
+        df,
+        use_container_width=True,
+        hide_index=True
+    )
+
+    st.caption(
+        f"Total de registros: {len(df)}"
+    )
+
+    if st.button(
+        "📄 Gerar PDF",
+        type="primary",
+        use_container_width=True,
+        key=f"pdf_{nome_arquivo}"
+    ):
+
+        buffer = BytesIO()
+
+        documento = SimpleDocTemplate(
+            buffer,
+            pagesize=A4,
+            rightMargin=1 * cm,
+            leftMargin=1 * cm,
+            topMargin=1 * cm,
+            bottomMargin=1 * cm
+        )
+
+        estilos = getSampleStyleSheet()
+
+        estilo_celula = ParagraphStyle(
+            "celula_classificacao",
+            parent=estilos["Normal"],
+            fontSize=7,
+            leading=9
+        )
+
+        elementos = []
+
+        elementos.append(
+            Paragraph(
+                "SISGET - Sistema Integrado de Gestão Pública",
+                estilos["Heading1"]
+            )
+        )
+
+        elementos.append(
+            Paragraph(
+                titulo,
+                estilos["Heading2"]
+            )
+        )
+
+        elementos.append(
+            Spacer(
+                1,
+                0.4 * cm
+            )
+        )
+
+        cabecalho = list(
+            df.columns
+        )
+
+        dados_tabela = [
+            [
+                Paragraph(
+                    str(coluna),
+                    estilo_celula
+                )
+                for coluna in cabecalho
+            ]
+        ]
+
+        for _, linha in df.iterrows():
+
+            dados_tabela.append([
+                Paragraph(
+                    str(
+                        linha[coluna]
+                        if pd.notna(linha[coluna])
+                        else ""
+                    ),
+                    estilo_celula
+                )
+                for coluna in cabecalho
+            ])
+
+        largura_total = (
+            19 * cm
+        )
+
+        largura_coluna = (
+            largura_total
+            /
+            len(cabecalho)
+        )
+
+        tabela = Table(
+            dados_tabela,
+            colWidths=[
+                largura_coluna
+                for _ in cabecalho
+            ],
+            repeatRows=1
+        )
+
+        tabela.setStyle(
+            TableStyle([
+                (
+                    "BACKGROUND",
+                    (0, 0),
+                    (-1, 0),
+                    colors.lightgrey
+                ),
+                (
+                    "FONTNAME",
+                    (0, 0),
+                    (-1, 0),
+                    "Helvetica-Bold"
+                ),
+                (
+                    "GRID",
+                    (0, 0),
+                    (-1, -1),
+                    0.4,
+                    colors.grey
+                ),
+                (
+                    "VALIGN",
+                    (0, 0),
+                    (-1, -1),
+                    "TOP"
+                )
+            ])
+        )
+
+        elementos.append(
+            tabela
+        )
+
+        documento.build(
+            elementos
+        )
+
+        buffer.seek(0)
+
+        st.download_button(
+            "⬇️ Baixar PDF",
+            data=buffer,
+            file_name=nome_arquivo,
+            mime="application/pdf",
+            use_container_width=True,
+            key=f"download_{nome_arquivo}"
+        )
+def natureza_despesa_imprimir():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            codigo AS "Código",
+            descricao AS "Descrição",
+            CASE
+                WHEN ativo THEN 'Ativa'
+                ELSE 'Inativa'
+            END AS "Situação"
+        FROM naturezas_despesa
+        ORDER BY codigo
+        """
+    )
+
+    sisget_relatorio_classificacao(
+        "Naturezas da Despesa",
+        df,
+        "naturezas_despesa.pdf"
+    )
+def acao_orcamentaria_imprimir():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            p.exercicio AS "Exercício",
+            p.codigo || ' - ' || p.descricao AS "Programa",
+            a.codigo AS "Código",
+            a.descricao AS "Descrição"
+        FROM acoes_orcamentarias a
+        INNER JOIN programas_orcamentarios p
+            ON p.id = a.programa_id
+        ORDER BY p.exercicio DESC, p.codigo, a.codigo
+        """
+    )
+
+    sisget_relatorio_classificacao(
+        "Ações Orçamentárias",
+        df,
+        "acoes_orcamentarias.pdf"
+    )
+def programa_orcamentario_imprimir():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            exercicio AS "Exercício",
+            codigo AS "Código",
+            descricao AS "Descrição"
+        FROM programas_orcamentarios
+        ORDER BY exercicio DESC, codigo
+        """
+    )
+
+    sisget_relatorio_classificacao(
+        "Programas Orçamentários",
+        df,
+        "programas_orcamentarios.pdf"
+    )
+def subfuncao_orcamentaria_imprimir():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            f.codigo || ' - ' || f.descricao AS "Função",
+            s.codigo AS "Código",
+            s.descricao AS "Descrição"
+        FROM subfuncoes_orcamentarias s
+        INNER JOIN funcoes_orcamentarias f
+            ON f.id = s.funcao_id
+        ORDER BY f.codigo, s.codigo
+        """
+    )
+
+    sisget_relatorio_classificacao(
+        "Subfunções Orçamentárias",
+        df,
+        "subfuncoes_orcamentarias.pdf"
+    )
 def cadastro_funcoes_orcamentarias():
 
     st.markdown(
