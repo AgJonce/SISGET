@@ -18653,7 +18653,7 @@ def subfuncao_orcamentaria_excluir():
 # PROGRAMAS
 # ============================================================
 
-def planejamento_programas():
+def planejamento_programas_orcamentarios():
 
     sisget_tela_principal(
         titulo="Programas Orçamentários",
@@ -19289,7 +19289,7 @@ def programa_orcamentario_excluir():
 # AÇÕES
 # ============================================================
 
-def planejamento_acoes():
+def planejamento_acoes_orcamentarias():
 
     sisget_tela_principal(
         titulo="Ações Orçamentárias",
