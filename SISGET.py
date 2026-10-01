@@ -13293,17 +13293,15 @@ def modulo_planejamento():
 
     st.divider()
 
-    # ========================================================
-    # SELECTBOX DOS MÓDULOS
-    # ========================================================
-
     modulo = st.selectbox(
         "Módulo *",
         options=[
             "Selecione...",
-            "🧾 Classificações Orçamentárias",
-            "📘 Programas Orçamentários",
-            "🎯 Ações Orçamentárias",
+            "🧾 Funções Orçamentárias",
+            "🧾 Subfunções Orçamentárias",
+            "📘 Programas",
+            "🎯 Ações",
+            "💰 Naturezas da Despesa",
             "💧 Fontes de Recursos",
             "📄 Fichas Orçamentárias"
         ],
@@ -13311,10 +13309,6 @@ def modulo_planejamento():
     )
 
     st.divider()
-
-    # ========================================================
-    # NENHUM MÓDULO SELECIONADO
-    # ========================================================
 
     if modulo == "Selecione...":
 
@@ -13324,41 +13318,29 @@ def modulo_planejamento():
 
         return
 
-    # ========================================================
-    # CLASSIFICAÇÕES ORÇAMENTÁRIAS
-    # ========================================================
+    elif modulo == "🧾 Funções Orçamentárias":
 
-    if modulo == "🧾 Classificações Orçamentárias":
+        planejamento_funcoes_orcamentarias()
 
-        planejamento_classificacoes()
+    elif modulo == "🧾 Subfunções Orçamentárias":
 
-    # ========================================================
-    # PROGRAMAS ORÇAMENTÁRIOS
-    # ========================================================
+        planejamento_subfuncoes_orcamentarias()
 
-    elif modulo == "📘 Programas Orçamentários":
+    elif modulo == "📘 Programas":
 
         planejamento_programas_orcamentarios()
 
-    # ========================================================
-    # AÇÕES ORÇAMENTÁRIAS
-    # ========================================================
-
-    elif modulo == "🎯 Ações Orçamentárias":
+    elif modulo == "🎯 Ações":
 
         planejamento_acoes_orcamentarias()
 
-    # ========================================================
-    # FONTES DE RECURSOS
-    # ========================================================
+    elif modulo == "💰 Naturezas da Despesa":
+
+        planejamento_naturezas_despesa()
 
     elif modulo == "💧 Fontes de Recursos":
 
         planejamento_fontes_recursos()
-
-    # ========================================================
-    # FICHAS ORÇAMENTÁRIAS
-    # ========================================================
 
     elif modulo == "📄 Fichas Orçamentárias":
 
