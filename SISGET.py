@@ -13318,33 +13318,33 @@ def modulo_planejamento():
 
         return
 
-    elif modulo == "🧾 Funções Orçamentárias":
+elif modulo == "🧾 Funções Orçamentárias":
 
-        planejamento_funcoes_orcamentarias()
+    planejamento_funcoes()
 
-    elif modulo == "🧾 Subfunções Orçamentárias":
+elif modulo == "🧾 Subfunções Orçamentárias":
 
-        planejamento_subfuncoes_orcamentarias()
+    planejamento_subfuncoes_orcamentarias()
 
-    elif modulo == "📘 Programas":
+elif modulo == "📘 Programas":
 
-        planejamento_programas_orcamentarios()
+    planejamento_programas_orcamentarios()
 
-    elif modulo == "🎯 Ações":
+elif modulo == "🎯 Ações":
 
-        planejamento_acoes_orcamentarias()
+    planejamento_acoes_orcamentarias()
 
-    elif modulo == "💰 Naturezas da Despesa":
+elif modulo == "💰 Naturezas da Despesa":
 
-        planejamento_naturezas_despesa()
+    planejamento_naturezas()
 
-    elif modulo == "💧 Fontes de Recursos":
+elif modulo == "💧 Fontes de Recursos":
 
-        planejamento_fontes_recursos()
+    planejamento_fontes_recursos()
 
-    elif modulo == "📄 Fichas Orçamentárias":
+elif modulo == "📄 Fichas Orçamentárias":
 
-        planejamento_fichas_orcamentarias()
+    planejamento_fichas_orcamentarias()
 
 def ficha_orcamentaria_incluir():
 
