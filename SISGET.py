@@ -13345,6 +13345,7 @@ def modulo_planejamento():
     elif modulo == "📄 Fichas Orçamentárias":
 
         planejamento_fichas_orcamentarias()
+
 def ficha_orcamentaria_incluir():
 
   # ========================================================
@@ -18318,7 +18319,7 @@ def funcao_orcamentaria_imprimir():
 # SUBFUNÇÕES - TELA PRINCIPAL
 # ============================================================
 
-def planejamento_subfuncoes():
+def planejamento_subfuncoes_orcamentarias():
 
     sisget_tela_principal(
         titulo="Subfunções Orçamentárias",
