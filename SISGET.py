@@ -26614,8 +26614,6 @@ def fornecedor_representante_alterar(
 
             st.rerun()
 
-    )
-
 
 # ============================================================
 # GRUPOS
