@@ -30382,7 +30382,297 @@ def solicitacao_riscos_editar(
         )
         st.rerun()
 
+# ============================================================
+# FORNECEDORES - TELA PRINCIPAL
+# ============================================================
 
+def cadastro_fornecedores():
+
+    # ========================================================
+    # ESTADO DA TELA
+    # ========================================================
+
+    chave_tela = "sisget_tela_fornecedores"
+
+    if chave_tela not in st.session_state:
+
+        st.session_state[
+            chave_tela
+        ] = "principal"
+
+    tela = st.session_state[
+        chave_tela
+    ]
+
+    # ========================================================
+    # TELA PRINCIPAL
+    # ========================================================
+
+    if tela == "principal":
+
+        # ====================================================
+        # CABEÇALHO + VOLTAR
+        # ====================================================
+
+        col_titulo, col_voltar = st.columns(
+            [6, 1]
+        )
+
+        with col_titulo:
+
+            st.title(
+                "🏢 Fornecedores"
+            )
+
+        with col_voltar:
+
+            if st.button(
+                "⬅️ Voltar",
+                use_container_width=True,
+                key="voltar_fornecedores_solicitacoes"
+            ):
+
+                st.session_state[
+                    "sisget_tela_fornecedores"
+                ] = "principal"
+
+                st.session_state[
+                    "sisget_fornecedor_id"
+                ] = None
+
+                # VOLTA PARA O MENU PRINCIPAL DE SOLICITAÇÕES
+                st.session_state[
+                    "sisget_modulo_solicitacoes"
+                ] = "Selecione..."
+
+                st.rerun()
+
+        st.markdown("---")
+
+        # ====================================================
+        # PRIMEIRA LINHA
+        # ====================================================
+
+        col1, col2, col3 = st.columns(3)
+
+        if col1.button(
+            "➕ Incluir",
+            type="primary",
+            use_container_width=True,
+            key="fornecedor_principal_incluir"
+        ):
+
+            st.session_state[
+                chave_tela
+            ] = "incluir"
+
+            st.rerun()
+
+        if col2.button(
+            "🔎 Localizar",
+            use_container_width=True,
+            key="fornecedor_principal_localizar"
+        ):
+
+            st.session_state[
+                chave_tela
+            ] = "localizar"
+
+            st.rerun()
+
+        if col3.button(
+            "👥 Representantes",
+            use_container_width=True,
+            key="fornecedor_principal_representantes"
+        ):
+
+            st.session_state[
+                chave_tela
+            ] = "representantes"
+
+            st.rerun()
+
+        # ====================================================
+        # SEGUNDA LINHA
+        # ====================================================
+
+        col4, col5, col6 = st.columns(3)
+
+        if col4.button(
+            "📑 Regularidades / Documentos",
+            use_container_width=True,
+            key="fornecedor_principal_documentos"
+        ):
+
+            st.session_state[
+                chave_tela
+            ] = "documentos"
+
+            st.rerun()
+
+        if col5.button(
+            "🗑️ Excluir",
+            use_container_width=True,
+            key="fornecedor_principal_excluir"
+        ):
+
+            st.session_state[
+                chave_tela
+            ] = "excluir"
+
+            st.rerun()
+
+        if col6.button(
+            "🖨️ Imprimir",
+            use_container_width=True,
+            key="fornecedor_principal_imprimir"
+        ):
+
+            st.session_state[
+                chave_tela
+            ] = "imprimir"
+
+            st.rerun()
+
+        st.markdown("---")
+
+        return
+
+    # ========================================================
+    # INCLUIR
+    # ========================================================
+
+    elif tela == "incluir":
+
+        sisget_cabecalho_tela(
+            "➕ Incluir Fornecedor",
+            voltar=lambda: fornecedor_voltar_principal(),
+            chave="fornecedor_incluir"
+        )
+
+        fornecedor_incluir()
+
+    # ========================================================
+    # LOCALIZAR
+    # ========================================================
+
+    elif tela == "localizar":
+
+        sisget_cabecalho_tela(
+            "🔎 Localizar Fornecedor",
+            voltar=lambda: fornecedor_voltar_principal(),
+            chave="fornecedor_localizar"
+        )
+
+        registro_id = fornecedor_localizar()
+
+        if registro_id:
+
+            st.session_state[
+                "sisget_fornecedor_id"
+            ] = registro_id
+
+            st.session_state[
+                chave_tela
+            ] = "alterar"
+
+            st.rerun()
+
+    # ========================================================
+    # ALTERAR
+    # ========================================================
+
+    elif tela == "alterar":
+
+        registro_id = st.session_state.get(
+            "sisget_fornecedor_id"
+        )
+
+        if not registro_id:
+
+            st.session_state[
+                chave_tela
+            ] = "localizar"
+
+            st.rerun()
+
+        sisget_cabecalho_tela(
+            "✏️ Alterar Fornecedor",
+            voltar=lambda: fornecedor_voltar_localizar(),
+            chave="fornecedor_alterar"
+        )
+
+        fornecedor_alterar(
+            registro_id
+        )
+
+    # ========================================================
+    # REPRESENTANTES
+    # ========================================================
+
+    elif tela == "representantes":
+
+        sisget_cabecalho_tela(
+            "👥 Representantes",
+            voltar=lambda: fornecedor_voltar_principal(),
+            chave="fornecedor_representantes"
+        )
+
+        fornecedor_representantes_principal()
+
+    # ========================================================
+    # DOCUMENTOS
+    # ========================================================
+
+    elif tela == "documentos":
+
+        sisget_cabecalho_tela(
+            "📑 Regularidades / Documentos",
+            voltar=lambda: fornecedor_voltar_principal(),
+            chave="fornecedor_documentos"
+        )
+
+        fornecedor_documentos_principal()
+
+    # ========================================================
+    # EXCLUIR
+    # ========================================================
+
+    elif tela == "excluir":
+
+        sisget_cabecalho_tela(
+            "🗑️ Excluir Fornecedor",
+            voltar=lambda: fornecedor_voltar_principal(),
+            chave="fornecedor_excluir"
+        )
+
+        fornecedor_excluir()
+
+    # ========================================================
+    # IMPRIMIR
+    # ========================================================
+
+    elif tela == "imprimir":
+
+        sisget_cabecalho_tela(
+            "🖨️ Imprimir Fornecedores",
+            voltar=lambda: fornecedor_voltar_principal(),
+            chave="fornecedor_imprimir"
+        )
+
+        fornecedor_imprimir()
+
+    # ========================================================
+    # SEGURANÇA
+    # ========================================================
+
+    else:
+
+        st.session_state[
+            chave_tela
+        ] = "principal"
+
+        st.rerun()
 # ============================================================
 # COMPRAS / COTAÇÃO
 # ============================================================
