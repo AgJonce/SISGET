@@ -25048,6 +25048,11 @@ def cadastro_fornecedores():
         ]
     )
 
+# ============================================================
+# REPRESENTANTES - ACESSO PRINCIPAL
+# SOMENTE FORNECEDORES PESSOA JURÍDICA
+# ============================================================
+
 def fornecedor_representantes_principal():
 
     st.subheader(
@@ -25059,9 +25064,14 @@ def fornecedor_representantes_principal():
         SELECT
             id,
             codigo,
-            razao_social
+            razao_social,
+            cpf_cnpj
+
         FROM fornecedores
+
         WHERE ativo = TRUE
+          AND tipo_pessoa = 'Jurídica'
+
         ORDER BY
             razao_social,
             codigo
@@ -25071,30 +25081,41 @@ def fornecedor_representantes_principal():
     if not fornecedores:
 
         st.info(
-            "Nenhum fornecedor ativo cadastrado."
+            "Nenhum fornecedor Pessoa Jurídica "
+            "cadastrado."
         )
 
         return
 
-    mapa = {
-        f"{codigo} - {razao_social}": id_
-        for id_, codigo, razao_social
-        in fornecedores
+    mapa_fornecedores = {
+
+        (
+            f"{codigo} - "
+            f"{razao_social} - "
+            f"{cpf_cnpj}"
+        ): fornecedor_id
+
+        for (
+            fornecedor_id,
+            codigo,
+            razao_social,
+            cpf_cnpj
+        ) in fornecedores
     }
 
     fornecedor_nome = st.selectbox(
         "Fornecedor *",
         list(
-            mapa.keys()
+            mapa_fornecedores.keys()
         ),
-        key="sisget_rep_fornecedor_principal"
+        key="fornecedor_representante_selecionar"
     )
 
-    fornecedor_id = mapa[
+    fornecedor_id = mapa_fornecedores[
         fornecedor_nome
     ]
 
-    st.divider()
+    st.markdown("---")
 
     fornecedor_representantes(
         fornecedor_id
