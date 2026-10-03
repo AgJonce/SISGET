@@ -24518,6 +24518,8659 @@ def modulo_assistente():
 # LOGIN
 # ============================================================
 
+# ============================================================
+# SISGET - MÓDULO DE SOLICITAÇÕES
+# ============================================================
+# Estrutura:
+#   Fornecedores
+#   Grupos
+#   Subgrupos
+#   Produtos
+#   Unidades
+#   Solicitações:
+#       Interna
+#       Licitação
+#       Compra
+#   Planejamento de Compras
+#
+# Fluxo da Solicitação para Licitação:
+# Solicitação -> Aprovação -> DFD -> ETP -> Mapa de Riscos
+# -> Compras/Cotação -> Contabilidade/Fichas -> Financeiro
+# -> Ordenador -> Enquadramento Licitação -> TR
+# -> Liberação para módulo de Licitações/Contratação Direta
+# ============================================================
+
+
+# ============================================================
+# AUXILIAR - PRÓXIMO CÓDIGO
+# ============================================================
+
+def sisget_proximo_codigo(
+    tabela,
+    campo="codigo",
+    tamanho=3,
+    filtro_sql="",
+    parametros=()
+):
+    dados = _sisget_fetch(
+        f"""
+        SELECT {campo}
+        FROM {tabela}
+        WHERE {campo} IS NOT NULL
+        {filtro_sql}
+        ORDER BY {campo}
+        """,
+        parametros
+    )
+
+    usados = set()
+
+    for registro in dados:
+        valor = str(registro[0] or "").strip()
+
+        try:
+            usados.add(int(valor))
+        except (ValueError, TypeError):
+            pass
+
+    proximo = 1
+
+    while proximo in usados:
+        proximo += 1
+
+    return str(proximo).zfill(tamanho)
+
+
+# ============================================================
+# AUXILIAR - PRÓXIMO NÚMERO SOLICITAÇÃO
+# ============================================================
+
+def sisget_proximo_numero_solicitacao(
+    tipo_solicitacao,
+    exercicio
+):
+    registro = _sisget_fetchone(
+        """
+        SELECT COALESCE(MAX(numero), 0)
+        FROM solicitacoes
+        WHERE tipo_solicitacao = ?
+          AND exercicio = ?
+        """,
+        (
+            tipo_solicitacao,
+            int(exercicio)
+        )
+    )
+
+    return int(registro[0] or 0) + 1
+
+
+# ============================================================
+# MÓDULO PRINCIPAL
+# ============================================================
+
+def modulo_solicitacoes():
+
+    st.title("📝 Solicitações")
+
+    st.caption(
+        "Cadastros, solicitações e planejamento de compras."
+    )
+
+    st.divider()
+
+    modulo = st.selectbox(
+        "Módulo *",
+        options=[
+            "Selecione...",
+            "🏢 Fornecedores",
+            "📁 Grupos",
+            "📂 Subgrupos",
+            "📦 Produtos",
+            "📏 Unidades",
+            "📝 Solicitações",
+            "📊 Planejamento de Compras"
+        ],
+        key="sisget_modulo_solicitacoes"
+    )
+
+    st.divider()
+
+    if modulo == "Selecione...":
+        st.info("Selecione um módulo acima para continuar.")
+        return
+
+    elif modulo == "🏢 Fornecedores":
+        cadastro_fornecedores()
+
+    elif modulo == "📁 Grupos":
+        cadastro_grupos_produtos()
+
+    elif modulo == "📂 Subgrupos":
+        cadastro_subgrupos_produtos()
+
+    elif modulo == "📦 Produtos":
+        cadastro_produtos()
+
+    elif modulo == "📏 Unidades":
+        modulo_unidades_produtos()
+
+    elif modulo == "📝 Solicitações":
+        modulo_tipos_solicitacoes()
+
+    elif modulo == "📊 Planejamento de Compras":
+        modulo_planejamento_compras()
+
+
+# ============================================================
+# FORNECEDORES
+# ============================================================
+
+def cadastro_fornecedores():
+    sisget_tela_principal(
+        titulo="Fornecedores",
+        chave="fornecedores",
+        func_incluir=fornecedor_incluir,
+        func_localizar=fornecedor_localizar,
+        func_alterar=fornecedor_alterar,
+        func_excluir=fornecedor_excluir,
+        func_imprimir=fornecedor_imprimir,
+        icone="🏢"
+    )
+
+
+def fornecedor_incluir():
+
+    if "sisget_fornecedor_reset" not in st.session_state:
+        st.session_state["sisget_fornecedor_reset"] = 0
+
+    reset = st.session_state["sisget_fornecedor_reset"]
+
+    if "sisget_mensagem_fornecedor" in st.session_state:
+        st.success(
+            st.session_state.pop(
+                "sisget_mensagem_fornecedor"
+            )
+        )
+
+    codigo = sisget_proximo_codigo(
+        "fornecedores",
+        tamanho=6
+    )
+
+    with st.form(
+        f"form_fornecedor_incluir_{reset}"
+    ):
+        col1, col2 = st.columns([1, 3])
+
+        col1.text_input(
+            "Código",
+            value=codigo,
+            disabled=True
+        )
+
+        tipo_pessoa = col2.selectbox(
+            "Tipo de Pessoa *",
+            ["Jurídica", "Física"]
+        )
+
+        cpf_cnpj = st.text_input(
+            "CPF / CNPJ *"
+        )
+
+        razao_social = st.text_input(
+            "Razão Social / Nome *"
+        )
+
+        nome_fantasia = st.text_input(
+            "Nome Fantasia"
+        )
+
+        col3, col4 = st.columns(2)
+
+        telefone = col3.text_input(
+            "Telefone"
+        )
+
+        email = col4.text_input(
+            "E-mail"
+        )
+
+        col5, col6, col7 = st.columns(
+            [1, 3, 1]
+        )
+
+        cep = col5.text_input("CEP")
+        logradouro = col6.text_input("Logradouro")
+        numero_endereco = col7.text_input("Número")
+
+        col8, col9, col10 = st.columns(
+            [2, 2, 1]
+        )
+
+        bairro = col8.text_input("Bairro")
+        cidade = col9.text_input("Cidade")
+        uf = col10.text_input(
+            "UF",
+            max_chars=2
+        )
+
+        representante = st.text_input(
+            "Representante"
+        )
+
+        representante_cpf = st.text_input(
+            "CPF do Representante"
+        )
+
+        salvar = st.form_submit_button(
+            "💾 Salvar Fornecedor",
+            type="primary",
+            use_container_width=True
+        )
+
+    if salvar:
+
+        cpf_cnpj = cpf_cnpj.strip()
+        razao_social = razao_social.strip()
+
+        if not cpf_cnpj or not razao_social:
+            st.warning(
+                "⚠️ Informe CPF/CNPJ e Razão Social/Nome."
+            )
+            return
+
+        existe = _sisget_fetchone(
+            """
+            SELECT id
+            FROM fornecedores
+            WHERE cpf_cnpj = ?
+            """,
+            (cpf_cnpj,)
+        )
+
+        if existe:
+            st.warning(
+                "⚠️ Já existe fornecedor com este CPF/CNPJ."
+            )
+            return
+
+        codigo = sisget_proximo_codigo(
+            "fornecedores",
+            tamanho=6
+        )
+
+        if _sisget_salvar(
+            """
+            INSERT INTO fornecedores
+            (
+                codigo,
+                tipo_pessoa,
+                cpf_cnpj,
+                razao_social,
+                nome_fantasia,
+                telefone,
+                email,
+                cep,
+                logradouro,
+                numero_endereco,
+                bairro,
+                cidade,
+                uf,
+                representante,
+                representante_cpf,
+                ativo
+            )
+            VALUES
+            (
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE
+            )
+            """,
+            (
+                codigo,
+                tipo_pessoa,
+                cpf_cnpj,
+                razao_social,
+                nome_fantasia.strip() or None,
+                telefone.strip() or None,
+                email.strip() or None,
+                cep.strip() or None,
+                logradouro.strip() or None,
+                numero_endereco.strip() or None,
+                bairro.strip() or None,
+                cidade.strip() or None,
+                uf.strip().upper() or None,
+                representante.strip() or None,
+                representante_cpf.strip() or None
+            )
+        ):
+            st.session_state[
+                "sisget_mensagem_fornecedor"
+            ] = (
+                f"✅ Fornecedor cadastrado. Código: {codigo}"
+            )
+
+            st.session_state[
+                "sisget_fornecedor_reset"
+            ] += 1
+
+            st.rerun()
+
+
+def fornecedor_localizar():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            id,
+            codigo AS "Código",
+            cpf_cnpj AS "CPF/CNPJ",
+            razao_social AS "Razão Social / Nome",
+            nome_fantasia AS "Nome Fantasia",
+            cidade AS "Cidade",
+            uf AS "UF",
+            CASE
+                WHEN ativo THEN 'Ativo'
+                ELSE 'Inativo'
+            END AS "Situação"
+        FROM fornecedores
+        ORDER BY codigo
+        """
+    )
+
+    if df.empty:
+        st.info("Nenhum fornecedor cadastrado.")
+        return None
+
+    return sisget_grid_localizar(
+        df=df,
+        chave="fornecedores",
+        coluna_id="id",
+        altura=480
+    )
+
+
+def fornecedor_alterar(registro_id):
+
+    registro = _sisget_fetchone(
+        """
+        SELECT
+            codigo,
+            cpf_cnpj,
+            razao_social,
+            nome_fantasia,
+            telefone,
+            email,
+            cidade,
+            uf,
+            ativo
+        FROM fornecedores
+        WHERE id = ?
+        """,
+        (registro_id,)
+    )
+
+    if not registro:
+        return
+
+    (
+        codigo,
+        documento_atual,
+        razao_atual,
+        fantasia_atual,
+        telefone_atual,
+        email_atual,
+        cidade_atual,
+        uf_atual,
+        ativo
+    ) = registro
+
+    with st.form(
+        f"form_fornecedor_alterar_{registro_id}"
+    ):
+        st.text_input(
+            "Código",
+            value=codigo,
+            disabled=True
+        )
+
+        cpf_cnpj = st.text_input(
+            "CPF / CNPJ *",
+            value=documento_atual or ""
+        )
+
+        razao_social = st.text_input(
+            "Razão Social / Nome *",
+            value=razao_atual or ""
+        )
+
+        nome_fantasia = st.text_input(
+            "Nome Fantasia",
+            value=fantasia_atual or ""
+        )
+
+        telefone = st.text_input(
+            "Telefone",
+            value=telefone_atual or ""
+        )
+
+        email = st.text_input(
+            "E-mail",
+            value=email_atual or ""
+        )
+
+        cidade = st.text_input(
+            "Cidade",
+            value=cidade_atual or ""
+        )
+
+        uf = st.text_input(
+            "UF",
+            value=uf_atual or "",
+            max_chars=2
+        )
+
+        col1, col2 = st.columns(2)
+
+        salvar = col1.form_submit_button(
+            "💾 Salvar Alterações",
+            type="primary",
+            use_container_width=True
+        )
+
+        mudar = col2.form_submit_button(
+            "🚫 Inativar" if ativo else "✅ Ativar",
+            use_container_width=True
+        )
+
+    if mudar:
+        if _sisget_salvar(
+            """
+            UPDATE fornecedores
+            SET ativo = ?
+            WHERE id = ?
+            """,
+            (
+                not ativo,
+                registro_id
+            )
+        ):
+            st.rerun()
+
+    if salvar:
+        if _sisget_salvar(
+            """
+            UPDATE fornecedores
+            SET
+                cpf_cnpj = ?,
+                razao_social = ?,
+                nome_fantasia = ?,
+                telefone = ?,
+                email = ?,
+                cidade = ?,
+                uf = ?
+            WHERE id = ?
+            """,
+            (
+                cpf_cnpj.strip(),
+                razao_social.strip(),
+                nome_fantasia.strip() or None,
+                telefone.strip() or None,
+                email.strip() or None,
+                cidade.strip() or None,
+                uf.strip().upper() or None,
+                registro_id
+            )
+        ):
+            st.rerun()
+
+
+def fornecedor_excluir():
+
+    registro_id = fornecedor_localizar()
+
+    if not registro_id:
+        return
+
+    uso = _sisget_fetchone(
+        """
+        SELECT COUNT(*)
+        FROM cotacoes
+        WHERE fornecedor_id = ?
+        """,
+        (registro_id,)
+    )
+
+    if uso and uso[0] > 0:
+        st.warning(
+            "⚠️ Fornecedor já utilizado. Inative em vez de excluir."
+        )
+        return
+
+    if st.button(
+        "🗑️ Confirmar Exclusão",
+        type="primary",
+        use_container_width=True,
+        key=f"excluir_fornecedor_{registro_id}"
+    ):
+        if _sisget_salvar(
+            "DELETE FROM fornecedores WHERE id = ?",
+            (registro_id,)
+        ):
+            st.rerun()
+
+
+def fornecedor_imprimir():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            codigo AS "Código",
+            cpf_cnpj AS "CPF/CNPJ",
+            razao_social AS "Razão Social / Nome",
+            telefone AS "Telefone",
+            email AS "E-mail",
+            cidade AS "Cidade",
+            uf AS "UF"
+        FROM fornecedores
+        ORDER BY codigo
+        """
+    )
+
+    sisget_relatorio_classificacao(
+        "Fornecedores",
+        df,
+        "fornecedores.pdf"
+    )
+
+
+# ============================================================
+# GRUPOS
+# ============================================================
+
+def cadastro_grupos_produtos():
+    sisget_tela_principal(
+        titulo="Grupos de Produtos",
+        chave="grupos_produtos",
+        func_incluir=grupo_produto_incluir,
+        func_localizar=grupo_produto_localizar,
+        func_alterar=grupo_produto_alterar,
+        func_excluir=grupo_produto_excluir,
+        func_imprimir=grupo_produto_imprimir,
+        icone="📁"
+    )
+
+
+def grupo_produto_incluir():
+
+    if "sisget_grupo_reset" not in st.session_state:
+        st.session_state["sisget_grupo_reset"] = 0
+
+    reset = st.session_state[
+        "sisget_grupo_reset"
+    ]
+
+    codigo = sisget_proximo_codigo(
+        "grupos_produtos",
+        tamanho=3
+    )
+
+    with st.form(
+        f"form_grupo_incluir_{reset}"
+    ):
+        col1, col2 = st.columns([1, 4])
+
+        col1.text_input(
+            "Código",
+            value=codigo,
+            disabled=True
+        )
+
+        descricao = col2.text_input(
+            "Descrição *"
+        )
+
+        salvar = st.form_submit_button(
+            "💾 Salvar Grupo",
+            type="primary",
+            use_container_width=True
+        )
+
+    if salvar:
+
+        if not descricao.strip():
+            st.warning("⚠️ Informe a descrição.")
+            return
+
+        codigo = sisget_proximo_codigo(
+            "grupos_produtos",
+            tamanho=3
+        )
+
+        if _sisget_salvar(
+            """
+            INSERT INTO grupos_produtos
+            (codigo, descricao, ativo)
+            VALUES (?, ?, TRUE)
+            """,
+            (
+                codigo,
+                descricao.strip()
+            )
+        ):
+            st.session_state["sisget_grupo_reset"] += 1
+            st.rerun()
+
+
+def grupo_produto_localizar():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            id,
+            codigo AS "Código",
+            descricao AS "Descrição",
+            CASE
+                WHEN ativo THEN 'Ativo'
+                ELSE 'Inativo'
+            END AS "Situação"
+        FROM grupos_produtos
+        ORDER BY codigo
+        """
+    )
+
+    if df.empty:
+        return None
+
+    return sisget_grid_localizar(
+        df=df,
+        chave="grupos_produtos",
+        coluna_id="id",
+        altura=420
+    )
+
+
+def grupo_produto_alterar(registro_id):
+
+    registro = _sisget_fetchone(
+        """
+        SELECT codigo, descricao, ativo
+        FROM grupos_produtos
+        WHERE id = ?
+        """,
+        (registro_id,)
+    )
+
+    if not registro:
+        return
+
+    codigo, descricao_atual, ativo = registro
+
+    with st.form(
+        f"form_grupo_alterar_{registro_id}"
+    ):
+        st.text_input(
+            "Código",
+            value=codigo,
+            disabled=True
+        )
+
+        descricao = st.text_input(
+            "Descrição *",
+            value=descricao_atual or ""
+        )
+
+        col1, col2 = st.columns(2)
+
+        salvar = col1.form_submit_button(
+            "💾 Salvar Alterações",
+            type="primary",
+            use_container_width=True
+        )
+
+        mudar = col2.form_submit_button(
+            "🚫 Inativar" if ativo else "✅ Ativar",
+            use_container_width=True
+        )
+
+    if mudar:
+        if _sisget_salvar(
+            "UPDATE grupos_produtos SET ativo = ? WHERE id = ?",
+            (
+                not ativo,
+                registro_id
+            )
+        ):
+            st.rerun()
+
+    if salvar:
+        if _sisget_salvar(
+            """
+            UPDATE grupos_produtos
+            SET descricao = ?
+            WHERE id = ?
+            """,
+            (
+                descricao.strip(),
+                registro_id
+            )
+        ):
+            st.rerun()
+
+
+def grupo_produto_excluir():
+
+    registro_id = grupo_produto_localizar()
+
+    if not registro_id:
+        return
+
+    dependencias = _sisget_fetchone(
+        """
+        SELECT COUNT(*)
+        FROM subgrupos_produtos
+        WHERE grupo_id = ?
+        """,
+        (registro_id,)
+    )
+
+    if dependencias and dependencias[0] > 0:
+        st.warning(
+            "⚠️ Grupo possui subgrupos vinculados."
+        )
+        return
+
+    if st.button(
+        "🗑️ Confirmar Exclusão",
+        type="primary",
+        use_container_width=True,
+        key=f"excluir_grupo_{registro_id}"
+    ):
+        if _sisget_salvar(
+            "DELETE FROM grupos_produtos WHERE id = ?",
+            (registro_id,)
+        ):
+            st.rerun()
+
+
+def grupo_produto_imprimir():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            codigo AS "Código",
+            descricao AS "Descrição"
+        FROM grupos_produtos
+        ORDER BY codigo
+        """
+    )
+
+    sisget_relatorio_classificacao(
+        "Grupos de Produtos",
+        df,
+        "grupos_produtos.pdf"
+    )
+
+
+# ============================================================
+# SUBGRUPOS
+# ============================================================
+
+def cadastro_subgrupos_produtos():
+    sisget_tela_principal(
+        titulo="Subgrupos de Produtos",
+        chave="subgrupos_produtos",
+        func_incluir=subgrupo_produto_incluir,
+        func_localizar=subgrupo_produto_localizar,
+        func_alterar=subgrupo_produto_alterar,
+        func_excluir=subgrupo_produto_excluir,
+        func_imprimir=subgrupo_produto_imprimir,
+        icone="📂"
+    )
+
+
+def subgrupo_produto_incluir():
+
+    if "sisget_subgrupo_reset" not in st.session_state:
+        st.session_state["sisget_subgrupo_reset"] = 0
+
+    reset = st.session_state[
+        "sisget_subgrupo_reset"
+    ]
+
+    grupos = _sisget_fetch(
+        """
+        SELECT id, codigo, descricao
+        FROM grupos_produtos
+        WHERE ativo = TRUE
+        ORDER BY codigo
+        """
+    )
+
+    if not grupos:
+        st.warning("⚠️ Cadastre um Grupo primeiro.")
+        return
+
+    mapa = {
+        f"{codigo} - {descricao}": id_
+        for id_, codigo, descricao in grupos
+    }
+
+    grupo_nome = st.selectbox(
+        "Grupo *",
+        list(mapa.keys()),
+        key=f"subgrupo_grupo_{reset}"
+    )
+
+    grupo_id = mapa[
+        grupo_nome
+    ]
+
+    codigo = sisget_proximo_codigo(
+        "subgrupos_produtos",
+        tamanho=3,
+        filtro_sql="AND grupo_id = ?",
+        parametros=(grupo_id,)
+    )
+
+    with st.form(
+        f"form_subgrupo_incluir_{reset}_{grupo_id}"
+    ):
+        col1, col2 = st.columns([1, 4])
+
+        col1.text_input(
+            "Código",
+            value=codigo,
+            disabled=True
+        )
+
+        descricao = col2.text_input(
+            "Descrição *"
+        )
+
+        salvar = st.form_submit_button(
+            "💾 Salvar Subgrupo",
+            type="primary",
+            use_container_width=True
+        )
+
+    if salvar:
+
+        if not descricao.strip():
+            st.warning("⚠️ Informe a descrição.")
+            return
+
+        codigo = sisget_proximo_codigo(
+            "subgrupos_produtos",
+            tamanho=3,
+            filtro_sql="AND grupo_id = ?",
+            parametros=(grupo_id,)
+        )
+
+        if _sisget_salvar(
+            """
+            INSERT INTO subgrupos_produtos
+            (grupo_id, codigo, descricao, ativo)
+            VALUES (?, ?, ?, TRUE)
+            """,
+            (
+                grupo_id,
+                codigo,
+                descricao.strip()
+            )
+        ):
+            st.session_state["sisget_subgrupo_reset"] += 1
+            st.rerun()
+
+
+def subgrupo_produto_localizar():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            s.id,
+            g.codigo || ' - ' || g.descricao AS "Grupo",
+            s.codigo AS "Código",
+            s.descricao AS "Descrição"
+        FROM subgrupos_produtos s
+        INNER JOIN grupos_produtos g
+            ON g.id = s.grupo_id
+        ORDER BY g.codigo, s.codigo
+        """
+    )
+
+    if df.empty:
+        return None
+
+    return sisget_grid_localizar(
+        df=df,
+        chave="subgrupos_produtos",
+        coluna_id="id",
+        altura=420
+    )
+
+
+def subgrupo_produto_alterar(registro_id):
+
+    registro = _sisget_fetchone(
+        """
+        SELECT codigo, descricao, ativo
+        FROM subgrupos_produtos
+        WHERE id = ?
+        """,
+        (registro_id,)
+    )
+
+    if not registro:
+        return
+
+    codigo, descricao_atual, ativo = registro
+
+    with st.form(
+        f"form_subgrupo_alterar_{registro_id}"
+    ):
+        st.text_input(
+            "Código",
+            value=codigo,
+            disabled=True
+        )
+
+        descricao = st.text_input(
+            "Descrição *",
+            value=descricao_atual or ""
+        )
+
+        col1, col2 = st.columns(2)
+
+        salvar = col1.form_submit_button(
+            "💾 Salvar Alterações",
+            type="primary",
+            use_container_width=True
+        )
+
+        mudar = col2.form_submit_button(
+            "🚫 Inativar" if ativo else "✅ Ativar",
+            use_container_width=True
+        )
+
+    if mudar:
+        if _sisget_salvar(
+            """
+            UPDATE subgrupos_produtos
+            SET ativo = ?
+            WHERE id = ?
+            """,
+            (
+                not ativo,
+                registro_id
+            )
+        ):
+            st.rerun()
+
+    if salvar:
+        if _sisget_salvar(
+            """
+            UPDATE subgrupos_produtos
+            SET descricao = ?
+            WHERE id = ?
+            """,
+            (
+                descricao.strip(),
+                registro_id
+            )
+        ):
+            st.rerun()
+
+
+def subgrupo_produto_excluir():
+
+    registro_id = subgrupo_produto_localizar()
+
+    if not registro_id:
+        return
+
+    dependencias = _sisget_fetchone(
+        """
+        SELECT COUNT(*)
+        FROM produtos
+        WHERE subgrupo_id = ?
+        """,
+        (registro_id,)
+    )
+
+    if dependencias and dependencias[0] > 0:
+        st.warning(
+            "⚠️ Subgrupo possui produtos vinculados."
+        )
+        return
+
+    if st.button(
+        "🗑️ Confirmar Exclusão",
+        type="primary",
+        use_container_width=True,
+        key=f"excluir_subgrupo_{registro_id}"
+    ):
+        if _sisget_salvar(
+            "DELETE FROM subgrupos_produtos WHERE id = ?",
+            (registro_id,)
+        ):
+            st.rerun()
+
+
+def subgrupo_produto_imprimir():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            g.descricao AS "Grupo",
+            s.codigo AS "Código",
+            s.descricao AS "Subgrupo"
+        FROM subgrupos_produtos s
+        INNER JOIN grupos_produtos g
+            ON g.id = s.grupo_id
+        ORDER BY g.codigo, s.codigo
+        """
+    )
+
+    sisget_relatorio_classificacao(
+        "Subgrupos de Produtos",
+        df,
+        "subgrupos_produtos.pdf"
+    )
+
+
+# ============================================================
+# UNIDADES
+# ============================================================
+
+def modulo_unidades_produtos():
+
+    st.subheader("📏 Unidades")
+
+    tipo = st.selectbox(
+        "Tipo de Unidade *",
+        [
+            "Selecione...",
+            "📐 Unidades de Medida",
+            "🛒 Unidades de Compra",
+            "🔄 Unidades de Movimentação"
+        ],
+        key="sisget_unidades_produtos"
+    )
+
+    st.divider()
+
+    if tipo == "Selecione...":
+        st.info("Selecione o tipo de unidade.")
+        return
+
+    elif tipo == "📐 Unidades de Medida":
+        cadastro_unidades_medida()
+
+    elif tipo == "🛒 Unidades de Compra":
+        cadastro_unidades_compra()
+
+    elif tipo == "🔄 Unidades de Movimentação":
+        cadastro_unidades_movimentacao()
+
+
+def cadastro_unidades_medida():
+    sisget_tela_principal(
+        titulo="Unidades de Medida",
+        chave="unidades_medida",
+        func_incluir=unidade_medida_incluir,
+        func_localizar=unidade_medida_localizar,
+        func_alterar=unidade_medida_alterar,
+        func_excluir=unidade_medida_excluir,
+        func_imprimir=unidade_medida_imprimir,
+        icone="📐"
+    )
+
+
+def unidade_medida_incluir():
+
+    if "sisget_unidade_medida_reset" not in st.session_state:
+        st.session_state["sisget_unidade_medida_reset"] = 0
+
+    reset = st.session_state[
+        "sisget_unidade_medida_reset"
+    ]
+
+    codigo = sisget_proximo_codigo(
+        "unidades_medida",
+        tamanho=3
+    )
+
+    with st.form(
+        f"form_unidade_medida_{reset}"
+    ):
+        col1, col2, col3 = st.columns([1, 3, 1])
+
+        col1.text_input(
+            "Código",
+            value=codigo,
+            disabled=True
+        )
+
+        descricao = col2.text_input(
+            "Descrição *"
+        )
+
+        sigla = col3.text_input(
+            "Sigla *"
+        )
+
+        salvar = st.form_submit_button(
+            "💾 Salvar Unidade",
+            type="primary",
+            use_container_width=True
+        )
+
+    if salvar:
+
+        if not descricao.strip() or not sigla.strip():
+            st.warning(
+                "⚠️ Informe descrição e sigla."
+            )
+            return
+
+        codigo = sisget_proximo_codigo(
+            "unidades_medida",
+            tamanho=3
+        )
+
+        if _sisget_salvar(
+            """
+            INSERT INTO unidades_medida
+            (codigo, descricao, sigla, ativo)
+            VALUES (?, ?, ?, TRUE)
+            """,
+            (
+                codigo,
+                descricao.strip(),
+                sigla.strip().upper()
+            )
+        ):
+            st.session_state[
+                "sisget_unidade_medida_reset"
+            ] += 1
+
+            st.rerun()
+
+
+def unidade_medida_localizar():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            id,
+            codigo AS "Código",
+            descricao AS "Descrição",
+            sigla AS "Sigla"
+        FROM unidades_medida
+        ORDER BY codigo
+        """
+    )
+
+    if df.empty:
+        return None
+
+    return sisget_grid_localizar(
+        df=df,
+        chave="unidades_medida",
+        coluna_id="id",
+        altura=420
+    )
+
+
+def unidade_medida_alterar(registro_id):
+
+    registro = _sisget_fetchone(
+        """
+        SELECT codigo, descricao, sigla, ativo
+        FROM unidades_medida
+        WHERE id = ?
+        """,
+        (registro_id,)
+    )
+
+    if not registro:
+        return
+
+    codigo, descricao_atual, sigla_atual, ativo = registro
+
+    with st.form(
+        f"form_unidade_medida_alterar_{registro_id}"
+    ):
+        st.text_input(
+            "Código",
+            value=codigo,
+            disabled=True
+        )
+
+        descricao = st.text_input(
+            "Descrição *",
+            value=descricao_atual or ""
+        )
+
+        sigla = st.text_input(
+            "Sigla *",
+            value=sigla_atual or ""
+        )
+
+        col1, col2 = st.columns(2)
+
+        salvar = col1.form_submit_button(
+            "💾 Salvar Alterações",
+            type="primary",
+            use_container_width=True
+        )
+
+        mudar = col2.form_submit_button(
+            "🚫 Inativar" if ativo else "✅ Ativar",
+            use_container_width=True
+        )
+
+    if mudar:
+        if _sisget_salvar(
+            "UPDATE unidades_medida SET ativo = ? WHERE id = ?",
+            (
+                not ativo,
+                registro_id
+            )
+        ):
+            st.rerun()
+
+    if salvar:
+        if _sisget_salvar(
+            """
+            UPDATE unidades_medida
+            SET descricao = ?, sigla = ?
+            WHERE id = ?
+            """,
+            (
+                descricao.strip(),
+                sigla.strip().upper(),
+                registro_id
+            )
+        ):
+            st.rerun()
+
+
+def unidade_medida_excluir():
+
+    registro_id = unidade_medida_localizar()
+
+    if not registro_id:
+        return
+
+    if st.button(
+        "🗑️ Confirmar Exclusão",
+        type="primary",
+        use_container_width=True,
+        key=f"excluir_unidade_medida_{registro_id}"
+    ):
+        if _sisget_salvar(
+            "DELETE FROM unidades_medida WHERE id = ?",
+            (registro_id,)
+        ):
+            st.rerun()
+
+
+def unidade_medida_imprimir():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            codigo AS "Código",
+            descricao AS "Descrição",
+            sigla AS "Sigla"
+        FROM unidades_medida
+        ORDER BY codigo
+        """
+    )
+
+    sisget_relatorio_classificacao(
+        "Unidades de Medida",
+        df,
+        "unidades_medida.pdf"
+    )
+
+
+def cadastro_unidades_compra():
+    sisget_tela_principal(
+        titulo="Unidades de Compra",
+        chave="unidades_compra",
+        func_incluir=unidade_compra_incluir,
+        func_localizar=unidade_compra_localizar,
+        func_alterar=unidade_compra_alterar,
+        func_excluir=unidade_compra_excluir,
+        func_imprimir=unidade_compra_imprimir,
+        icone="🛒"
+    )
+
+
+def unidade_compra_incluir():
+
+    if "sisget_unidade_compra_reset" not in st.session_state:
+        st.session_state["sisget_unidade_compra_reset"] = 0
+
+    reset = st.session_state[
+        "sisget_unidade_compra_reset"
+    ]
+
+    medidas = _sisget_fetch(
+        """
+        SELECT id, sigla, descricao
+        FROM unidades_medida
+        WHERE ativo = TRUE
+        ORDER BY descricao
+        """
+    )
+
+    if not medidas:
+        st.warning(
+            "⚠️ Cadastre uma Unidade de Medida primeiro."
+        )
+        return
+
+    mapa = {
+        f"{sigla} - {descricao}": id_
+        for id_, sigla, descricao in medidas
+    }
+
+    codigo = sisget_proximo_codigo(
+        "unidades_compra",
+        tamanho=3
+    )
+
+    with st.form(
+        f"form_unidade_compra_{reset}"
+    ):
+        col1, col2 = st.columns([1, 4])
+
+        col1.text_input(
+            "Código",
+            value=codigo,
+            disabled=True
+        )
+
+        descricao = col2.text_input(
+            "Descrição *",
+            placeholder="Ex.: Caixa"
+        )
+
+        medida_nome = st.selectbox(
+            "Unidade de Medida *",
+            list(mapa.keys())
+        )
+
+        salvar = st.form_submit_button(
+            "💾 Salvar Unidade de Compra",
+            type="primary",
+            use_container_width=True
+        )
+
+    if salvar:
+
+        codigo = sisget_proximo_codigo(
+            "unidades_compra",
+            tamanho=3
+        )
+
+        if _sisget_salvar(
+            """
+            INSERT INTO unidades_compra
+            (codigo, descricao, unidade_medida_id, ativo)
+            VALUES (?, ?, ?, TRUE)
+            """,
+            (
+                codigo,
+                descricao.strip(),
+                mapa[medida_nome]
+            )
+        ):
+            st.session_state[
+                "sisget_unidade_compra_reset"
+            ] += 1
+
+            st.rerun()
+
+
+def unidade_compra_localizar():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            uc.id,
+            uc.codigo AS "Código",
+            uc.descricao AS "Descrição",
+            um.sigla AS "Unidade"
+        FROM unidades_compra uc
+        INNER JOIN unidades_medida um
+            ON um.id = uc.unidade_medida_id
+        ORDER BY uc.codigo
+        """
+    )
+
+    if df.empty:
+        return None
+
+    return sisget_grid_localizar(
+        df=df,
+        chave="unidades_compra",
+        coluna_id="id",
+        altura=420
+    )
+
+
+def unidade_compra_alterar(registro_id):
+
+    registro = _sisget_fetchone(
+        """
+        SELECT codigo, descricao, ativo
+        FROM unidades_compra
+        WHERE id = ?
+        """,
+        (registro_id,)
+    )
+
+    if not registro:
+        return
+
+    codigo, descricao_atual, ativo = registro
+
+    with st.form(
+        f"form_unidade_compra_alterar_{registro_id}"
+    ):
+        st.text_input(
+            "Código",
+            value=codigo,
+            disabled=True
+        )
+
+        descricao = st.text_input(
+            "Descrição *",
+            value=descricao_atual or ""
+        )
+
+        col1, col2 = st.columns(2)
+
+        salvar = col1.form_submit_button(
+            "💾 Salvar Alterações",
+            type="primary",
+            use_container_width=True
+        )
+
+        mudar = col2.form_submit_button(
+            "🚫 Inativar" if ativo else "✅ Ativar",
+            use_container_width=True
+        )
+
+    if mudar:
+        if _sisget_salvar(
+            "UPDATE unidades_compra SET ativo = ? WHERE id = ?",
+            (
+                not ativo,
+                registro_id
+            )
+        ):
+            st.rerun()
+
+    if salvar:
+        if _sisget_salvar(
+            """
+            UPDATE unidades_compra
+            SET descricao = ?
+            WHERE id = ?
+            """,
+            (
+                descricao.strip(),
+                registro_id
+            )
+        ):
+            st.rerun()
+
+
+def unidade_compra_excluir():
+
+    registro_id = unidade_compra_localizar()
+
+    if not registro_id:
+        return
+
+    if st.button(
+        "🗑️ Confirmar Exclusão",
+        type="primary",
+        use_container_width=True,
+        key=f"excluir_unidade_compra_{registro_id}"
+    ):
+        if _sisget_salvar(
+            "DELETE FROM unidades_compra WHERE id = ?",
+            (registro_id,)
+        ):
+            st.rerun()
+
+
+def unidade_compra_imprimir():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            codigo AS "Código",
+            descricao AS "Descrição"
+        FROM unidades_compra
+        ORDER BY codigo
+        """
+    )
+
+    sisget_relatorio_classificacao(
+        "Unidades de Compra",
+        df,
+        "unidades_compra.pdf"
+    )
+
+
+def cadastro_unidades_movimentacao():
+    sisget_tela_principal(
+        titulo="Unidades de Movimentação",
+        chave="unidades_movimentacao",
+        func_incluir=unidade_movimentacao_incluir,
+        func_localizar=unidade_movimentacao_localizar,
+        func_alterar=unidade_movimentacao_alterar,
+        func_excluir=unidade_movimentacao_excluir,
+        func_imprimir=unidade_movimentacao_imprimir,
+        icone="🔄"
+    )
+
+
+def unidade_movimentacao_incluir():
+
+    if "sisget_unidade_mov_reset" not in st.session_state:
+        st.session_state["sisget_unidade_mov_reset"] = 0
+
+    reset = st.session_state[
+        "sisget_unidade_mov_reset"
+    ]
+
+    compras = _sisget_fetch(
+        """
+        SELECT id, codigo, descricao
+        FROM unidades_compra
+        WHERE ativo = TRUE
+        ORDER BY codigo
+        """
+    )
+
+    medidas = _sisget_fetch(
+        """
+        SELECT id, sigla, descricao
+        FROM unidades_medida
+        WHERE ativo = TRUE
+        ORDER BY descricao
+        """
+    )
+
+    if not compras or not medidas:
+        st.warning(
+            "⚠️ Cadastre Unidade de Compra e Unidade de Medida."
+        )
+        return
+
+    mapa_compras = {
+        f"{codigo} - {descricao}": id_
+        for id_, codigo, descricao in compras
+    }
+
+    mapa_medidas = {
+        f"{sigla} - {descricao}": id_
+        for id_, sigla, descricao in medidas
+    }
+
+    codigo = sisget_proximo_codigo(
+        "unidades_movimentacao",
+        tamanho=3
+    )
+
+    with st.form(
+        f"form_unidade_movimentacao_{reset}"
+    ):
+        col1, col2 = st.columns([1, 4])
+
+        col1.text_input(
+            "Código",
+            value=codigo,
+            disabled=True
+        )
+
+        descricao = col2.text_input(
+            "Descrição *",
+            placeholder="Ex.: Comprimido"
+        )
+
+        compra_nome = st.selectbox(
+            "Unidade de Compra *",
+            list(mapa_compras.keys())
+        )
+
+        medida_nome = st.selectbox(
+            "Unidade de Movimentação *",
+            list(mapa_medidas.keys())
+        )
+
+        fator = st.number_input(
+            "Fator de Conversão *",
+            min_value=0.000001,
+            value=1.0,
+            format="%.6f",
+            help="Ex.: 1 caixa = 30 comprimidos -> fator 30."
+        )
+
+        salvar = st.form_submit_button(
+            "💾 Salvar Unidade de Movimentação",
+            type="primary",
+            use_container_width=True
+        )
+
+    if salvar:
+
+        codigo = sisget_proximo_codigo(
+            "unidades_movimentacao",
+            tamanho=3
+        )
+
+        if _sisget_salvar(
+            """
+            INSERT INTO unidades_movimentacao
+            (
+                codigo,
+                descricao,
+                unidade_compra_id,
+                unidade_medida_id,
+                fator_conversao,
+                ativo
+            )
+            VALUES (?, ?, ?, ?, ?, TRUE)
+            """,
+            (
+                codigo,
+                descricao.strip(),
+                mapa_compras[compra_nome],
+                mapa_medidas[medida_nome],
+                float(fator)
+            )
+        ):
+            st.session_state[
+                "sisget_unidade_mov_reset"
+            ] += 1
+
+            st.rerun()
+
+
+def unidade_movimentacao_localizar():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            umv.id,
+            umv.codigo AS "Código",
+            umv.descricao AS "Descrição",
+            uc.descricao AS "Compra",
+            um.sigla AS "Movimentação",
+            umv.fator_conversao AS "Fator"
+        FROM unidades_movimentacao umv
+        INNER JOIN unidades_compra uc
+            ON uc.id = umv.unidade_compra_id
+        INNER JOIN unidades_medida um
+            ON um.id = umv.unidade_medida_id
+        ORDER BY umv.codigo
+        """
+    )
+
+    if df.empty:
+        return None
+
+    return sisget_grid_localizar(
+        df=df,
+        chave="unidades_movimentacao",
+        coluna_id="id",
+        altura=420
+    )
+
+
+def unidade_movimentacao_alterar(registro_id):
+
+    registro = _sisget_fetchone(
+        """
+        SELECT codigo, descricao, fator_conversao, ativo
+        FROM unidades_movimentacao
+        WHERE id = ?
+        """,
+        (registro_id,)
+    )
+
+    if not registro:
+        return
+
+    codigo, descricao_atual, fator_atual, ativo = registro
+
+    with st.form(
+        f"form_unidade_mov_alterar_{registro_id}"
+    ):
+        st.text_input(
+            "Código",
+            value=codigo,
+            disabled=True
+        )
+
+        descricao = st.text_input(
+            "Descrição *",
+            value=descricao_atual or ""
+        )
+
+        fator = st.number_input(
+            "Fator de Conversão *",
+            min_value=0.000001,
+            value=float(fator_atual or 1),
+            format="%.6f"
+        )
+
+        col1, col2 = st.columns(2)
+
+        salvar = col1.form_submit_button(
+            "💾 Salvar Alterações",
+            type="primary",
+            use_container_width=True
+        )
+
+        mudar = col2.form_submit_button(
+            "🚫 Inativar" if ativo else "✅ Ativar",
+            use_container_width=True
+        )
+
+    if mudar:
+        if _sisget_salvar(
+            """
+            UPDATE unidades_movimentacao
+            SET ativo = ?
+            WHERE id = ?
+            """,
+            (
+                not ativo,
+                registro_id
+            )
+        ):
+            st.rerun()
+
+    if salvar:
+        if _sisget_salvar(
+            """
+            UPDATE unidades_movimentacao
+            SET descricao = ?, fator_conversao = ?
+            WHERE id = ?
+            """,
+            (
+                descricao.strip(),
+                float(fator),
+                registro_id
+            )
+        ):
+            st.rerun()
+
+
+def unidade_movimentacao_excluir():
+
+    registro_id = unidade_movimentacao_localizar()
+
+    if not registro_id:
+        return
+
+    if st.button(
+        "🗑️ Confirmar Exclusão",
+        type="primary",
+        use_container_width=True,
+        key=f"excluir_unidade_mov_{registro_id}"
+    ):
+        if _sisget_salvar(
+            """
+            DELETE FROM unidades_movimentacao
+            WHERE id = ?
+            """,
+            (registro_id,)
+        ):
+            st.rerun()
+
+
+def unidade_movimentacao_imprimir():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            umv.codigo AS "Código",
+            umv.descricao AS "Descrição",
+            uc.descricao AS "Compra",
+            um.sigla AS "Movimentação",
+            umv.fator_conversao AS "Fator"
+        FROM unidades_movimentacao umv
+        INNER JOIN unidades_compra uc
+            ON uc.id = umv.unidade_compra_id
+        INNER JOIN unidades_medida um
+            ON um.id = umv.unidade_medida_id
+        ORDER BY umv.codigo
+        """
+    )
+
+    sisget_relatorio_classificacao(
+        "Unidades de Movimentação",
+        df,
+        "unidades_movimentacao.pdf"
+    )
+
+
+# ============================================================
+# PRODUTOS
+# ============================================================
+
+def cadastro_produtos():
+    sisget_tela_principal(
+        titulo="Produtos",
+        chave="produtos",
+        func_incluir=produto_incluir,
+        func_localizar=produto_localizar,
+        func_alterar=produto_alterar,
+        func_excluir=produto_excluir,
+        func_imprimir=produto_imprimir,
+        icone="📦"
+    )
+
+
+def produto_incluir():
+
+    if "sisget_produto_reset" not in st.session_state:
+        st.session_state["sisget_produto_reset"] = 0
+
+    reset = st.session_state[
+        "sisget_produto_reset"
+    ]
+
+    grupos = _sisget_fetch(
+        """
+        SELECT id, codigo, descricao
+        FROM grupos_produtos
+        WHERE ativo = TRUE
+        ORDER BY codigo
+        """
+    )
+
+    if not grupos:
+        st.warning("⚠️ Cadastre um Grupo primeiro.")
+        return
+
+    mapa_grupos = {
+        f"{codigo} - {descricao}": id_
+        for id_, codigo, descricao in grupos
+    }
+
+    grupo_nome = st.selectbox(
+        "Grupo *",
+        list(mapa_grupos.keys()),
+        key=f"produto_grupo_{reset}"
+    )
+
+    grupo_id = mapa_grupos[
+        grupo_nome
+    ]
+
+    subgrupos = _sisget_fetch(
+        """
+        SELECT id, codigo, descricao
+        FROM subgrupos_produtos
+        WHERE grupo_id = ?
+          AND ativo = TRUE
+        ORDER BY codigo
+        """,
+        (grupo_id,)
+    )
+
+    if not subgrupos:
+        st.warning(
+            "⚠️ Cadastre um Subgrupo para o Grupo."
+        )
+        return
+
+    mapa_subgrupos = {
+        f"{codigo} - {descricao}": id_
+        for id_, codigo, descricao in subgrupos
+    }
+
+    compras = _sisget_fetch(
+        """
+        SELECT id, codigo, descricao
+        FROM unidades_compra
+        WHERE ativo = TRUE
+        ORDER BY codigo
+        """
+    )
+
+    movimentos = _sisget_fetch(
+        """
+        SELECT id, codigo, descricao, fator_conversao
+        FROM unidades_movimentacao
+        WHERE ativo = TRUE
+        ORDER BY codigo
+        """
+    )
+
+    if not compras or not movimentos:
+        st.warning(
+            "⚠️ Cadastre as Unidades primeiro."
+        )
+        return
+
+    mapa_compras = {
+        f"{codigo} - {descricao}": id_
+        for id_, codigo, descricao in compras
+    }
+
+    mapa_movimentos = {
+        (
+            f"{codigo} - {descricao}"
+            f" | fator {float(fator):g}"
+        ): id_
+        for id_, codigo, descricao, fator in movimentos
+    }
+
+    codigo = sisget_proximo_codigo(
+        "produtos",
+        tamanho=6
+    )
+
+    with st.form(
+        f"form_produto_{reset}_{grupo_id}"
+    ):
+        col1, col2 = st.columns([1, 4])
+
+        col1.text_input(
+            "Código",
+            value=codigo,
+            disabled=True
+        )
+
+        descricao = col2.text_input(
+            "Descrição *"
+        )
+
+        subgrupo_nome = st.selectbox(
+            "Subgrupo *",
+            list(mapa_subgrupos.keys())
+        )
+
+        tipo_item = st.selectbox(
+            "Tipo do Item *",
+            [
+                "Consumo",
+                "Patrimonial",
+                "Serviço"
+            ]
+        )
+
+        col3, col4 = st.columns(2)
+
+        unidade_compra_nome = col3.selectbox(
+            "Unidade de Compra *",
+            list(mapa_compras.keys())
+        )
+
+        unidade_mov_nome = col4.selectbox(
+            "Unidade de Movimentação *",
+            list(mapa_movimentos.keys())
+        )
+
+        item_patrimonial = st.checkbox(
+            "Item Patrimonial"
+        )
+
+        controla_estoque = st.checkbox(
+            "Controla Estoque",
+            value=True
+        )
+
+        estoque_minimo = st.number_input(
+            "Estoque Mínimo",
+            min_value=0.0,
+            value=0.0,
+            format="%.6f"
+        )
+
+        conta_orcamentaria = st.text_input(
+            "Conta / Natureza Orçamentária Padrão"
+        )
+
+        codigo_tribunal = st.text_input(
+            "Classificação Tribunal de Contas"
+        )
+
+        especificacao = st.text_area(
+            "Especificação Técnica"
+        )
+
+        salvar = st.form_submit_button(
+            "💾 Salvar Produto",
+            type="primary",
+            use_container_width=True
+        )
+
+    if salvar:
+
+        if not descricao.strip():
+            st.warning("⚠️ Informe a descrição.")
+            return
+
+        if tipo_item == "Patrimonial":
+            item_patrimonial = True
+
+        codigo = sisget_proximo_codigo(
+            "produtos",
+            tamanho=6
+        )
+
+        if _sisget_salvar(
+            """
+            INSERT INTO produtos
+            (
+                codigo,
+                descricao,
+                grupo_id,
+                subgrupo_id,
+                tipo_item,
+                item_patrimonial,
+                unidade_compra_id,
+                unidade_movimentacao_id,
+                controla_estoque,
+                estoque_minimo,
+                conta_orcamentaria_padrao,
+                codigo_tribunal,
+                especificacao,
+                ativo
+            )
+            VALUES
+            (
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE
+            )
+            """,
+            (
+                codigo,
+                descricao.strip(),
+                grupo_id,
+                mapa_subgrupos[subgrupo_nome],
+                tipo_item,
+                item_patrimonial,
+                mapa_compras[unidade_compra_nome],
+                mapa_movimentos[unidade_mov_nome],
+                controla_estoque,
+                float(estoque_minimo),
+                conta_orcamentaria.strip() or None,
+                codigo_tribunal.strip() or None,
+                especificacao.strip() or None
+            )
+        ):
+            st.session_state[
+                "sisget_produto_reset"
+            ] += 1
+
+            st.rerun()
+
+
+def produto_localizar():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            p.id,
+            p.codigo AS "Código",
+            p.descricao AS "Produto",
+            g.descricao AS "Grupo",
+            sg.descricao AS "Subgrupo",
+            p.tipo_item AS "Tipo"
+        FROM produtos p
+        INNER JOIN grupos_produtos g
+            ON g.id = p.grupo_id
+        INNER JOIN subgrupos_produtos sg
+            ON sg.id = p.subgrupo_id
+        ORDER BY p.codigo
+        """
+    )
+
+    if df.empty:
+        return None
+
+    return sisget_grid_localizar(
+        df=df,
+        chave="produtos",
+        coluna_id="id",
+        altura=480
+    )
+
+
+def produto_alterar(registro_id):
+
+    registro = _sisget_fetchone(
+        """
+        SELECT
+            codigo,
+            descricao,
+            tipo_item,
+            item_patrimonial,
+            controla_estoque,
+            estoque_minimo,
+            conta_orcamentaria_padrao,
+            codigo_tribunal,
+            especificacao,
+            ativo
+        FROM produtos
+        WHERE id = ?
+        """,
+        (registro_id,)
+    )
+
+    if not registro:
+        return
+
+    (
+        codigo,
+        descricao_atual,
+        tipo_atual,
+        patrimonial_atual,
+        controla_atual,
+        minimo_atual,
+        conta_atual,
+        tribunal_atual,
+        especificacao_atual,
+        ativo
+    ) = registro
+
+    tipos = ["Consumo", "Patrimonial", "Serviço"]
+
+    indice = (
+        tipos.index(tipo_atual)
+        if tipo_atual in tipos
+        else 0
+    )
+
+    with st.form(
+        f"form_produto_alterar_{registro_id}"
+    ):
+        st.text_input(
+            "Código",
+            value=codigo,
+            disabled=True
+        )
+
+        descricao = st.text_input(
+            "Descrição *",
+            value=descricao_atual or ""
+        )
+
+        tipo_item = st.selectbox(
+            "Tipo do Item *",
+            tipos,
+            index=indice
+        )
+
+        item_patrimonial = st.checkbox(
+            "Item Patrimonial",
+            value=bool(patrimonial_atual)
+        )
+
+        controla_estoque = st.checkbox(
+            "Controla Estoque",
+            value=bool(controla_atual)
+        )
+
+        estoque_minimo = st.number_input(
+            "Estoque Mínimo",
+            min_value=0.0,
+            value=float(minimo_atual or 0),
+            format="%.6f"
+        )
+
+        conta = st.text_input(
+            "Conta / Natureza Padrão",
+            value=conta_atual or ""
+        )
+
+        tribunal = st.text_input(
+            "Classificação Tribunal",
+            value=tribunal_atual or ""
+        )
+
+        especificacao = st.text_area(
+            "Especificação",
+            value=especificacao_atual or ""
+        )
+
+        col1, col2 = st.columns(2)
+
+        salvar = col1.form_submit_button(
+            "💾 Salvar Alterações",
+            type="primary",
+            use_container_width=True
+        )
+
+        mudar = col2.form_submit_button(
+            "🚫 Inativar" if ativo else "✅ Ativar",
+            use_container_width=True
+        )
+
+    if mudar:
+        if _sisget_salvar(
+            "UPDATE produtos SET ativo = ? WHERE id = ?",
+            (
+                not ativo,
+                registro_id
+            )
+        ):
+            st.rerun()
+
+    if salvar:
+        if tipo_item == "Patrimonial":
+            item_patrimonial = True
+
+        if _sisget_salvar(
+            """
+            UPDATE produtos
+            SET
+                descricao = ?,
+                tipo_item = ?,
+                item_patrimonial = ?,
+                controla_estoque = ?,
+                estoque_minimo = ?,
+                conta_orcamentaria_padrao = ?,
+                codigo_tribunal = ?,
+                especificacao = ?
+            WHERE id = ?
+            """,
+            (
+                descricao.strip(),
+                tipo_item,
+                item_patrimonial,
+                controla_estoque,
+                float(estoque_minimo),
+                conta.strip() or None,
+                tribunal.strip() or None,
+                especificacao.strip() or None,
+                registro_id
+            )
+        ):
+            st.rerun()
+
+
+def produto_excluir():
+
+    registro_id = produto_localizar()
+
+    if not registro_id:
+        return
+
+    uso = _sisget_fetchone(
+        """
+        SELECT COUNT(*)
+        FROM solicitacoes_itens
+        WHERE produto_id = ?
+        """,
+        (registro_id,)
+    )
+
+    if uso and uso[0] > 0:
+        st.warning(
+            "⚠️ Produto já utilizado. Inative em vez de excluir."
+        )
+        return
+
+    if st.button(
+        "🗑️ Confirmar Exclusão",
+        type="primary",
+        use_container_width=True,
+        key=f"excluir_produto_{registro_id}"
+    ):
+        if _sisget_salvar(
+            "DELETE FROM produtos WHERE id = ?",
+            (registro_id,)
+        ):
+            st.rerun()
+
+
+def produto_imprimir():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            p.codigo AS "Código",
+            p.descricao AS "Produto",
+            g.descricao AS "Grupo",
+            sg.descricao AS "Subgrupo",
+            p.tipo_item AS "Tipo"
+        FROM produtos p
+        INNER JOIN grupos_produtos g
+            ON g.id = p.grupo_id
+        INNER JOIN subgrupos_produtos sg
+            ON sg.id = p.subgrupo_id
+        ORDER BY p.codigo
+        """
+    )
+
+    sisget_relatorio_classificacao(
+        "Produtos",
+        df,
+        "produtos.pdf"
+    )
+
+
+# ============================================================
+# TIPOS DE SOLICITAÇÃO
+# ============================================================
+
+def modulo_tipos_solicitacoes():
+
+    st.subheader("📝 Solicitações")
+
+    tipo = st.selectbox(
+        "Tipo de Solicitação *",
+        [
+            "Selecione...",
+            "📦 Solicitação Interna",
+            "⚖️ Solicitação para Licitação",
+            "🛒 Solicitação de Compra"
+        ],
+        key="sisget_tipo_solicitacao"
+    )
+
+    st.divider()
+
+    if tipo == "Selecione...":
+        st.info("Selecione o tipo de solicitação.")
+        return
+
+    elif tipo == "📦 Solicitação Interna":
+        modulo_solicitacao_interna()
+
+    elif tipo == "⚖️ Solicitação para Licitação":
+        modulo_solicitacao_licitacao()
+
+    elif tipo == "🛒 Solicitação de Compra":
+        modulo_solicitacao_compra()
+
+
+def modulo_solicitacao_interna():
+    sisget_tela_principal(
+        titulo="Solicitação Interna",
+        chave="solicitacao_interna",
+        func_incluir=solicitacao_interna_incluir,
+        func_localizar=solicitacao_interna_localizar,
+        func_alterar=solicitacao_interna_alterar,
+        func_excluir=solicitacao_interna_excluir,
+        func_imprimir=solicitacao_interna_imprimir,
+        icone="📦"
+    )
+
+
+def modulo_solicitacao_compra():
+    sisget_tela_principal(
+        titulo="Solicitação de Compra",
+        chave="solicitacao_compra",
+        func_incluir=solicitacao_compra_incluir,
+        func_localizar=solicitacao_compra_localizar,
+        func_alterar=solicitacao_compra_alterar,
+        func_excluir=solicitacao_compra_excluir,
+        func_imprimir=solicitacao_compra_imprimir,
+        icone="🛒"
+    )
+
+
+def modulo_solicitacao_licitacao():
+    sisget_tela_principal(
+        titulo="Solicitação para Licitação",
+        chave="solicitacao_licitacao",
+        func_incluir=solicitacao_licitacao_incluir,
+        func_localizar=solicitacao_licitacao_localizar,
+        func_alterar=solicitacao_licitacao_alterar,
+        func_excluir=solicitacao_licitacao_excluir,
+        func_imprimir=solicitacao_licitacao_imprimir,
+        icone="⚖️"
+    )
+
+
+# ============================================================
+# BASE DE INCLUSÃO DAS SOLICITAÇÕES
+# ============================================================
+
+def sisget_solicitacao_incluir_base(
+    tipo_solicitacao,
+    titulo,
+    chave_reset,
+    etapa_inicial
+):
+
+    if chave_reset not in st.session_state:
+        st.session_state[chave_reset] = 0
+
+    reset = st.session_state[chave_reset]
+
+    exercicio = datetime.now().year
+
+    numero = sisget_proximo_numero_solicitacao(
+        tipo_solicitacao,
+        exercicio
+    )
+
+    prefixos = {
+        "INTERNA": "INT",
+        "COMPRA": "COM",
+        "LICITACAO": "LIC"
+    }
+
+    codigo = (
+        f"{prefixos[tipo_solicitacao]}"
+        f"-{exercicio}-"
+        f"{str(numero).zfill(6)}"
+    )
+
+    st.subheader(titulo)
+
+    unidades = _sisget_fetch(
+        """
+        SELECT id, codigo, nome
+        FROM unidades_administrativas
+        WHERE ativo = TRUE
+        ORDER BY codigo, nome
+        """
+    )
+
+    if not unidades:
+        st.warning(
+            "⚠️ Nenhuma Unidade Administrativa ativa."
+        )
+        return
+
+    mapa_unidades = {
+        f"{codigo_u} - {nome_u}": id_u
+        for id_u, codigo_u, nome_u in unidades
+    }
+
+    with st.form(
+        f"form_solicitacao_{tipo_solicitacao}_{reset}"
+    ):
+        st.text_input(
+            "Código",
+            value=codigo,
+            disabled=True
+        )
+
+        unidade_nome = st.selectbox(
+            "Unidade / Setor Solicitante *",
+            list(mapa_unidades.keys())
+        )
+
+        prioridade = st.selectbox(
+            "Prioridade *",
+            ["Normal", "Alta", "Urgente"]
+        )
+
+        objeto = st.text_area(
+            "Objeto / Resumo *"
+        )
+
+        justificativa = st.text_area(
+            "Justificativa *"
+        )
+
+        data_necessidade = st.date_input(
+            "Data da Necessidade"
+        )
+
+        observacao = st.text_area(
+            "Observações"
+        )
+
+        salvar = st.form_submit_button(
+            "💾 Salvar Solicitação",
+            type="primary",
+            use_container_width=True
+        )
+
+    if salvar:
+
+        if not objeto.strip() or not justificativa.strip():
+            st.warning(
+                "⚠️ Informe objeto e justificativa."
+            )
+            return
+
+        numero = sisget_proximo_numero_solicitacao(
+            tipo_solicitacao,
+            exercicio
+        )
+
+        codigo = (
+            f"{prefixos[tipo_solicitacao]}"
+            f"-{exercicio}-"
+            f"{str(numero).zfill(6)}"
+        )
+
+        solicitacao_id = _sisget_salvar_retorno(
+            """
+            INSERT INTO solicitacoes
+            (
+                codigo,
+                exercicio,
+                numero,
+                tipo_solicitacao,
+                unidade_administrativa_id,
+                solicitante_usuario_id,
+                prioridade,
+                objeto,
+                justificativa,
+                data_necessidade,
+                observacao,
+                status,
+                etapa_atual,
+                ativo
+            )
+            VALUES
+            (
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                'RASCUNHO',
+                ?,
+                TRUE
+            )
+            RETURNING id
+            """,
+            (
+                codigo,
+                exercicio,
+                numero,
+                tipo_solicitacao,
+                mapa_unidades[unidade_nome],
+                st.session_state.get("usuario_id"),
+                prioridade,
+                objeto.strip(),
+                justificativa.strip(),
+                data_necessidade,
+                observacao.strip() or None,
+                etapa_inicial
+            )
+        )
+
+        if solicitacao_id:
+            st.session_state[chave_reset] += 1
+            st.rerun()
+
+
+def solicitacao_interna_incluir():
+    sisget_solicitacao_incluir_base(
+        "INTERNA",
+        "📦 Solicitação Interna",
+        "sisget_solicitacao_interna_reset",
+        "ALMOXARIFADO"
+    )
+
+
+def solicitacao_compra_incluir():
+    sisget_solicitacao_incluir_base(
+        "COMPRA",
+        "🛒 Solicitação de Compra",
+        "sisget_solicitacao_compra_reset",
+        "COMPRAS"
+    )
+
+
+def solicitacao_licitacao_incluir():
+    sisget_solicitacao_incluir_base(
+        "LICITACAO",
+        "⚖️ Solicitação para Licitação",
+        "sisget_solicitacao_licitacao_reset",
+        "APROVACAO"
+    )
+
+
+# ============================================================
+# LOCALIZAR / ALTERAR / EXCLUIR / IMPRIMIR SOLICITAÇÕES
+# ============================================================
+
+def sisget_solicitacao_localizar_tipo(
+    tipo_solicitacao,
+    chave
+):
+    df = _sisget_dataframe(
+        """
+        SELECT
+            id,
+            codigo AS "Código",
+            objeto AS "Objeto",
+            prioridade AS "Prioridade",
+            status AS "Status",
+            etapa_atual AS "Etapa"
+        FROM solicitacoes
+        WHERE tipo_solicitacao = ?
+          AND ativo = TRUE
+        ORDER BY exercicio DESC, numero DESC
+        """,
+        (tipo_solicitacao,)
+    )
+
+    if df.empty:
+        return None
+
+    return sisget_grid_localizar(
+        df=df,
+        chave=chave,
+        coluna_id="id",
+        altura=480
+    )
+
+
+def solicitacao_interna_localizar():
+    return sisget_solicitacao_localizar_tipo(
+        "INTERNA",
+        "solicitacao_interna"
+    )
+
+
+def solicitacao_compra_localizar():
+    return sisget_solicitacao_localizar_tipo(
+        "COMPRA",
+        "solicitacao_compra"
+    )
+
+
+def solicitacao_licitacao_localizar():
+    return sisget_solicitacao_localizar_tipo(
+        "LICITACAO",
+        "solicitacao_licitacao"
+    )
+
+
+def sisget_solicitacao_alterar_base(
+    solicitacao_id
+):
+
+    registro = _sisget_fetchone(
+        """
+        SELECT
+            codigo,
+            objeto,
+            justificativa,
+            prioridade,
+            observacao,
+            status,
+            etapa_atual
+        FROM solicitacoes
+        WHERE id = ?
+        """,
+        (solicitacao_id,)
+    )
+
+    if not registro:
+        return
+
+    (
+        codigo,
+        objeto_atual,
+        justificativa_atual,
+        prioridade_atual,
+        observacao_atual,
+        status,
+        etapa_atual
+    ) = registro
+
+    prioridades = ["Normal", "Alta", "Urgente"]
+
+    indice = (
+        prioridades.index(prioridade_atual)
+        if prioridade_atual in prioridades
+        else 0
+    )
+
+    with st.form(
+        f"form_solicitacao_alterar_{solicitacao_id}"
+    ):
+        st.text_input(
+            "Código",
+            value=codigo,
+            disabled=True
+        )
+
+        st.text_input(
+            "Etapa",
+            value=etapa_atual or "",
+            disabled=True
+        )
+
+        objeto = st.text_area(
+            "Objeto *",
+            value=objeto_atual or ""
+        )
+
+        justificativa = st.text_area(
+            "Justificativa *",
+            value=justificativa_atual or ""
+        )
+
+        prioridade = st.selectbox(
+            "Prioridade *",
+            prioridades,
+            index=indice
+        )
+
+        observacao = st.text_area(
+            "Observações",
+            value=observacao_atual or ""
+        )
+
+        salvar = st.form_submit_button(
+            "💾 Salvar Alterações",
+            type="primary",
+            use_container_width=True
+        )
+
+    if salvar:
+        if _sisget_salvar(
+            """
+            UPDATE solicitacoes
+            SET
+                objeto = ?,
+                justificativa = ?,
+                prioridade = ?,
+                observacao = ?
+            WHERE id = ?
+            """,
+            (
+                objeto.strip(),
+                justificativa.strip(),
+                prioridade,
+                observacao.strip() or None,
+                solicitacao_id
+            )
+        ):
+            st.rerun()
+
+    st.markdown("---")
+
+    solicitacao_itens_editar(
+        solicitacao_id
+    )
+
+
+def solicitacao_interna_alterar(solicitacao_id):
+    sisget_solicitacao_alterar_base(
+        solicitacao_id
+    )
+
+
+def solicitacao_compra_alterar(solicitacao_id):
+    sisget_solicitacao_alterar_base(
+        solicitacao_id
+    )
+
+
+def solicitacao_licitacao_alterar(solicitacao_id):
+    sisget_solicitacao_alterar_base(
+        solicitacao_id
+    )
+
+    st.markdown("---")
+
+    solicitacao_licitacao_fluxo(
+        solicitacao_id
+    )
+
+
+def sisget_solicitacao_excluir_tipo(
+    tipo_solicitacao,
+    chave
+):
+    solicitacao_id = sisget_solicitacao_localizar_tipo(
+        tipo_solicitacao,
+        chave
+    )
+
+    if not solicitacao_id:
+        return
+
+    if st.button(
+        "🗑️ Confirmar Exclusão",
+        type="primary",
+        use_container_width=True,
+        key=f"excluir_solicitacao_{solicitacao_id}"
+    ):
+        if _sisget_salvar(
+            """
+            UPDATE solicitacoes
+            SET ativo = FALSE
+            WHERE id = ?
+            """,
+            (solicitacao_id,)
+        ):
+            st.rerun()
+
+
+def solicitacao_interna_excluir():
+    sisget_solicitacao_excluir_tipo(
+        "INTERNA",
+        "excluir_solicitacao_interna"
+    )
+
+
+def solicitacao_compra_excluir():
+    sisget_solicitacao_excluir_tipo(
+        "COMPRA",
+        "excluir_solicitacao_compra"
+    )
+
+
+def solicitacao_licitacao_excluir():
+    sisget_solicitacao_excluir_tipo(
+        "LICITACAO",
+        "excluir_solicitacao_licitacao"
+    )
+
+
+def sisget_solicitacao_imprimir_tipo(
+    tipo_solicitacao,
+    titulo,
+    arquivo
+):
+    df = _sisget_dataframe(
+        """
+        SELECT
+            codigo AS "Código",
+            objeto AS "Objeto",
+            prioridade AS "Prioridade",
+            status AS "Status",
+            etapa_atual AS "Etapa"
+        FROM solicitacoes
+        WHERE tipo_solicitacao = ?
+          AND ativo = TRUE
+        ORDER BY exercicio DESC, numero DESC
+        """,
+        (tipo_solicitacao,)
+    )
+
+    sisget_relatorio_classificacao(
+        titulo,
+        df,
+        arquivo
+    )
+
+
+def solicitacao_interna_imprimir():
+    sisget_solicitacao_imprimir_tipo(
+        "INTERNA",
+        "Solicitações Internas",
+        "solicitacoes_internas.pdf"
+    )
+
+
+def solicitacao_compra_imprimir():
+    sisget_solicitacao_imprimir_tipo(
+        "COMPRA",
+        "Solicitações de Compra",
+        "solicitacoes_compra.pdf"
+    )
+
+
+def solicitacao_licitacao_imprimir():
+    sisget_solicitacao_imprimir_tipo(
+        "LICITACAO",
+        "Solicitações para Licitação",
+        "solicitacoes_licitacao.pdf"
+    )
+
+
+# ============================================================
+# ITENS DAS SOLICITAÇÕES
+# ============================================================
+
+def solicitacao_itens_editar(
+    solicitacao_id
+):
+
+    produtos = _sisget_fetch(
+        """
+        SELECT id, codigo, descricao
+        FROM produtos
+        WHERE ativo = TRUE
+        ORDER BY codigo
+        """
+    )
+
+    if not produtos:
+        st.warning("⚠️ Nenhum produto cadastrado.")
+        return
+
+    mapa = {
+        f"{codigo} - {descricao}": id_
+        for id_, codigo, descricao in produtos
+    }
+
+    with st.form(
+        f"form_item_solicitacao_{solicitacao_id}",
+        clear_on_submit=True
+    ):
+        produto_nome = st.selectbox(
+            "Produto *",
+            list(mapa.keys())
+        )
+
+        quantidade = st.number_input(
+            "Quantidade *",
+            min_value=0.000001,
+            value=1.0,
+            format="%.6f"
+        )
+
+        valor_unitario = st.number_input(
+            "Valor Estimado Unitário",
+            min_value=0.0,
+            value=0.0,
+            format="%.2f"
+        )
+
+        observacao = st.text_input(
+            "Observação"
+        )
+
+        adicionar = st.form_submit_button(
+            "➕ Adicionar Item",
+            type="primary",
+            use_container_width=True
+        )
+
+    if adicionar:
+
+        valor_total = (
+            float(quantidade)
+            *
+            float(valor_unitario)
+        )
+
+        if _sisget_salvar(
+            """
+            INSERT INTO solicitacoes_itens
+            (
+                solicitacao_id,
+                produto_id,
+                quantidade_solicitada,
+                valor_estimado_unitario,
+                valor_estimado_total,
+                observacao,
+                ativo
+            )
+            VALUES (?, ?, ?, ?, ?, ?, TRUE)
+            """,
+            (
+                solicitacao_id,
+                mapa[produto_nome],
+                float(quantidade),
+                float(valor_unitario),
+                valor_total,
+                observacao.strip() or None
+            )
+        ):
+            st.rerun()
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            si.id,
+            p.codigo AS "Código",
+            p.descricao AS "Produto",
+            si.quantidade_solicitada AS "Quantidade",
+            si.valor_estimado_unitario AS "Valor Unitário",
+            si.valor_estimado_total AS "Valor Total"
+        FROM solicitacoes_itens si
+        INNER JOIN produtos p
+            ON p.id = si.produto_id
+        WHERE si.solicitacao_id = ?
+          AND si.ativo = TRUE
+        ORDER BY si.id
+        """,
+        (solicitacao_id,)
+    )
+
+    if not df.empty:
+        st.dataframe(
+            df,
+            use_container_width=True,
+            hide_index=True
+        )
+
+
+# ============================================================
+# AUXILIAR - MOVER ETAPA
+# ============================================================
+
+def sisget_solicitacao_mover_etapa(
+    solicitacao_id,
+    etapa_origem,
+    etapa_destino,
+    acao,
+    observacao=None,
+    status=None
+):
+
+    if status:
+        sucesso = _sisget_salvar(
+            """
+            UPDATE solicitacoes
+            SET
+                etapa_atual = ?,
+                status = ?
+            WHERE id = ?
+            """,
+            (
+                etapa_destino,
+                status,
+                solicitacao_id
+            )
+        )
+    else:
+        sucesso = _sisget_salvar(
+            """
+            UPDATE solicitacoes
+            SET etapa_atual = ?
+            WHERE id = ?
+            """,
+            (
+                etapa_destino,
+                solicitacao_id
+            )
+        )
+
+    if sucesso:
+        _sisget_salvar(
+            """
+            INSERT INTO solicitacoes_historico
+            (
+                solicitacao_id,
+                usuario_id,
+                etapa_origem,
+                etapa_destino,
+                acao,
+                observacao
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                solicitacao_id,
+                st.session_state.get("usuario_id"),
+                etapa_origem,
+                etapa_destino,
+                acao,
+                observacao
+            )
+        )
+
+    return sucesso
+
+
+# ============================================================
+# FLUXO DA SOLICITAÇÃO PARA LICITAÇÃO
+# ============================================================
+
+def solicitacao_licitacao_fluxo(
+    solicitacao_id
+):
+
+    registro = _sisget_fetchone(
+        """
+        SELECT etapa_atual, status
+        FROM solicitacoes
+        WHERE id = ?
+        """,
+        (solicitacao_id,)
+    )
+
+    if not registro:
+        return
+
+    etapa_atual, status = registro
+
+    st.subheader("🔄 Fluxo da Solicitação")
+
+    st.info(
+        f"Status: {status} | Etapa: {etapa_atual}"
+    )
+
+    etapas = [
+        "APROVACAO",
+        "DFD",
+        "ETP",
+        "RISCOS",
+        "COMPRAS",
+        "CONTABILIDADE",
+        "FINANCEIRO",
+        "ORDENADOR",
+        "LICITACAO",
+        "TR",
+        "LIBERACAO_LICITACAO"
+    ]
+
+    nomes = {
+        "APROVACAO": "✅ Aprovação",
+        "DFD": "📄 DFD",
+        "ETP": "📘 ETP",
+        "RISCOS": "⚠️ Mapa de Riscos",
+        "COMPRAS": "🛒 Compras / Cotação",
+        "CONTABILIDADE": "🧾 Contabilidade / Fichas",
+        "FINANCEIRO": "💰 Financeiro",
+        "ORDENADOR": "✍️ Ordenador",
+        "LICITACAO": "⚖️ Enquadramento",
+        "TR": "📑 Termo de Referência",
+        "LIBERACAO_LICITACAO": "🚀 Liberação"
+    }
+
+    indice_atual = (
+        etapas.index(etapa_atual)
+        if etapa_atual in etapas
+        else 0
+    )
+
+    for indice, etapa in enumerate(etapas):
+
+        if indice < indice_atual:
+            marcador = "✅"
+        elif indice == indice_atual:
+            marcador = "🟡"
+        else:
+            marcador = "🔒"
+
+        st.write(
+            f"{marcador} {nomes[etapa]}"
+        )
+
+    st.divider()
+
+    if etapa_atual == "APROVACAO":
+        solicitacao_etapa_aprovacao(
+            solicitacao_id
+        )
+
+    elif etapa_atual == "DFD":
+        solicitacao_dfd_editar(
+            solicitacao_id
+        )
+
+    elif etapa_atual == "ETP":
+        solicitacao_etp_editar(
+            solicitacao_id
+        )
+
+    elif etapa_atual == "RISCOS":
+        solicitacao_riscos_editar(
+            solicitacao_id
+        )
+
+    elif etapa_atual == "COMPRAS":
+        solicitacao_compras_cotacao(
+            solicitacao_id
+        )
+
+    elif etapa_atual == "CONTABILIDADE":
+        solicitacao_contabilidade_fichas(
+            solicitacao_id
+        )
+
+    elif etapa_atual == "FINANCEIRO":
+        solicitacao_financeiro_validar(
+            solicitacao_id
+        )
+
+    elif etapa_atual == "ORDENADOR":
+        solicitacao_ordenador_autorizar(
+            solicitacao_id
+        )
+
+    elif etapa_atual == "LICITACAO":
+        solicitacao_enquadramento_licitacao(
+            solicitacao_id
+        )
+
+    elif etapa_atual == "TR":
+        solicitacao_tr_editar(
+            solicitacao_id
+        )
+
+    elif etapa_atual == "LIBERACAO_LICITACAO":
+        solicitacao_liberar_licitacao(
+            solicitacao_id
+        )
+
+
+# ============================================================
+# APROVAÇÃO
+# ============================================================
+
+def solicitacao_etapa_aprovacao(
+    solicitacao_id
+):
+
+    with st.form(
+        f"form_aprovacao_{solicitacao_id}"
+    ):
+        observacao = st.text_area(
+            "Observação"
+        )
+
+        col1, col2 = st.columns(2)
+
+        aprovar = col1.form_submit_button(
+            "✅ Aprovar",
+            type="primary",
+            use_container_width=True
+        )
+
+        rejeitar = col2.form_submit_button(
+            "❌ Rejeitar",
+            use_container_width=True
+        )
+
+    if aprovar:
+        if sisget_solicitacao_mover_etapa(
+            solicitacao_id,
+            "APROVACAO",
+            "DFD",
+            "SOLICITACAO_APROVADA",
+            observacao.strip() or None,
+            "EM_TRAMITACAO"
+        ):
+            st.rerun()
+
+    if rejeitar:
+        if sisget_solicitacao_mover_etapa(
+            solicitacao_id,
+            "APROVACAO",
+            "APROVACAO",
+            "SOLICITACAO_REJEITADA",
+            observacao.strip() or None,
+            "REJEITADA"
+        ):
+            st.rerun()
+
+
+# ============================================================
+# DFD
+# ============================================================
+
+def solicitacao_dfd_editar(
+    solicitacao_id
+):
+
+    with st.form(
+        f"form_dfd_{solicitacao_id}"
+    ):
+        necessidade = st.text_area(
+            "Descrição da Necessidade *"
+        )
+
+        justificativa = st.text_area(
+            "Justificativa da Demanda *"
+        )
+
+        quantidade = st.text_area(
+            "Quantidade Preliminar / Justificativa *"
+        )
+
+        previsao = st.date_input(
+            "Previsão da Contratação"
+        )
+
+        alinhamento = st.text_area(
+            "Alinhamento com o Planejamento"
+        )
+
+        salvar = st.form_submit_button(
+            "💾 Salvar e Concluir DFD",
+            type="primary",
+            use_container_width=True
+        )
+
+    if salvar:
+
+        if _sisget_salvar(
+            """
+            INSERT INTO solicitacoes_dfd
+            (
+                solicitacao_id,
+                descricao_necessidade,
+                justificativa_demanda,
+                quantidade_preliminar,
+                previsao_contratacao,
+                alinhamento_planejamento
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT (solicitacao_id)
+            DO UPDATE SET
+                descricao_necessidade = EXCLUDED.descricao_necessidade,
+                justificativa_demanda = EXCLUDED.justificativa_demanda,
+                quantidade_preliminar = EXCLUDED.quantidade_preliminar,
+                previsao_contratacao = EXCLUDED.previsao_contratacao,
+                alinhamento_planejamento = EXCLUDED.alinhamento_planejamento
+            """,
+            (
+                solicitacao_id,
+                necessidade.strip(),
+                justificativa.strip(),
+                quantidade.strip(),
+                previsao,
+                alinhamento.strip() or None
+            )
+        ):
+            sisget_solicitacao_mover_etapa(
+                solicitacao_id,
+                "DFD",
+                "ETP",
+                "DFD_CONCLUIDO"
+            )
+            st.rerun()
+
+
+# ============================================================
+# ETP
+# ============================================================
+
+def solicitacao_etp_editar(
+    solicitacao_id
+):
+
+    with st.form(
+        f"form_etp_{solicitacao_id}"
+    ):
+        necessidade = st.text_area(
+            "Necessidade / Problema *"
+        )
+
+        requisitos = st.text_area(
+            "Requisitos da Contratação *"
+        )
+
+        mercado = st.text_area(
+            "Levantamento de Mercado *"
+        )
+
+        solucao = st.text_area(
+            "Solução Escolhida *"
+        )
+
+        justificativa_solucao = st.text_area(
+            "Justificativa da Solução *"
+        )
+
+        quantidades = st.text_area(
+            "Estimativa das Quantidades *"
+        )
+
+        valor = st.number_input(
+            "Estimativa Inicial do Valor",
+            min_value=0.0,
+            value=0.0,
+            format="%.2f"
+        )
+
+        parcelamento = st.checkbox(
+            "Contratação parcelada?"
+        )
+
+        impactos = st.text_area(
+            "Impactos / Sustentabilidade"
+        )
+
+        viabilidade = st.selectbox(
+            "Conclusão *",
+            ["Viável", "Inviável"]
+        )
+
+        salvar = st.form_submit_button(
+            "💾 Salvar e Concluir ETP",
+            type="primary",
+            use_container_width=True
+        )
+
+    if salvar:
+
+        if _sisget_salvar(
+            """
+            INSERT INTO solicitacoes_etp
+            (
+                solicitacao_id,
+                necessidade,
+                requisitos,
+                levantamento_mercado,
+                solucao_escolhida,
+                justificativa_solucao,
+                estimativa_quantidades,
+                estimativa_valor,
+                parcelamento,
+                impactos,
+                conclusao_viabilidade
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (solicitacao_id)
+            DO UPDATE SET
+                necessidade = EXCLUDED.necessidade,
+                requisitos = EXCLUDED.requisitos,
+                levantamento_mercado = EXCLUDED.levantamento_mercado,
+                solucao_escolhida = EXCLUDED.solucao_escolhida,
+                justificativa_solucao = EXCLUDED.justificativa_solucao,
+                estimativa_quantidades = EXCLUDED.estimativa_quantidades,
+                estimativa_valor = EXCLUDED.estimativa_valor,
+                parcelamento = EXCLUDED.parcelamento,
+                impactos = EXCLUDED.impactos,
+                conclusao_viabilidade = EXCLUDED.conclusao_viabilidade
+            """,
+            (
+                solicitacao_id,
+                necessidade.strip(),
+                requisitos.strip(),
+                mercado.strip(),
+                solucao.strip(),
+                justificativa_solucao.strip(),
+                quantidades.strip(),
+                float(valor),
+                parcelamento,
+                impactos.strip() or None,
+                viabilidade
+            )
+        ):
+            if viabilidade == "Viável":
+                sisget_solicitacao_mover_etapa(
+                    solicitacao_id,
+                    "ETP",
+                    "RISCOS",
+                    "ETP_CONCLUIDO"
+                )
+            else:
+                _sisget_salvar(
+                    """
+                    UPDATE solicitacoes
+                    SET status = 'ETP_INVIAVEL'
+                    WHERE id = ?
+                    """,
+                    (solicitacao_id,)
+                )
+
+            st.rerun()
+
+
+# ============================================================
+# MAPA DE RISCOS
+# ============================================================
+
+def solicitacao_riscos_editar(
+    solicitacao_id
+):
+
+    with st.form(
+        f"form_risco_{solicitacao_id}",
+        clear_on_submit=True
+    ):
+        categoria = st.selectbox(
+            "Categoria *",
+            [
+                "Técnico",
+                "Financeiro",
+                "Orçamentário",
+                "Jurídico",
+                "Operacional",
+                "Prazo",
+                "Fornecedor",
+                "Mercado",
+                "Fiscal",
+                "Ambiental",
+                "Logístico",
+                "Outro"
+            ]
+        )
+
+        evento = st.text_area(
+            "Evento de Risco *"
+        )
+
+        causa = st.text_area(
+            "Causa *"
+        )
+
+        consequencia = st.text_area(
+            "Consequência *"
+        )
+
+        col1, col2 = st.columns(2)
+
+        probabilidade = col1.selectbox(
+            "Probabilidade",
+            [1, 2, 3, 4, 5]
+        )
+
+        impacto = col2.selectbox(
+            "Impacto",
+            [1, 2, 3, 4, 5]
+        )
+
+        nivel = (
+            int(probabilidade)
+            *
+            int(impacto)
+        )
+
+        st.info(
+            f"Nível do Risco: {nivel}"
+        )
+
+        resposta = st.selectbox(
+            "Resposta",
+            [
+                "Aceitar",
+                "Mitigar",
+                "Evitar",
+                "Transferir"
+            ]
+        )
+
+        preventiva = st.text_area(
+            "Ação Preventiva"
+        )
+
+        contingencia = st.text_area(
+            "Contingência"
+        )
+
+        responsavel = st.text_input(
+            "Responsável"
+        )
+
+        adicionar = st.form_submit_button(
+            "➕ Adicionar Risco",
+            type="primary",
+            use_container_width=True
+        )
+
+    if adicionar:
+        if _sisget_salvar(
+            """
+            INSERT INTO solicitacoes_riscos
+            (
+                solicitacao_id,
+                categoria,
+                evento,
+                causa,
+                consequencia,
+                probabilidade,
+                impacto,
+                nivel,
+                resposta,
+                acao_preventiva,
+                contingencia,
+                responsavel,
+                situacao
+            )
+            VALUES
+            (
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                'IDENTIFICADO'
+            )
+            """,
+            (
+                solicitacao_id,
+                categoria,
+                evento.strip(),
+                causa.strip(),
+                consequencia.strip(),
+                int(probabilidade),
+                int(impacto),
+                nivel,
+                resposta,
+                preventiva.strip() or None,
+                contingencia.strip() or None,
+                responsavel.strip() or None
+            )
+        ):
+            st.rerun()
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            categoria AS "Categoria",
+            evento AS "Risco",
+            probabilidade AS "Prob.",
+            impacto AS "Impacto",
+            nivel AS "Nível",
+            resposta AS "Resposta"
+        FROM solicitacoes_riscos
+        WHERE solicitacao_id = ?
+        ORDER BY nivel DESC
+        """,
+        (solicitacao_id,)
+    )
+
+    if not df.empty:
+        st.dataframe(
+            df,
+            use_container_width=True,
+            hide_index=True
+        )
+
+    if st.button(
+        "✅ Concluir Mapa de Riscos",
+        type="primary",
+        use_container_width=True,
+        key=f"concluir_riscos_{solicitacao_id}"
+    ):
+        sisget_solicitacao_mover_etapa(
+            solicitacao_id,
+            "RISCOS",
+            "COMPRAS",
+            "RISCOS_CONCLUIDOS"
+        )
+        st.rerun()
+
+
+# ============================================================
+# COMPRAS / COTAÇÃO
+# ============================================================
+
+def solicitacao_compras_cotacao(
+    solicitacao_id
+):
+
+    itens = _sisget_fetch(
+        """
+        SELECT
+            si.id,
+            p.codigo,
+            p.descricao
+        FROM solicitacoes_itens si
+        INNER JOIN produtos p
+            ON p.id = si.produto_id
+        WHERE si.solicitacao_id = ?
+          AND si.ativo = TRUE
+        ORDER BY si.id
+        """,
+        (solicitacao_id,)
+    )
+
+    fornecedores = _sisget_fetch(
+        """
+        SELECT id, codigo, razao_social
+        FROM fornecedores
+        WHERE ativo = TRUE
+        ORDER BY razao_social
+        """
+    )
+
+    if not itens or not fornecedores:
+        st.warning(
+            "⚠️ Necessário ter itens e fornecedores cadastrados."
+        )
+        return
+
+    mapa_itens = {
+        f"{codigo} - {descricao}": item_id
+        for item_id, codigo, descricao in itens
+    }
+
+    mapa_fornecedores = {
+        f"{codigo} - {razao}": fornecedor_id
+        for fornecedor_id, codigo, razao in fornecedores
+    }
+
+    with st.form(
+        f"form_cotacao_{solicitacao_id}",
+        clear_on_submit=True
+    ):
+        item_nome = st.selectbox(
+            "Item *",
+            list(mapa_itens.keys())
+        )
+
+        fornecedor_nome = st.selectbox(
+            "Fornecedor *",
+            list(mapa_fornecedores.keys())
+        )
+
+        fonte = st.selectbox(
+            "Fonte da Pesquisa *",
+            [
+                "Cotação com fornecedor",
+                "Painel de preços",
+                "Contratação anterior",
+                "Ata / ARP",
+                "Banco de preços",
+                "Outra fonte"
+            ]
+        )
+
+        valor_unitario = st.number_input(
+            "Valor Unitário *",
+            min_value=0.0,
+            value=0.0,
+            format="%.2f"
+        )
+
+        adicionar = st.form_submit_button(
+            "➕ Adicionar Cotação",
+            type="primary",
+            use_container_width=True
+        )
+
+    if adicionar:
+
+        if _sisget_salvar(
+            """
+            INSERT INTO cotacoes
+            (
+                solicitacao_id,
+                solicitacao_item_id,
+                fornecedor_id,
+                fonte_pesquisa,
+                valor_unitario
+            )
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                solicitacao_id,
+                mapa_itens[item_nome],
+                mapa_fornecedores[fornecedor_nome],
+                fonte,
+                float(valor_unitario)
+            )
+        ):
+            st.rerun()
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            p.descricao AS "Item",
+            f.razao_social AS "Fornecedor",
+            c.fonte_pesquisa AS "Fonte",
+            c.valor_unitario AS "Valor Unitário"
+        FROM cotacoes c
+        INNER JOIN solicitacoes_itens si
+            ON si.id = c.solicitacao_item_id
+        INNER JOIN produtos p
+            ON p.id = si.produto_id
+        INNER JOIN fornecedores f
+            ON f.id = c.fornecedor_id
+        WHERE c.solicitacao_id = ?
+        ORDER BY p.descricao, c.valor_unitario
+        """,
+        (solicitacao_id,)
+    )
+
+    if not df.empty:
+        st.dataframe(
+            df,
+            use_container_width=True,
+            hide_index=True
+        )
+
+    if st.button(
+        "✅ Concluir Cotação",
+        type="primary",
+        use_container_width=True,
+        key=f"concluir_cotacao_{solicitacao_id}"
+    ):
+        sisget_solicitacao_mover_etapa(
+            solicitacao_id,
+            "COMPRAS",
+            "CONTABILIDADE",
+            "COTACAO_CONCLUIDA"
+        )
+        st.rerun()
+
+
+# ============================================================
+# CONTABILIDADE / FICHAS
+# ============================================================
+
+def solicitacao_contabilidade_fichas(
+    solicitacao_id
+):
+
+    fichas = _sisget_fetch(
+        """
+        SELECT id, exercicio, numero_ficha, descricao
+        FROM fichas_orcamentarias
+        WHERE ativo = TRUE
+        ORDER BY exercicio DESC, numero_ficha
+        """
+    )
+
+    if not fichas:
+        st.warning(
+            "⚠️ Nenhuma ficha orçamentária ativa."
+        )
+        return
+
+    mapa = {
+        (
+            f"{exercicio}"
+            f" | Ficha {numero_ficha}"
+            f" | {descricao or ''}"
+        ): ficha_id
+        for (
+            ficha_id,
+            exercicio,
+            numero_ficha,
+            descricao
+        ) in fichas
+    }
+
+    with st.form(
+        f"form_fichas_{solicitacao_id}",
+        clear_on_submit=True
+    ):
+        ficha_nome = st.selectbox(
+            "Ficha Orçamentária *",
+            list(mapa.keys())
+        )
+
+        valor = st.number_input(
+            "Valor Vinculado *",
+            min_value=0.0,
+            value=0.0,
+            format="%.2f"
+        )
+
+        adicionar = st.form_submit_button(
+            "➕ Vincular Ficha",
+            type="primary",
+            use_container_width=True
+        )
+
+    if adicionar:
+        if _sisget_salvar(
+            """
+            INSERT INTO solicitacoes_fichas
+            (
+                solicitacao_id,
+                ficha_orcamentaria_id,
+                valor_vinculado,
+                validada_contabilidade
+            )
+            VALUES (?, ?, ?, TRUE)
+            """,
+            (
+                solicitacao_id,
+                mapa[ficha_nome],
+                float(valor)
+            )
+        ):
+            st.rerun()
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            f.numero_ficha AS "Ficha",
+            f.exercicio AS "Exercício",
+            sf.valor_vinculado AS "Valor"
+        FROM solicitacoes_fichas sf
+        INNER JOIN fichas_orcamentarias f
+            ON f.id = sf.ficha_orcamentaria_id
+        WHERE sf.solicitacao_id = ?
+        ORDER BY sf.id
+        """,
+        (solicitacao_id,)
+    )
+
+    if not df.empty:
+        st.dataframe(
+            df,
+            use_container_width=True,
+            hide_index=True
+        )
+
+    if st.button(
+        "✅ Validar Contabilidade",
+        type="primary",
+        use_container_width=True,
+        key=f"validar_contabilidade_{solicitacao_id}"
+    ):
+        sisget_solicitacao_mover_etapa(
+            solicitacao_id,
+            "CONTABILIDADE",
+            "FINANCEIRO",
+            "CONTABILIDADE_VALIDOU"
+        )
+        st.rerun()
+
+
+# ============================================================
+# FINANCEIRO
+# ============================================================
+
+def solicitacao_financeiro_validar(
+    solicitacao_id
+):
+
+    with st.form(
+        f"form_financeiro_{solicitacao_id}"
+    ):
+        valor_validado = st.number_input(
+            "Valor Validado *",
+            min_value=0.0,
+            value=0.0,
+            format="%.2f"
+        )
+
+        cota = st.number_input(
+            "Cota Financeira",
+            min_value=0.0,
+            value=0.0,
+            format="%.2f"
+        )
+
+        reserva = st.number_input(
+            "Reserva",
+            min_value=0.0,
+            value=0.0,
+            format="%.2f"
+        )
+
+        parecer = st.text_area(
+            "Parecer Financeiro"
+        )
+
+        validar = st.form_submit_button(
+            "✅ Validar Financeiro",
+            type="primary",
+            use_container_width=True
+        )
+
+    if validar:
+        _sisget_salvar(
+            """
+            INSERT INTO solicitacoes_financeiro
+            (
+                solicitacao_id,
+                valor_validado,
+                cota,
+                reserva,
+                parecer
+            )
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                solicitacao_id,
+                float(valor_validado),
+                float(cota),
+                float(reserva),
+                parecer.strip() or None
+            )
+        )
+
+        sisget_solicitacao_mover_etapa(
+            solicitacao_id,
+            "FINANCEIRO",
+            "ORDENADOR",
+            "FINANCEIRO_VALIDOU"
+        )
+
+        st.rerun()
+
+
+# ============================================================
+# ORDENADOR
+# ============================================================
+
+def solicitacao_ordenador_autorizar(
+    solicitacao_id
+):
+
+    with st.form(
+        f"form_ordenador_{solicitacao_id}"
+    ):
+        despacho = st.text_area(
+            "Despacho"
+        )
+
+        col1, col2 = st.columns(2)
+
+        autorizar = col1.form_submit_button(
+            "✍️ Autorizar",
+            type="primary",
+            use_container_width=True
+        )
+
+        devolver = col2.form_submit_button(
+            "↩️ Devolver",
+            use_container_width=True
+        )
+
+    if autorizar:
+        sisget_solicitacao_mover_etapa(
+            solicitacao_id,
+            "ORDENADOR",
+            "LICITACAO",
+            "ORDENADOR_AUTORIZOU",
+            despacho.strip() or None,
+            "AUTORIZADA"
+        )
+        st.rerun()
+
+    if devolver:
+        sisget_solicitacao_mover_etapa(
+            solicitacao_id,
+            "ORDENADOR",
+            "COMPRAS",
+            "ORDENADOR_DEVOLVEU",
+            despacho.strip() or None,
+            "DEVOLVIDA"
+        )
+        st.rerun()
+
+
+# ============================================================
+# ENQUADRAMENTO
+# ============================================================
+
+def solicitacao_enquadramento_licitacao(
+    solicitacao_id
+):
+
+    with st.form(
+        f"form_enquadramento_{solicitacao_id}"
+    ):
+        tipo_processo = st.selectbox(
+            "Tipo do Processo *",
+            [
+                "Licitação",
+                "Contratação Direta"
+            ]
+        )
+
+        tipo_objeto = st.selectbox(
+            "Tipo do Objeto *",
+            [
+                "Aquisição de bens",
+                "Serviço",
+                "Serviço de engenharia",
+                "Obra",
+                "Locação",
+                "Tecnologia da Informação",
+                "Outro"
+            ]
+        )
+
+        modalidade = st.selectbox(
+            "Modalidade / Forma *",
+            (
+                [
+                    "Pregão",
+                    "Concorrência",
+                    "Concurso",
+                    "Leilão",
+                    "Diálogo Competitivo"
+                ]
+                if tipo_processo == "Licitação"
+                else
+                [
+                    "Dispensa",
+                    "Inexigibilidade"
+                ]
+            )
+        )
+
+        criterio = st.selectbox(
+            "Critério de Julgamento",
+            [
+                "Menor preço",
+                "Maior desconto",
+                "Técnica e preço",
+                "Melhor técnica",
+                "Maior lance",
+                "Maior retorno econômico",
+                "Não se aplica"
+            ]
+        )
+
+        modo_disputa = st.selectbox(
+            "Modo de Disputa",
+            [
+                "Aberto",
+                "Fechado",
+                "Aberto e Fechado",
+                "Não se aplica"
+            ]
+        )
+
+        registro_precos = st.checkbox(
+            "Sistema de Registro de Preços - SRP"
+        )
+
+        fundamento = st.text_input(
+            "Fundamento Legal"
+        )
+
+        justificativa = st.text_area(
+            "Justificativa do Enquadramento *"
+        )
+
+        salvar = st.form_submit_button(
+            "💾 Salvar Enquadramento",
+            type="primary",
+            use_container_width=True
+        )
+
+    if salvar:
+
+        if _sisget_salvar(
+            """
+            INSERT INTO solicitacoes_enquadramento
+            (
+                solicitacao_id,
+                tipo_processo,
+                tipo_objeto,
+                modalidade,
+                criterio_julgamento,
+                modo_disputa,
+                registro_precos,
+                fundamento_legal,
+                justificativa
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (solicitacao_id)
+            DO UPDATE SET
+                tipo_processo = EXCLUDED.tipo_processo,
+                tipo_objeto = EXCLUDED.tipo_objeto,
+                modalidade = EXCLUDED.modalidade,
+                criterio_julgamento = EXCLUDED.criterio_julgamento,
+                modo_disputa = EXCLUDED.modo_disputa,
+                registro_precos = EXCLUDED.registro_precos,
+                fundamento_legal = EXCLUDED.fundamento_legal,
+                justificativa = EXCLUDED.justificativa
+            """,
+            (
+                solicitacao_id,
+                tipo_processo,
+                tipo_objeto,
+                modalidade,
+                criterio,
+                modo_disputa,
+                registro_precos,
+                fundamento.strip() or None,
+                justificativa.strip()
+            )
+        ):
+            sisget_solicitacao_mover_etapa(
+                solicitacao_id,
+                "LICITACAO",
+                "TR",
+                "ENQUADRAMENTO_CONCLUIDO"
+            )
+
+            st.rerun()
+
+
+# ============================================================
+# TERMO DE REFERÊNCIA
+# ============================================================
+
+def solicitacao_tr_editar(
+    solicitacao_id
+):
+
+    with st.form(
+        f"form_tr_{solicitacao_id}"
+    ):
+        objeto = st.text_area(
+            "1. Definição do Objeto *"
+        )
+
+        fundamentacao = st.text_area(
+            "2. Fundamentação *"
+        )
+
+        solucao = st.text_area(
+            "3. Descrição da Solução *"
+        )
+
+        requisitos = st.text_area(
+            "4. Requisitos da Contratação *"
+        )
+
+        execucao = st.text_area(
+            "5. Modelo de Execução *"
+        )
+
+        gestao = st.text_area(
+            "6. Gestão e Fiscalização"
+        )
+
+        pagamento = st.text_area(
+            "7. Medição e Pagamento"
+        )
+
+        selecao = st.text_area(
+            "8. Critérios de Seleção"
+        )
+
+        valor = st.text_area(
+            "9. Estimativa do Valor"
+        )
+
+        adequacao = st.text_area(
+            "10. Adequação Orçamentária"
+        )
+
+        obrigacoes_contratada = st.text_area(
+            "11. Obrigações da Contratada"
+        )
+
+        obrigacoes_adm = st.text_area(
+            "12. Obrigações da Administração"
+        )
+
+        sancoes = st.text_area(
+            "13. Sanções"
+        )
+
+        salvar = st.form_submit_button(
+            "💾 Salvar e Concluir TR",
+            type="primary",
+            use_container_width=True
+        )
+
+    if salvar:
+        if _sisget_salvar(
+            """
+            INSERT INTO solicitacoes_tr
+            (
+                solicitacao_id,
+                objeto,
+                fundamentacao,
+                descricao_solucao,
+                requisitos,
+                modelo_execucao,
+                gestao_fiscalizacao,
+                medicao_pagamento,
+                criterios_selecao,
+                estimativa_valor,
+                adequacao_orcamentaria,
+                obrigacoes_contratada,
+                obrigacoes_administracao,
+                sancoes
+            )
+            VALUES
+            (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (solicitacao_id)
+            DO UPDATE SET
+                objeto = EXCLUDED.objeto,
+                fundamentacao = EXCLUDED.fundamentacao,
+                descricao_solucao = EXCLUDED.descricao_solucao,
+                requisitos = EXCLUDED.requisitos,
+                modelo_execucao = EXCLUDED.modelo_execucao,
+                gestao_fiscalizacao = EXCLUDED.gestao_fiscalizacao,
+                medicao_pagamento = EXCLUDED.medicao_pagamento,
+                criterios_selecao = EXCLUDED.criterios_selecao,
+                estimativa_valor = EXCLUDED.estimativa_valor,
+                adequacao_orcamentaria = EXCLUDED.adequacao_orcamentaria,
+                obrigacoes_contratada = EXCLUDED.obrigacoes_contratada,
+                obrigacoes_administracao = EXCLUDED.obrigacoes_administracao,
+                sancoes = EXCLUDED.sancoes
+            """,
+            (
+                solicitacao_id,
+                objeto.strip(),
+                fundamentacao.strip(),
+                solucao.strip(),
+                requisitos.strip(),
+                execucao.strip(),
+                gestao.strip() or None,
+                pagamento.strip() or None,
+                selecao.strip() or None,
+                valor.strip() or None,
+                adequacao.strip() or None,
+                obrigacoes_contratada.strip() or None,
+                obrigacoes_adm.strip() or None,
+                sancoes.strip() or None
+            )
+        ):
+            sisget_solicitacao_mover_etapa(
+                solicitacao_id,
+                "TR",
+                "LIBERACAO_LICITACAO",
+                "TR_CONCLUIDO"
+            )
+
+            st.rerun()
+
+
+# ============================================================
+# LIBERAÇÃO
+# ============================================================
+
+def solicitacao_liberar_licitacao(
+    solicitacao_id
+):
+
+    verificacoes = {
+        "DFD": _sisget_fetchone(
+            "SELECT id FROM solicitacoes_dfd WHERE solicitacao_id = ?",
+            (solicitacao_id,)
+        ),
+        "ETP": _sisget_fetchone(
+            "SELECT id FROM solicitacoes_etp WHERE solicitacao_id = ?",
+            (solicitacao_id,)
+        ),
+        "Riscos": _sisget_fetchone(
+            "SELECT id FROM solicitacoes_riscos WHERE solicitacao_id = ? LIMIT 1",
+            (solicitacao_id,)
+        ),
+        "Cotação": _sisget_fetchone(
+            "SELECT id FROM cotacoes WHERE solicitacao_id = ? LIMIT 1",
+            (solicitacao_id,)
+        ),
+        "Fichas": _sisget_fetchone(
+            "SELECT id FROM solicitacoes_fichas WHERE solicitacao_id = ? LIMIT 1",
+            (solicitacao_id,)
+        ),
+        "Financeiro": _sisget_fetchone(
+            "SELECT id FROM solicitacoes_financeiro WHERE solicitacao_id = ? LIMIT 1",
+            (solicitacao_id,)
+        ),
+        "Enquadramento": _sisget_fetchone(
+            "SELECT id FROM solicitacoes_enquadramento WHERE solicitacao_id = ?",
+            (solicitacao_id,)
+        ),
+        "TR": _sisget_fetchone(
+            "SELECT id FROM solicitacoes_tr WHERE solicitacao_id = ?",
+            (solicitacao_id,)
+        )
+    }
+
+    tudo_ok = True
+
+    for nome, registro in verificacoes.items():
+        if registro:
+            st.success(
+                f"✅ {nome}"
+            )
+        else:
+            st.error(
+                f"❌ {nome}"
+            )
+            tudo_ok = False
+
+    if not tudo_ok:
+        st.warning(
+            "⚠️ O processo ainda possui pendências."
+        )
+        return
+
+    if st.button(
+        "🚀 Liberar Processo",
+        type="primary",
+        use_container_width=True,
+        key=f"liberar_processo_{solicitacao_id}"
+    ):
+        enquadramento = _sisget_fetchone(
+            """
+            SELECT tipo_processo
+            FROM solicitacoes_enquadramento
+            WHERE solicitacao_id = ?
+            """,
+            (solicitacao_id,)
+        )
+
+        tipo = (
+            enquadramento[0]
+            if enquadramento
+            else "Licitação"
+        )
+
+        destino = (
+            "MODULO_LICITACOES"
+            if tipo == "Licitação"
+            else "MODULO_CONTRATACAO_DIRETA"
+        )
+
+        sisget_solicitacao_mover_etapa(
+            solicitacao_id,
+            "LIBERACAO_LICITACAO",
+            destino,
+            "PROCESSO_LIBERADO",
+            tipo,
+            "LIBERADA"
+        )
+
+        st.rerun()
+
+
+# ============================================================
+# PLANEJAMENTO DE COMPRAS
+# ============================================================
+
+def modulo_planejamento_compras():
+
+    st.title("📊 Planejamento de Compras")
+
+    opcao = st.selectbox(
+        "Planejamento *",
+        [
+            "Selecione...",
+            "📥 Necessidades das Solicitações",
+            "📦 Análise de Estoque",
+            "⚠️ Itens em Falta",
+            "🛒 Necessidade de Compra",
+            "🔗 Consolidação de Demandas",
+            "📋 Agrupamento para Licitação",
+            "🔄 Processos em Andamento",
+            "📑 ARP / Contratos com Saldo",
+            "🚨 Alertas",
+            "📊 Dashboard"
+        ],
+        key="sisget_planejamento_compras"
+    )
+
+    st.divider()
+
+    if opcao == "Selecione...":
+        st.info("Selecione uma opção.")
+        return
+
+    elif opcao == "📥 Necessidades das Solicitações":
+        planejamento_necessidades_solicitacoes()
+
+    elif opcao == "📦 Análise de Estoque":
+        planejamento_analise_estoque()
+
+    elif opcao == "⚠️ Itens em Falta":
+        planejamento_itens_falta()
+
+    elif opcao == "🛒 Necessidade de Compra":
+        planejamento_necessidade_compra()
+
+    elif opcao == "🔗 Consolidação de Demandas":
+        planejamento_consolidacao_demandas()
+
+    elif opcao == "📋 Agrupamento para Licitação":
+        planejamento_agrupar_licitacao()
+
+    elif opcao == "🔄 Processos em Andamento":
+        planejamento_processos_andamento()
+
+    elif opcao == "📑 ARP / Contratos com Saldo":
+        planejamento_atas_contratos()
+
+    elif opcao == "🚨 Alertas":
+        planejamento_alertas()
+
+    elif opcao == "📊 Dashboard":
+        planejamento_dashboard()
+
+
+def planejamento_necessidades_solicitacoes():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            p.id,
+            p.codigo AS "Código",
+            p.descricao AS "Produto",
+            SUM(si.quantidade_solicitada) AS "Solicitado"
+        FROM solicitacoes_itens si
+        INNER JOIN solicitacoes s
+            ON s.id = si.solicitacao_id
+        INNER JOIN produtos p
+            ON p.id = si.produto_id
+        WHERE s.ativo = TRUE
+          AND si.ativo = TRUE
+          AND s.status NOT IN ('REJEITADA', 'CANCELADA')
+        GROUP BY
+            p.id,
+            p.codigo,
+            p.descricao
+        ORDER BY p.descricao
+        """
+    )
+
+    st.dataframe(
+        df,
+        use_container_width=True,
+        hide_index=True
+    )
+
+
+def planejamento_analise_estoque():
+    st.info(
+        "Integração futura com Almoxarifado: "
+        "solicitações + estoque atual + estoque mínimo + entradas pendentes."
+    )
+
+
+def planejamento_itens_falta():
+    st.info(
+        "Listará itens cujo estoque não cobre a demanda."
+    )
+
+
+def planejamento_necessidade_compra():
+    st.info(
+        "Fórmula: Solicitado + Estoque Mínimo "
+        "- Estoque Disponível - Em Compra."
+    )
+
+
+def planejamento_consolidacao_demandas():
+    st.info(
+        "Consolidação do mesmo produto solicitado por várias unidades."
+    )
+
+
+def planejamento_agrupar_licitacao():
+    st.info(
+        "Agrupamento das necessidades para futura licitação."
+    )
+
+
+def planejamento_processos_andamento():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            codigo AS "Solicitação",
+            objeto AS "Objeto",
+            status AS "Status",
+            etapa_atual AS "Etapa"
+        FROM solicitacoes
+        WHERE ativo = TRUE
+        ORDER BY exercicio DESC, numero DESC
+        """
+    )
+
+    st.dataframe(
+        df,
+        use_container_width=True,
+        hide_index=True
+    )
+
+
+def planejamento_atas_contratos():
+    st.info(
+        "Integração futura com Atas/ARP e Contratos."
+    )
+
+
+def planejamento_alertas():
+    st.info(
+        "Alertas de estoque baixo, múltiplas demandas, "
+        "ARP vencendo e processos em andamento."
+    )
+
+
+def planejamento_dashboard():
+
+    total = _sisget_fetchone(
+        """
+        SELECT COUNT(*)
+        FROM solicitacoes
+        WHERE ativo = TRUE
+        """
+    )
+
+    st.metric(
+        "Solicitações",
+        int(total[0] or 0)
+        if total
+        else 0
+    )
+
+# ============================================================
+# COMPLEMENTO CRUD COMPLETO - DOCUMENTOS E FLUXO
+# ============================================================
+# As defs abaixo completam o módulo com telas próprias de:
+# Itens, DFD, ETP, Riscos, Cotações, Fichas, Financeiro,
+# Enquadramento, TR, Histórico e Assinaturas.
+#
+# IMPORTANTE:
+# No início do SISGET.py deixe:
+# import hashlib
+# from datetime import datetime
+# ============================================================
+
+
+# ============================================================
+# MAPA / SELEÇÃO DE SOLICITAÇÕES
+# ============================================================
+
+def sisget_mapa_solicitacoes(
+    tipo_solicitacao=None,
+    somente_ativas=True
+):
+    sql = """
+        SELECT
+            id,
+            codigo,
+            objeto,
+            tipo_solicitacao,
+            status,
+            etapa_atual
+        FROM solicitacoes
+        WHERE 1 = 1
+    """
+
+    parametros = []
+
+    if somente_ativas:
+        sql += " AND ativo = TRUE "
+
+    if tipo_solicitacao:
+        sql += " AND tipo_solicitacao = ? "
+        parametros.append(tipo_solicitacao)
+
+    sql += """
+        ORDER BY
+            exercicio DESC,
+            numero DESC
+    """
+
+    dados = _sisget_fetch(
+        sql,
+        tuple(parametros)
+    )
+
+    mapa = {}
+
+    for (
+        id_,
+        codigo,
+        objeto,
+        tipo,
+        status,
+        etapa
+    ) in dados:
+
+        nome = (
+            f"{codigo or id_}"
+            f" | {tipo or ''}"
+            f" | {objeto or ''}"
+            f" | {status or ''}"
+            f" | {etapa or ''}"
+        )
+
+        mapa[nome] = id_
+
+    return mapa
+
+
+def sisget_selecionar_solicitacao(
+    label,
+    key,
+    tipo_solicitacao=None
+):
+    mapa = sisget_mapa_solicitacoes(
+        tipo_solicitacao=tipo_solicitacao
+    )
+
+    if not mapa:
+        st.warning(
+            "⚠️ Nenhuma solicitação disponível."
+        )
+        return None
+
+    nome = st.selectbox(
+        label,
+        list(mapa.keys()),
+        key=key
+    )
+
+    return mapa[nome]
+
+
+# ============================================================
+# SUBMENU COMPLETO DE SOLICITAÇÕES
+# Esta definição substitui a anterior.
+# ============================================================
+
+def modulo_tipos_solicitacoes():
+
+    st.subheader(
+        "📝 Solicitações"
+    )
+
+    tipo = st.selectbox(
+        "Área *",
+        [
+            "Selecione...",
+            "📦 Solicitação Interna",
+            "⚖️ Solicitação para Licitação",
+            "🛒 Solicitação de Compra",
+            "🧩 Documentos / Fluxo",
+            "📜 Histórico Geral",
+            "✍️ Assinaturas"
+        ],
+        key="sisget_tipo_solicitacao"
+    )
+
+    st.divider()
+
+    if tipo == "Selecione...":
+        st.info(
+            "Selecione uma opção."
+        )
+        return
+
+    elif tipo == "📦 Solicitação Interna":
+        modulo_solicitacao_interna()
+
+    elif tipo == "⚖️ Solicitação para Licitação":
+        modulo_solicitacao_licitacao()
+
+    elif tipo == "🛒 Solicitação de Compra":
+        modulo_solicitacao_compra()
+
+    elif tipo == "🧩 Documentos / Fluxo":
+        modulo_documentos_solicitacoes()
+
+    elif tipo == "📜 Histórico Geral":
+        cadastro_historico_solicitacoes()
+
+    elif tipo == "✍️ Assinaturas":
+        cadastro_assinaturas_solicitacoes()
+
+
+# ============================================================
+# DOCUMENTOS / FLUXO
+# ============================================================
+
+def modulo_documentos_solicitacoes():
+
+    st.subheader(
+        "🧩 Documentos / Fluxo"
+    )
+
+    opcao = st.selectbox(
+        "Cadastro *",
+        [
+            "Selecione...",
+            "📦 Itens",
+            "📄 DFD",
+            "📘 ETP",
+            "⚠️ Mapa de Riscos",
+            "💲 Cotações",
+            "🧾 Fichas Orçamentárias",
+            "💰 Financeiro",
+            "⚖️ Enquadramento",
+            "📑 Termo de Referência - TR"
+        ],
+        key="sisget_documentos_fluxo_solicitacoes"
+    )
+
+    st.divider()
+
+    if opcao == "Selecione...":
+        st.info(
+            "Selecione o cadastro."
+        )
+        return
+
+    elif opcao == "📦 Itens":
+        cadastro_itens_solicitacoes()
+
+    elif opcao == "📄 DFD":
+        cadastro_dfd_solicitacoes()
+
+    elif opcao == "📘 ETP":
+        cadastro_etp_solicitacoes()
+
+    elif opcao == "⚠️ Mapa de Riscos":
+        cadastro_riscos_solicitacoes()
+
+    elif opcao == "💲 Cotações":
+        cadastro_cotacoes_solicitacoes()
+
+    elif opcao == "🧾 Fichas Orçamentárias":
+        cadastro_fichas_solicitacoes()
+
+    elif opcao == "💰 Financeiro":
+        cadastro_financeiro_solicitacoes()
+
+    elif opcao == "⚖️ Enquadramento":
+        cadastro_enquadramento_solicitacoes()
+
+    elif opcao == "📑 Termo de Referência - TR":
+        cadastro_tr_solicitacoes()
+
+
+# ============================================================
+# ITENS - TELA PRINCIPAL
+# ============================================================
+
+def cadastro_itens_solicitacoes():
+
+    sisget_tela_principal(
+        titulo="Itens das Solicitações",
+        chave="solicitacoes_itens",
+        func_incluir=solicitacao_item_incluir,
+        func_localizar=solicitacao_item_localizar,
+        func_alterar=solicitacao_item_alterar,
+        func_excluir=solicitacao_item_excluir,
+        func_imprimir=solicitacao_item_imprimir,
+        icone="📦"
+    )
+
+
+def solicitacao_item_incluir():
+
+    if "sisget_item_solicitacao_reset" not in st.session_state:
+        st.session_state[
+            "sisget_item_solicitacao_reset"
+        ] = 0
+
+    reset = st.session_state[
+        "sisget_item_solicitacao_reset"
+    ]
+
+    solicitacao_id = sisget_selecionar_solicitacao(
+        "Solicitação *",
+        f"item_solicitacao_{reset}"
+    )
+
+    if not solicitacao_id:
+        return
+
+    produtos = _sisget_fetch(
+        """
+        SELECT
+            id,
+            codigo,
+            descricao
+        FROM produtos
+        WHERE ativo = TRUE
+        ORDER BY codigo
+        """
+    )
+
+    if not produtos:
+        st.warning(
+            "⚠️ Nenhum produto ativo cadastrado."
+        )
+        return
+
+    mapa_produtos = {
+        f"{codigo} - {descricao}": id_
+        for id_, codigo, descricao in produtos
+    }
+
+    codigo = sisget_proximo_codigo(
+        "solicitacoes_itens",
+        tamanho=6
+    )
+
+    with st.form(
+        f"form_solicitacao_item_{reset}_{solicitacao_id}"
+    ):
+        st.text_input(
+            "Código",
+            value=codigo,
+            disabled=True
+        )
+
+        produto_nome = st.selectbox(
+            "Produto *",
+            list(mapa_produtos.keys())
+        )
+
+        quantidade = st.number_input(
+            "Quantidade *",
+            min_value=0.000001,
+            value=1.0,
+            format="%.6f"
+        )
+
+        valor_unitario = st.number_input(
+            "Valor Estimado Unitário",
+            min_value=0.0,
+            value=0.0,
+            format="%.2f"
+        )
+
+        observacao = st.text_area(
+            "Observação"
+        )
+
+        salvar = st.form_submit_button(
+            "💾 Salvar Item",
+            type="primary",
+            use_container_width=True
+        )
+
+    if salvar:
+        codigo = sisget_proximo_codigo(
+            "solicitacoes_itens",
+            tamanho=6
+        )
+
+        valor_total = (
+            float(quantidade)
+            *
+            float(valor_unitario)
+        )
+
+        if _sisget_salvar(
+            """
+            INSERT INTO solicitacoes_itens
+            (
+                codigo,
+                solicitacao_id,
+                produto_id,
+                quantidade_solicitada,
+                valor_estimado_unitario,
+                valor_estimado_total,
+                observacao,
+                ativo
+            )
+            VALUES
+            (
+                ?, ?, ?, ?, ?, ?, ?, TRUE
+            )
+            """,
+            (
+                codigo,
+                solicitacao_id,
+                mapa_produtos[produto_nome],
+                float(quantidade),
+                float(valor_unitario),
+                valor_total,
+                observacao.strip() or None
+            )
+        ):
+            st.session_state[
+                "sisget_item_solicitacao_reset"
+            ] += 1
+            st.rerun()
+
+
+def solicitacao_item_localizar():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            si.id,
+            si.codigo AS "Código",
+            s.codigo AS "Solicitação",
+            p.codigo AS "Produto Código",
+            p.descricao AS "Produto",
+            si.quantidade_solicitada AS "Quantidade",
+            si.valor_estimado_unitario AS "Valor Unitário",
+            si.valor_estimado_total AS "Valor Total"
+        FROM solicitacoes_itens si
+        INNER JOIN solicitacoes s
+            ON s.id = si.solicitacao_id
+        INNER JOIN produtos p
+            ON p.id = si.produto_id
+        WHERE si.ativo = TRUE
+        ORDER BY si.id DESC
+        """
+    )
+
+    if df.empty:
+        return None
+
+    return sisget_grid_localizar(
+        df=df,
+        chave="solicitacoes_itens",
+        coluna_id="id",
+        altura=480
+    )
+
+
+def solicitacao_item_alterar(
+    registro_id
+):
+
+    registro = _sisget_fetchone(
+        """
+        SELECT
+            codigo,
+            quantidade_solicitada,
+            valor_estimado_unitario,
+            observacao,
+            ativo
+        FROM solicitacoes_itens
+        WHERE id = ?
+        """,
+        (registro_id,)
+    )
+
+    if not registro:
+        return
+
+    (
+        codigo,
+        quantidade_atual,
+        valor_atual,
+        observacao_atual,
+        ativo
+    ) = registro
+
+    with st.form(
+        f"form_item_alterar_{registro_id}"
+    ):
+        st.text_input(
+            "Código",
+            value=codigo or "",
+            disabled=True
+        )
+
+        quantidade = st.number_input(
+            "Quantidade *",
+            min_value=0.000001,
+            value=float(quantidade_atual or 1),
+            format="%.6f"
+        )
+
+        valor_unitario = st.number_input(
+            "Valor Unitário",
+            min_value=0.0,
+            value=float(valor_atual or 0),
+            format="%.2f"
+        )
+
+        observacao = st.text_area(
+            "Observação",
+            value=observacao_atual or ""
+        )
+
+        col1, col2 = st.columns(2)
+
+        salvar = col1.form_submit_button(
+            "💾 Salvar Alterações",
+            type="primary",
+            use_container_width=True
+        )
+
+        mudar = col2.form_submit_button(
+            "🚫 Inativar"
+            if ativo
+            else "✅ Ativar",
+            use_container_width=True
+        )
+
+    if mudar:
+        if _sisget_salvar(
+            """
+            UPDATE solicitacoes_itens
+            SET ativo = ?
+            WHERE id = ?
+            """,
+            (
+                not ativo,
+                registro_id
+            )
+        ):
+            st.rerun()
+
+    if salvar:
+        valor_total = (
+            float(quantidade)
+            *
+            float(valor_unitario)
+        )
+
+        if _sisget_salvar(
+            """
+            UPDATE solicitacoes_itens
+            SET
+                quantidade_solicitada = ?,
+                valor_estimado_unitario = ?,
+                valor_estimado_total = ?,
+                observacao = ?
+            WHERE id = ?
+            """,
+            (
+                float(quantidade),
+                float(valor_unitario),
+                valor_total,
+                observacao.strip() or None,
+                registro_id
+            )
+        ):
+            st.rerun()
+
+
+def solicitacao_item_excluir():
+
+    registro_id = solicitacao_item_localizar()
+
+    if not registro_id:
+        return
+
+    if st.button(
+        "🗑️ Confirmar Exclusão",
+        type="primary",
+        use_container_width=True,
+        key=f"excluir_item_solicitacao_{registro_id}"
+    ):
+        if _sisget_salvar(
+            """
+            UPDATE solicitacoes_itens
+            SET ativo = FALSE
+            WHERE id = ?
+            """,
+            (registro_id,)
+        ):
+            st.rerun()
+
+
+def solicitacao_item_imprimir():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            s.codigo AS "Solicitação",
+            p.codigo AS "Produto",
+            p.descricao AS "Descrição",
+            si.quantidade_solicitada AS "Quantidade",
+            si.valor_estimado_unitario AS "Valor Unitário",
+            si.valor_estimado_total AS "Valor Total"
+        FROM solicitacoes_itens si
+        INNER JOIN solicitacoes s
+            ON s.id = si.solicitacao_id
+        INNER JOIN produtos p
+            ON p.id = si.produto_id
+        WHERE si.ativo = TRUE
+        ORDER BY s.codigo, p.codigo
+        """
+    )
+
+    sisget_relatorio_classificacao(
+        "Itens das Solicitações",
+        df,
+        "solicitacoes_itens.pdf"
+    )
+
+
+# ============================================================
+# DFD - CRUD
+# ============================================================
+
+def cadastro_dfd_solicitacoes():
+    sisget_tela_principal(
+        titulo="DFD - Documento de Formalização da Demanda",
+        chave="solicitacoes_dfd",
+        func_incluir=dfd_incluir,
+        func_localizar=dfd_localizar,
+        func_alterar=dfd_alterar,
+        func_excluir=dfd_excluir,
+        func_imprimir=dfd_imprimir,
+        icone="📄"
+    )
+
+
+def dfd_incluir():
+
+    if "sisget_dfd_reset" not in st.session_state:
+        st.session_state["sisget_dfd_reset"] = 0
+
+    reset = st.session_state[
+        "sisget_dfd_reset"
+    ]
+
+    solicitacao_id = sisget_selecionar_solicitacao(
+        "Solicitação para Licitação *",
+        f"dfd_solicitacao_{reset}",
+        "LICITACAO"
+    )
+
+    if not solicitacao_id:
+        return
+
+    existe = _sisget_fetchone(
+        """
+        SELECT id
+        FROM solicitacoes_dfd
+        WHERE solicitacao_id = ?
+        """,
+        (solicitacao_id,)
+    )
+
+    if existe:
+        st.warning(
+            "⚠️ Esta solicitação já possui DFD."
+        )
+        return
+
+    codigo = sisget_proximo_codigo(
+        "solicitacoes_dfd",
+        tamanho=6
+    )
+
+    with st.form(
+        f"form_dfd_incluir_{reset}_{solicitacao_id}"
+    ):
+        st.text_input(
+            "Código",
+            value=codigo,
+            disabled=True
+        )
+
+        necessidade = st.text_area(
+            "Descrição da Necessidade *"
+        )
+
+        justificativa = st.text_area(
+            "Justificativa da Demanda *"
+        )
+
+        quantidade = st.text_area(
+            "Quantidade Preliminar / Justificativa"
+        )
+
+        previsao = st.date_input(
+            "Previsão da Contratação"
+        )
+
+        alinhamento = st.text_area(
+            "Alinhamento com o Planejamento"
+        )
+
+        observacoes = st.text_area(
+            "Observações"
+        )
+
+        salvar = st.form_submit_button(
+            "💾 Salvar DFD",
+            type="primary",
+            use_container_width=True
+        )
+
+    if salvar:
+        codigo = sisget_proximo_codigo(
+            "solicitacoes_dfd",
+            tamanho=6
+        )
+
+        if _sisget_salvar(
+            """
+            INSERT INTO solicitacoes_dfd
+            (
+                codigo,
+                solicitacao_id,
+                descricao_necessidade,
+                justificativa_demanda,
+                quantidade_preliminar,
+                previsao_contratacao,
+                alinhamento_planejamento,
+                observacoes
+            )
+            VALUES
+            (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                codigo,
+                solicitacao_id,
+                necessidade.strip(),
+                justificativa.strip(),
+                quantidade.strip() or None,
+                previsao,
+                alinhamento.strip() or None,
+                observacoes.strip() or None
+            )
+        ):
+            st.session_state[
+                "sisget_dfd_reset"
+            ] += 1
+            st.rerun()
+
+
+def dfd_localizar():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            d.id,
+            d.codigo AS "Código",
+            s.codigo AS "Solicitação",
+            s.objeto AS "Objeto",
+            d.previsao_contratacao AS "Previsão"
+        FROM solicitacoes_dfd d
+        INNER JOIN solicitacoes s
+            ON s.id = d.solicitacao_id
+        ORDER BY d.id DESC
+        """
+    )
+
+    if df.empty:
+        return None
+
+    return sisget_grid_localizar(
+        df=df,
+        chave="solicitacoes_dfd",
+        coluna_id="id",
+        altura=450
+    )
+
+
+def dfd_alterar(
+    registro_id
+):
+
+    registro = _sisget_fetchone(
+        """
+        SELECT
+            codigo,
+            descricao_necessidade,
+            justificativa_demanda,
+            quantidade_preliminar,
+            previsao_contratacao,
+            alinhamento_planejamento,
+            observacoes
+        FROM solicitacoes_dfd
+        WHERE id = ?
+        """,
+        (registro_id,)
+    )
+
+    if not registro:
+        return
+
+    (
+        codigo,
+        necessidade_atual,
+        justificativa_atual,
+        quantidade_atual,
+        previsao_atual,
+        alinhamento_atual,
+        observacoes_atual
+    ) = registro
+
+    with st.form(
+        f"form_dfd_alterar_{registro_id}"
+    ):
+        st.text_input(
+            "Código",
+            value=codigo or "",
+            disabled=True
+        )
+
+        necessidade = st.text_area(
+            "Descrição da Necessidade *",
+            value=necessidade_atual or ""
+        )
+
+        justificativa = st.text_area(
+            "Justificativa da Demanda *",
+            value=justificativa_atual or ""
+        )
+
+        quantidade = st.text_area(
+            "Quantidade Preliminar",
+            value=quantidade_atual or ""
+        )
+
+        previsao = st.date_input(
+            "Previsão da Contratação",
+            value=previsao_atual
+            if previsao_atual
+            else datetime.now().date()
+        )
+
+        alinhamento = st.text_area(
+            "Alinhamento com Planejamento",
+            value=alinhamento_atual or ""
+        )
+
+        observacoes = st.text_area(
+            "Observações",
+            value=observacoes_atual or ""
+        )
+
+        salvar = st.form_submit_button(
+            "💾 Salvar Alterações",
+            type="primary",
+            use_container_width=True
+        )
+
+    if salvar:
+        if _sisget_salvar(
+            """
+            UPDATE solicitacoes_dfd
+            SET
+                descricao_necessidade = ?,
+                justificativa_demanda = ?,
+                quantidade_preliminar = ?,
+                previsao_contratacao = ?,
+                alinhamento_planejamento = ?,
+                observacoes = ?,
+                atualizado_em = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (
+                necessidade.strip(),
+                justificativa.strip(),
+                quantidade.strip() or None,
+                previsao,
+                alinhamento.strip() or None,
+                observacoes.strip() or None,
+                registro_id
+            )
+        ):
+            st.rerun()
+
+
+def dfd_excluir():
+
+    registro_id = dfd_localizar()
+
+    if not registro_id:
+        return
+
+    if st.button(
+        "🗑️ Confirmar Exclusão do DFD",
+        type="primary",
+        use_container_width=True,
+        key=f"excluir_dfd_{registro_id}"
+    ):
+        if _sisget_salvar(
+            """
+            DELETE FROM solicitacoes_dfd
+            WHERE id = ?
+            """,
+            (registro_id,)
+        ):
+            st.rerun()
+
+
+def dfd_imprimir():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            d.codigo AS "Código",
+            s.codigo AS "Solicitação",
+            s.objeto AS "Objeto",
+            d.descricao_necessidade AS "Necessidade",
+            d.justificativa_demanda AS "Justificativa",
+            d.previsao_contratacao AS "Previsão"
+        FROM solicitacoes_dfd d
+        INNER JOIN solicitacoes s
+            ON s.id = d.solicitacao_id
+        ORDER BY d.id DESC
+        """
+    )
+
+    sisget_relatorio_classificacao(
+        "DFD - Documentos de Formalização da Demanda",
+        df,
+        "dfd_solicitacoes.pdf"
+    )
+
+
+# ============================================================
+# ETP - CRUD
+# ============================================================
+
+def cadastro_etp_solicitacoes():
+    sisget_tela_principal(
+        titulo="ETP - Estudo Técnico Preliminar",
+        chave="solicitacoes_etp",
+        func_incluir=etp_incluir,
+        func_localizar=etp_localizar,
+        func_alterar=etp_alterar,
+        func_excluir=etp_excluir,
+        func_imprimir=etp_imprimir,
+        icone="📘"
+    )
+
+
+def etp_incluir():
+
+    if "sisget_etp_reset" not in st.session_state:
+        st.session_state["sisget_etp_reset"] = 0
+
+    reset = st.session_state[
+        "sisget_etp_reset"
+    ]
+
+    solicitacao_id = sisget_selecionar_solicitacao(
+        "Solicitação para Licitação *",
+        f"etp_solicitacao_{reset}",
+        "LICITACAO"
+    )
+
+    if not solicitacao_id:
+        return
+
+    existe = _sisget_fetchone(
+        """
+        SELECT id
+        FROM solicitacoes_etp
+        WHERE solicitacao_id = ?
+        """,
+        (solicitacao_id,)
+    )
+
+    if existe:
+        st.warning(
+            "⚠️ Esta solicitação já possui ETP."
+        )
+        return
+
+    codigo = sisget_proximo_codigo(
+        "solicitacoes_etp",
+        tamanho=6
+    )
+
+    with st.form(
+        f"form_etp_incluir_{reset}_{solicitacao_id}"
+    ):
+        st.text_input(
+            "Código",
+            value=codigo,
+            disabled=True
+        )
+
+        necessidade = st.text_area(
+            "Necessidade / Problema *"
+        )
+
+        requisitos = st.text_area(
+            "Requisitos da Contratação *"
+        )
+
+        mercado = st.text_area(
+            "Levantamento de Mercado *"
+        )
+
+        solucao = st.text_area(
+            "Solução Escolhida *"
+        )
+
+        justificativa = st.text_area(
+            "Justificativa da Solução *"
+        )
+
+        quantidades = st.text_area(
+            "Estimativa / Justificativa das Quantidades *"
+        )
+
+        valor = st.number_input(
+            "Estimativa de Valor",
+            min_value=0.0,
+            value=0.0,
+            format="%.2f"
+        )
+
+        parcelamento = st.checkbox(
+            "Contratação parcelada?"
+        )
+
+        justificativa_parcelamento = st.text_area(
+            "Justificativa do Parcelamento / Não Parcelamento"
+        )
+
+        impactos = st.text_area(
+            "Impactos / Sustentabilidade"
+        )
+
+        viabilidade = st.selectbox(
+            "Conclusão de Viabilidade *",
+            ["Viável", "Inviável"]
+        )
+
+        salvar = st.form_submit_button(
+            "💾 Salvar ETP",
+            type="primary",
+            use_container_width=True
+        )
+
+    if salvar:
+        codigo = sisget_proximo_codigo(
+            "solicitacoes_etp",
+            tamanho=6
+        )
+
+        if _sisget_salvar(
+            """
+            INSERT INTO solicitacoes_etp
+            (
+                codigo,
+                solicitacao_id,
+                necessidade,
+                requisitos,
+                levantamento_mercado,
+                solucao_escolhida,
+                justificativa_solucao,
+                estimativa_quantidades,
+                estimativa_valor,
+                parcelamento,
+                justificativa_parcelamento,
+                impactos,
+                conclusao_viabilidade
+            )
+            VALUES
+            (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                codigo,
+                solicitacao_id,
+                necessidade.strip(),
+                requisitos.strip(),
+                mercado.strip(),
+                solucao.strip(),
+                justificativa.strip(),
+                quantidades.strip(),
+                float(valor),
+                parcelamento,
+                justificativa_parcelamento.strip() or None,
+                impactos.strip() or None,
+                viabilidade
+            )
+        ):
+            st.session_state[
+                "sisget_etp_reset"
+            ] += 1
+            st.rerun()
+
+
+def etp_localizar():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            e.id,
+            e.codigo AS "Código",
+            s.codigo AS "Solicitação",
+            s.objeto AS "Objeto",
+            e.estimativa_valor AS "Valor",
+            e.conclusao_viabilidade AS "Viabilidade"
+        FROM solicitacoes_etp e
+        INNER JOIN solicitacoes s
+            ON s.id = e.solicitacao_id
+        ORDER BY e.id DESC
+        """
+    )
+
+    if df.empty:
+        return None
+
+    return sisget_grid_localizar(
+        df=df,
+        chave="solicitacoes_etp",
+        coluna_id="id",
+        altura=450
+    )
+
+
+def etp_alterar(
+    registro_id
+):
+
+    registro = _sisget_fetchone(
+        """
+        SELECT
+            codigo,
+            necessidade,
+            requisitos,
+            levantamento_mercado,
+            solucao_escolhida,
+            justificativa_solucao,
+            estimativa_quantidades,
+            estimativa_valor,
+            parcelamento,
+            justificativa_parcelamento,
+            impactos,
+            conclusao_viabilidade
+        FROM solicitacoes_etp
+        WHERE id = ?
+        """,
+        (registro_id,)
+    )
+
+    if not registro:
+        return
+
+    (
+        codigo,
+        necessidade_atual,
+        requisitos_atual,
+        mercado_atual,
+        solucao_atual,
+        justificativa_atual,
+        quantidades_atual,
+        valor_atual,
+        parcelamento_atual,
+        justificativa_parc_atual,
+        impactos_atual,
+        viabilidade_atual
+    ) = registro
+
+    with st.form(
+        f"form_etp_alterar_{registro_id}"
+    ):
+        st.text_input(
+            "Código",
+            value=codigo or "",
+            disabled=True
+        )
+
+        necessidade = st.text_area(
+            "Necessidade *",
+            value=necessidade_atual or ""
+        )
+
+        requisitos = st.text_area(
+            "Requisitos *",
+            value=requisitos_atual or ""
+        )
+
+        mercado = st.text_area(
+            "Levantamento de Mercado *",
+            value=mercado_atual or ""
+        )
+
+        solucao = st.text_area(
+            "Solução Escolhida *",
+            value=solucao_atual or ""
+        )
+
+        justificativa = st.text_area(
+            "Justificativa da Solução *",
+            value=justificativa_atual or ""
+        )
+
+        quantidades = st.text_area(
+            "Estimativa das Quantidades *",
+            value=quantidades_atual or ""
+        )
+
+        valor = st.number_input(
+            "Estimativa de Valor",
+            min_value=0.0,
+            value=float(valor_atual or 0),
+            format="%.2f"
+        )
+
+        parcelamento = st.checkbox(
+            "Parcelamento",
+            value=bool(parcelamento_atual)
+        )
+
+        justificativa_parc = st.text_area(
+            "Justificativa do Parcelamento",
+            value=justificativa_parc_atual or ""
+        )
+
+        impactos = st.text_area(
+            "Impactos",
+            value=impactos_atual or ""
+        )
+
+        viabilidade = st.selectbox(
+            "Viabilidade",
+            ["Viável", "Inviável"],
+            index=(
+                0
+                if viabilidade_atual != "Inviável"
+                else 1
+            )
+        )
+
+        salvar = st.form_submit_button(
+            "💾 Salvar Alterações",
+            type="primary",
+            use_container_width=True
+        )
+
+    if salvar:
+        if _sisget_salvar(
+            """
+            UPDATE solicitacoes_etp
+            SET
+                necessidade = ?,
+                requisitos = ?,
+                levantamento_mercado = ?,
+                solucao_escolhida = ?,
+                justificativa_solucao = ?,
+                estimativa_quantidades = ?,
+                estimativa_valor = ?,
+                parcelamento = ?,
+                justificativa_parcelamento = ?,
+                impactos = ?,
+                conclusao_viabilidade = ?,
+                atualizado_em = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (
+                necessidade.strip(),
+                requisitos.strip(),
+                mercado.strip(),
+                solucao.strip(),
+                justificativa.strip(),
+                quantidades.strip(),
+                float(valor),
+                parcelamento,
+                justificativa_parc.strip() or None,
+                impactos.strip() or None,
+                viabilidade,
+                registro_id
+            )
+        ):
+            st.rerun()
+
+
+def etp_excluir():
+
+    registro_id = etp_localizar()
+
+    if not registro_id:
+        return
+
+    if st.button(
+        "🗑️ Confirmar Exclusão do ETP",
+        type="primary",
+        use_container_width=True,
+        key=f"excluir_etp_{registro_id}"
+    ):
+        if _sisget_salvar(
+            """
+            DELETE FROM solicitacoes_etp
+            WHERE id = ?
+            """,
+            (registro_id,)
+        ):
+            st.rerun()
+
+
+def etp_imprimir():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            e.codigo AS "Código",
+            s.codigo AS "Solicitação",
+            s.objeto AS "Objeto",
+            e.solucao_escolhida AS "Solução",
+            e.estimativa_valor AS "Valor",
+            e.conclusao_viabilidade AS "Viabilidade"
+        FROM solicitacoes_etp e
+        INNER JOIN solicitacoes s
+            ON s.id = e.solicitacao_id
+        ORDER BY e.id DESC
+        """
+    )
+
+    sisget_relatorio_classificacao(
+        "Estudos Técnicos Preliminares",
+        df,
+        "etp_solicitacoes.pdf"
+    )
+
+
+# ============================================================
+# RISCOS - CRUD
+# ============================================================
+
+def cadastro_riscos_solicitacoes():
+    sisget_tela_principal(
+        titulo="Mapa de Riscos",
+        chave="solicitacoes_riscos",
+        func_incluir=risco_incluir,
+        func_localizar=risco_localizar,
+        func_alterar=risco_alterar,
+        func_excluir=risco_excluir,
+        func_imprimir=risco_imprimir,
+        icone="⚠️"
+    )
+
+
+def risco_incluir():
+
+    if "sisget_risco_reset" not in st.session_state:
+        st.session_state["sisget_risco_reset"] = 0
+
+    reset = st.session_state[
+        "sisget_risco_reset"
+    ]
+
+    solicitacao_id = sisget_selecionar_solicitacao(
+        "Solicitação *",
+        f"risco_solicitacao_{reset}",
+        "LICITACAO"
+    )
+
+    if not solicitacao_id:
+        return
+
+    codigo = sisget_proximo_codigo(
+        "solicitacoes_riscos",
+        tamanho=6
+    )
+
+    with st.form(
+        f"form_risco_incluir_{reset}_{solicitacao_id}"
+    ):
+        st.text_input(
+            "Código",
+            value=codigo,
+            disabled=True
+        )
+
+        categoria = st.selectbox(
+            "Categoria *",
+            [
+                "Técnico",
+                "Financeiro",
+                "Orçamentário",
+                "Jurídico",
+                "Operacional",
+                "Prazo",
+                "Fornecedor",
+                "Mercado",
+                "Fiscal",
+                "Ambiental",
+                "Logístico",
+                "Outro"
+            ]
+        )
+
+        evento = st.text_area(
+            "Evento de Risco *"
+        )
+
+        causa = st.text_area(
+            "Causa *"
+        )
+
+        consequencia = st.text_area(
+            "Consequência *"
+        )
+
+        col1, col2 = st.columns(2)
+
+        probabilidade = col1.selectbox(
+            "Probabilidade",
+            [1, 2, 3, 4, 5]
+        )
+
+        impacto = col2.selectbox(
+            "Impacto",
+            [1, 2, 3, 4, 5]
+        )
+
+        nivel = (
+            int(probabilidade)
+            *
+            int(impacto)
+        )
+
+        st.info(
+            f"Nível calculado: {nivel}"
+        )
+
+        resposta = st.selectbox(
+            "Resposta",
+            [
+                "Aceitar",
+                "Mitigar",
+                "Evitar",
+                "Transferir"
+            ]
+        )
+
+        preventiva = st.text_area(
+            "Ação Preventiva"
+        )
+
+        contingencia = st.text_area(
+            "Contingência"
+        )
+
+        responsavel = st.text_input(
+            "Responsável"
+        )
+
+        salvar = st.form_submit_button(
+            "💾 Salvar Risco",
+            type="primary",
+            use_container_width=True
+        )
+
+    if salvar:
+        codigo = sisget_proximo_codigo(
+            "solicitacoes_riscos",
+            tamanho=6
+        )
+
+        if _sisget_salvar(
+            """
+            INSERT INTO solicitacoes_riscos
+            (
+                codigo,
+                solicitacao_id,
+                categoria,
+                evento,
+                causa,
+                consequencia,
+                probabilidade,
+                impacto,
+                nivel,
+                resposta,
+                acao_preventiva,
+                contingencia,
+                responsavel,
+                situacao
+            )
+            VALUES
+            (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'IDENTIFICADO')
+            """,
+            (
+                codigo,
+                solicitacao_id,
+                categoria,
+                evento.strip(),
+                causa.strip(),
+                consequencia.strip(),
+                int(probabilidade),
+                int(impacto),
+                nivel,
+                resposta,
+                preventiva.strip() or None,
+                contingencia.strip() or None,
+                responsavel.strip() or None
+            )
+        ):
+            st.session_state[
+                "sisget_risco_reset"
+            ] += 1
+            st.rerun()
+
+
+def risco_localizar():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            r.id,
+            r.codigo AS "Código",
+            s.codigo AS "Solicitação",
+            r.categoria AS "Categoria",
+            r.evento AS "Risco",
+            r.probabilidade AS "Prob.",
+            r.impacto AS "Impacto",
+            r.nivel AS "Nível",
+            r.situacao AS "Situação"
+        FROM solicitacoes_riscos r
+        INNER JOIN solicitacoes s
+            ON s.id = r.solicitacao_id
+        ORDER BY r.nivel DESC, r.id DESC
+        """
+    )
+
+    if df.empty:
+        return None
+
+    return sisget_grid_localizar(
+        df=df,
+        chave="solicitacoes_riscos",
+        coluna_id="id",
+        altura=480
+    )
+
+
+def risco_alterar(
+    registro_id
+):
+
+    registro = _sisget_fetchone(
+        """
+        SELECT
+            codigo,
+            evento,
+            causa,
+            consequencia,
+            probabilidade,
+            impacto,
+            resposta,
+            acao_preventiva,
+            contingencia,
+            responsavel,
+            situacao
+        FROM solicitacoes_riscos
+        WHERE id = ?
+        """,
+        (registro_id,)
+    )
+
+    if not registro:
+        return
+
+    (
+        codigo,
+        evento_atual,
+        causa_atual,
+        consequencia_atual,
+        prob_atual,
+        impacto_atual,
+        resposta_atual,
+        preventiva_atual,
+        contingencia_atual,
+        responsavel_atual,
+        situacao_atual
+    ) = registro
+
+    respostas = [
+        "Aceitar",
+        "Mitigar",
+        "Evitar",
+        "Transferir"
+    ]
+
+    situacoes = [
+        "IDENTIFICADO",
+        "EM_TRATAMENTO",
+        "MITIGADO",
+        "OCORRIDO",
+        "ENCERRADO"
+    ]
+
+    with st.form(
+        f"form_risco_alterar_{registro_id}"
+    ):
+        st.text_input(
+            "Código",
+            value=codigo or "",
+            disabled=True
+        )
+
+        evento = st.text_area(
+            "Evento",
+            value=evento_atual or ""
+        )
+
+        causa = st.text_area(
+            "Causa",
+            value=causa_atual or ""
+        )
+
+        consequencia = st.text_area(
+            "Consequência",
+            value=consequencia_atual or ""
+        )
+
+        col1, col2 = st.columns(2)
+
+        probabilidade = col1.selectbox(
+            "Probabilidade",
+            [1, 2, 3, 4, 5],
+            index=max(
+                0,
+                min(
+                    4,
+                    int(prob_atual or 1) - 1
+                )
+            )
+        )
+
+        impacto = col2.selectbox(
+            "Impacto",
+            [1, 2, 3, 4, 5],
+            index=max(
+                0,
+                min(
+                    4,
+                    int(impacto_atual or 1) - 1
+                )
+            )
+        )
+
+        resposta = st.selectbox(
+            "Resposta",
+            respostas,
+            index=(
+                respostas.index(resposta_atual)
+                if resposta_atual in respostas
+                else 0
+            )
+        )
+
+        preventiva = st.text_area(
+            "Ação Preventiva",
+            value=preventiva_atual or ""
+        )
+
+        contingencia = st.text_area(
+            "Contingência",
+            value=contingencia_atual or ""
+        )
+
+        responsavel = st.text_input(
+            "Responsável",
+            value=responsavel_atual or ""
+        )
+
+        situacao = st.selectbox(
+            "Situação",
+            situacoes,
+            index=(
+                situacoes.index(situacao_atual)
+                if situacao_atual in situacoes
+                else 0
+            )
+        )
+
+        salvar = st.form_submit_button(
+            "💾 Salvar Alterações",
+            type="primary",
+            use_container_width=True
+        )
+
+    if salvar:
+        nivel = (
+            int(probabilidade)
+            *
+            int(impacto)
+        )
+
+        if _sisget_salvar(
+            """
+            UPDATE solicitacoes_riscos
+            SET
+                evento = ?,
+                causa = ?,
+                consequencia = ?,
+                probabilidade = ?,
+                impacto = ?,
+                nivel = ?,
+                resposta = ?,
+                acao_preventiva = ?,
+                contingencia = ?,
+                responsavel = ?,
+                situacao = ?
+            WHERE id = ?
+            """,
+            (
+                evento.strip(),
+                causa.strip(),
+                consequencia.strip(),
+                int(probabilidade),
+                int(impacto),
+                nivel,
+                resposta,
+                preventiva.strip() or None,
+                contingencia.strip() or None,
+                responsavel.strip() or None,
+                situacao,
+                registro_id
+            )
+        ):
+            st.rerun()
+
+
+def risco_excluir():
+
+    registro_id = risco_localizar()
+
+    if not registro_id:
+        return
+
+    if st.button(
+        "🗑️ Confirmar Exclusão do Risco",
+        type="primary",
+        use_container_width=True,
+        key=f"excluir_risco_{registro_id}"
+    ):
+        if _sisget_salvar(
+            """
+            DELETE FROM solicitacoes_riscos
+            WHERE id = ?
+            """,
+            (registro_id,)
+        ):
+            st.rerun()
+
+
+def risco_imprimir():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            s.codigo AS "Solicitação",
+            r.codigo AS "Código",
+            r.categoria AS "Categoria",
+            r.evento AS "Risco",
+            r.probabilidade AS "Prob.",
+            r.impacto AS "Impacto",
+            r.nivel AS "Nível",
+            r.resposta AS "Resposta",
+            r.situacao AS "Situação"
+        FROM solicitacoes_riscos r
+        INNER JOIN solicitacoes s
+            ON s.id = r.solicitacao_id
+        ORDER BY s.codigo, r.nivel DESC
+        """
+    )
+
+    sisget_relatorio_classificacao(
+        "Mapa de Riscos",
+        df,
+        "mapa_riscos.pdf"
+    )
+
+
+# ============================================================
+# COTAÇÕES - CRUD
+# ============================================================
+
+def cadastro_cotacoes_solicitacoes():
+    sisget_tela_principal(
+        titulo="Cotações / Pesquisa de Preços",
+        chave="cotacoes",
+        func_incluir=cotacao_incluir,
+        func_localizar=cotacao_localizar,
+        func_alterar=cotacao_alterar,
+        func_excluir=cotacao_excluir,
+        func_imprimir=cotacao_imprimir,
+        icone="💲"
+    )
+
+
+def cotacao_incluir():
+
+    if "sisget_cotacao_reset" not in st.session_state:
+        st.session_state["sisget_cotacao_reset"] = 0
+
+    reset = st.session_state[
+        "sisget_cotacao_reset"
+    ]
+
+    solicitacao_id = sisget_selecionar_solicitacao(
+        "Solicitação *",
+        f"cotacao_solicitacao_{reset}"
+    )
+
+    if not solicitacao_id:
+        return
+
+    itens = _sisget_fetch(
+        """
+        SELECT
+            si.id,
+            p.codigo,
+            p.descricao,
+            si.quantidade_solicitada
+        FROM solicitacoes_itens si
+        INNER JOIN produtos p
+            ON p.id = si.produto_id
+        WHERE si.solicitacao_id = ?
+          AND si.ativo = TRUE
+        ORDER BY si.id
+        """,
+        (solicitacao_id,)
+    )
+
+    fornecedores = _sisget_fetch(
+        """
+        SELECT
+            id,
+            codigo,
+            razao_social
+        FROM fornecedores
+        WHERE ativo = TRUE
+        ORDER BY razao_social
+        """
+    )
+
+    if not itens:
+        st.warning(
+            "⚠️ Solicitação sem itens."
+        )
+        return
+
+    if not fornecedores:
+        st.warning(
+            "⚠️ Cadastre fornecedores."
+        )
+        return
+
+    mapa_itens = {
+        (
+            f"{codigo} - {descricao}"
+            f" | Qtd: {float(qtd):g}"
+        ): item_id
+        for item_id, codigo, descricao, qtd in itens
+    }
+
+    mapa_fornecedores = {
+        f"{codigo} - {razao}": fornecedor_id
+        for fornecedor_id, codigo, razao in fornecedores
+    }
+
+    codigo = sisget_proximo_codigo(
+        "cotacoes",
+        tamanho=6
+    )
+
+    with st.form(
+        f"form_cotacao_incluir_{reset}_{solicitacao_id}"
+    ):
+        st.text_input(
+            "Código",
+            value=codigo,
+            disabled=True
+        )
+
+        item_nome = st.selectbox(
+            "Item *",
+            list(mapa_itens.keys())
+        )
+
+        fornecedor_nome = st.selectbox(
+            "Fornecedor *",
+            list(mapa_fornecedores.keys())
+        )
+
+        fonte = st.selectbox(
+            "Fonte da Pesquisa *",
+            [
+                "Cotação com fornecedor",
+                "Painel de preços",
+                "Contratação anterior",
+                "Ata / ARP",
+                "Banco de preços",
+                "Outra fonte"
+            ]
+        )
+
+        valor_unitario = st.number_input(
+            "Valor Unitário *",
+            min_value=0.0,
+            value=0.0,
+            format="%.2f"
+        )
+
+        observacao = st.text_area(
+            "Observação"
+        )
+
+        documento_url = st.text_input(
+            "Documento / URL"
+        )
+
+        salvar = st.form_submit_button(
+            "💾 Salvar Cotação",
+            type="primary",
+            use_container_width=True
+        )
+
+    if salvar:
+        item_id = mapa_itens[item_nome]
+
+        qtd_registro = _sisget_fetchone(
+            """
+            SELECT quantidade_solicitada
+            FROM solicitacoes_itens
+            WHERE id = ?
+            """,
+            (item_id,)
+        )
+
+        quantidade = float(
+            qtd_registro[0] or 0
+        )
+
+        valor_total = (
+            quantidade
+            *
+            float(valor_unitario)
+        )
+
+        codigo = sisget_proximo_codigo(
+            "cotacoes",
+            tamanho=6
+        )
+
+        if _sisget_salvar(
+            """
+            INSERT INTO cotacoes
+            (
+                codigo,
+                solicitacao_id,
+                solicitacao_item_id,
+                fornecedor_id,
+                fonte_pesquisa,
+                valor_unitario,
+                valor_total,
+                observacao,
+                documento_url
+            )
+            VALUES
+            (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                codigo,
+                solicitacao_id,
+                item_id,
+                mapa_fornecedores[fornecedor_nome],
+                fonte,
+                float(valor_unitario),
+                valor_total,
+                observacao.strip() or None,
+                documento_url.strip() or None
+            )
+        ):
+            st.session_state[
+                "sisget_cotacao_reset"
+            ] += 1
+            st.rerun()
+
+
+def cotacao_localizar():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            c.id,
+            c.codigo AS "Código",
+            s.codigo AS "Solicitação",
+            p.descricao AS "Item",
+            f.razao_social AS "Fornecedor",
+            c.fonte_pesquisa AS "Fonte",
+            c.valor_unitario AS "Valor Unitário",
+            c.valor_total AS "Valor Total"
+        FROM cotacoes c
+        INNER JOIN solicitacoes s
+            ON s.id = c.solicitacao_id
+        INNER JOIN solicitacoes_itens si
+            ON si.id = c.solicitacao_item_id
+        INNER JOIN produtos p
+            ON p.id = si.produto_id
+        LEFT JOIN fornecedores f
+            ON f.id = c.fornecedor_id
+        ORDER BY c.id DESC
+        """
+    )
+
+    if df.empty:
+        return None
+
+    return sisget_grid_localizar(
+        df=df,
+        chave="cotacoes",
+        coluna_id="id",
+        altura=480
+    )
+
+
+def cotacao_alterar(
+    registro_id
+):
+
+    registro = _sisget_fetchone(
+        """
+        SELECT
+            codigo,
+            valor_unitario,
+            observacao,
+            documento_url
+        FROM cotacoes
+        WHERE id = ?
+        """,
+        (registro_id,)
+    )
+
+    if not registro:
+        return
+
+    (
+        codigo,
+        valor_atual,
+        observacao_atual,
+        documento_atual
+    ) = registro
+
+    with st.form(
+        f"form_cotacao_alterar_{registro_id}"
+    ):
+        st.text_input(
+            "Código",
+            value=codigo or "",
+            disabled=True
+        )
+
+        valor = st.number_input(
+            "Valor Unitário *",
+            min_value=0.0,
+            value=float(valor_atual or 0),
+            format="%.2f"
+        )
+
+        observacao = st.text_area(
+            "Observação",
+            value=observacao_atual or ""
+        )
+
+        documento = st.text_input(
+            "Documento / URL",
+            value=documento_atual or ""
+        )
+
+        salvar = st.form_submit_button(
+            "💾 Salvar Alterações",
+            type="primary",
+            use_container_width=True
+        )
+
+    if salvar:
+        item = _sisget_fetchone(
+            """
+            SELECT
+                si.quantidade_solicitada
+            FROM cotacoes c
+            INNER JOIN solicitacoes_itens si
+                ON si.id = c.solicitacao_item_id
+            WHERE c.id = ?
+            """,
+            (registro_id,)
+        )
+
+        quantidade = float(
+            item[0] or 0
+        )
+
+        total = (
+            quantidade
+            *
+            float(valor)
+        )
+
+        if _sisget_salvar(
+            """
+            UPDATE cotacoes
+            SET
+                valor_unitario = ?,
+                valor_total = ?,
+                observacao = ?,
+                documento_url = ?
+            WHERE id = ?
+            """,
+            (
+                float(valor),
+                total,
+                observacao.strip() or None,
+                documento.strip() or None,
+                registro_id
+            )
+        ):
+            st.rerun()
+
+
+def cotacao_excluir():
+
+    registro_id = cotacao_localizar()
+
+    if not registro_id:
+        return
+
+    if st.button(
+        "🗑️ Confirmar Exclusão da Cotação",
+        type="primary",
+        use_container_width=True,
+        key=f"excluir_cotacao_{registro_id}"
+    ):
+        if _sisget_salvar(
+            """
+            DELETE FROM cotacoes
+            WHERE id = ?
+            """,
+            (registro_id,)
+        ):
+            st.rerun()
+
+
+def cotacao_imprimir():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            s.codigo AS "Solicitação",
+            p.descricao AS "Item",
+            f.razao_social AS "Fornecedor",
+            c.fonte_pesquisa AS "Fonte",
+            c.valor_unitario AS "Valor Unitário",
+            c.valor_total AS "Valor Total"
+        FROM cotacoes c
+        INNER JOIN solicitacoes s
+            ON s.id = c.solicitacao_id
+        INNER JOIN solicitacoes_itens si
+            ON si.id = c.solicitacao_item_id
+        INNER JOIN produtos p
+            ON p.id = si.produto_id
+        LEFT JOIN fornecedores f
+            ON f.id = c.fornecedor_id
+        ORDER BY s.codigo, p.descricao, c.valor_unitario
+        """
+    )
+
+    sisget_relatorio_classificacao(
+        "Cotações / Pesquisa de Preços",
+        df,
+        "cotacoes.pdf"
+    )
+
+
+# ============================================================
+# FICHAS ORÇAMENTÁRIAS DA SOLICITAÇÃO - CRUD
+# ============================================================
+
+def cadastro_fichas_solicitacoes():
+    sisget_tela_principal(
+        titulo="Fichas Orçamentárias das Solicitações",
+        chave="solicitacoes_fichas",
+        func_incluir=solicitacao_ficha_incluir,
+        func_localizar=solicitacao_ficha_localizar,
+        func_alterar=solicitacao_ficha_alterar,
+        func_excluir=solicitacao_ficha_excluir,
+        func_imprimir=solicitacao_ficha_imprimir,
+        icone="🧾"
+    )
+
+
+def solicitacao_ficha_incluir():
+
+    if "sisget_sol_ficha_reset" not in st.session_state:
+        st.session_state["sisget_sol_ficha_reset"] = 0
+
+    reset = st.session_state[
+        "sisget_sol_ficha_reset"
+    ]
+
+    solicitacao_id = sisget_selecionar_solicitacao(
+        "Solicitação *",
+        f"sol_ficha_solicitacao_{reset}"
+    )
+
+    if not solicitacao_id:
+        return
+
+    fichas = _sisget_fetch(
+        """
+        SELECT
+            id,
+            exercicio,
+            numero_ficha,
+            descricao
+        FROM fichas_orcamentarias
+        WHERE ativo = TRUE
+        ORDER BY exercicio DESC, numero_ficha
+        """
+    )
+
+    if not fichas:
+        st.warning(
+            "⚠️ Nenhuma ficha orçamentária ativa."
+        )
+        return
+
+    mapa_fichas = {
+        (
+            f"{exercicio}"
+            f" | Ficha {numero_ficha}"
+            f" | {descricao or ''}"
+        ): id_
+        for id_, exercicio, numero_ficha, descricao in fichas
+    }
+
+    itens = _sisget_fetch(
+        """
+        SELECT
+            si.id,
+            p.codigo,
+            p.descricao
+        FROM solicitacoes_itens si
+        INNER JOIN produtos p
+            ON p.id = si.produto_id
+        WHERE si.solicitacao_id = ?
+          AND si.ativo = TRUE
+        ORDER BY si.id
+        """,
+        (solicitacao_id,)
+    )
+
+    mapa_itens = {
+        "Toda a Solicitação": None
+    }
+
+    for id_, codigo, descricao in itens:
+        mapa_itens[
+            f"{codigo} - {descricao}"
+        ] = id_
+
+    codigo = sisget_proximo_codigo(
+        "solicitacoes_fichas",
+        tamanho=6
+    )
+
+    with st.form(
+        f"form_sol_ficha_{reset}_{solicitacao_id}"
+    ):
+        st.text_input(
+            "Código",
+            value=codigo,
+            disabled=True
+        )
+
+        ficha_nome = st.selectbox(
+            "Ficha Orçamentária *",
+            list(mapa_fichas.keys())
+        )
+
+        item_nome = st.selectbox(
+            "Vincular ao Item",
+            list(mapa_itens.keys())
+        )
+
+        valor = st.number_input(
+            "Valor Vinculado *",
+            min_value=0.0,
+            value=0.0,
+            format="%.2f"
+        )
+
+        observacao = st.text_area(
+            "Observação"
+        )
+
+        salvar = st.form_submit_button(
+            "💾 Vincular Ficha",
+            type="primary",
+            use_container_width=True
+        )
+
+    if salvar:
+        codigo = sisget_proximo_codigo(
+            "solicitacoes_fichas",
+            tamanho=6
+        )
+
+        if _sisget_salvar(
+            """
+            INSERT INTO solicitacoes_fichas
+            (
+                codigo,
+                solicitacao_id,
+                ficha_orcamentaria_id,
+                solicitacao_item_id,
+                valor_vinculado,
+                validada_contabilidade,
+                observacao
+            )
+            VALUES
+            (?, ?, ?, ?, ?, TRUE, ?)
+            """,
+            (
+                codigo,
+                solicitacao_id,
+                mapa_fichas[ficha_nome],
+                mapa_itens[item_nome],
+                float(valor),
+                observacao.strip() or None
+            )
+        ):
+            st.session_state[
+                "sisget_sol_ficha_reset"
+            ] += 1
+            st.rerun()
+
+
+def solicitacao_ficha_localizar():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            sf.id,
+            sf.codigo AS "Código",
+            s.codigo AS "Solicitação",
+            f.numero_ficha AS "Ficha",
+            f.exercicio AS "Exercício",
+            sf.valor_vinculado AS "Valor",
+            CASE
+                WHEN sf.validada_contabilidade
+                THEN 'Validada'
+                ELSE 'Pendente'
+            END AS "Situação"
+        FROM solicitacoes_fichas sf
+        INNER JOIN solicitacoes s
+            ON s.id = sf.solicitacao_id
+        INNER JOIN fichas_orcamentarias f
+            ON f.id = sf.ficha_orcamentaria_id
+        ORDER BY sf.id DESC
+        """
+    )
+
+    if df.empty:
+        return None
+
+    return sisget_grid_localizar(
+        df=df,
+        chave="solicitacoes_fichas",
+        coluna_id="id",
+        altura=480
+    )
+
+
+def solicitacao_ficha_alterar(
+    registro_id
+):
+
+    registro = _sisget_fetchone(
+        """
+        SELECT
+            codigo,
+            valor_vinculado,
+            validada_contabilidade,
+            observacao
+        FROM solicitacoes_fichas
+        WHERE id = ?
+        """,
+        (registro_id,)
+    )
+
+    if not registro:
+        return
+
+    (
+        codigo,
+        valor_atual,
+        validada_atual,
+        observacao_atual
+    ) = registro
+
+    with st.form(
+        f"form_sol_ficha_alterar_{registro_id}"
+    ):
+        st.text_input(
+            "Código",
+            value=codigo or "",
+            disabled=True
+        )
+
+        valor = st.number_input(
+            "Valor Vinculado",
+            min_value=0.0,
+            value=float(valor_atual or 0),
+            format="%.2f"
+        )
+
+        validada = st.checkbox(
+            "Validada pela Contabilidade",
+            value=bool(validada_atual)
+        )
+
+        observacao = st.text_area(
+            "Observação",
+            value=observacao_atual or ""
+        )
+
+        salvar = st.form_submit_button(
+            "💾 Salvar Alterações",
+            type="primary",
+            use_container_width=True
+        )
+
+    if salvar:
+        if _sisget_salvar(
+            """
+            UPDATE solicitacoes_fichas
+            SET
+                valor_vinculado = ?,
+                validada_contabilidade = ?,
+                observacao = ?
+            WHERE id = ?
+            """,
+            (
+                float(valor),
+                validada,
+                observacao.strip() or None,
+                registro_id
+            )
+        ):
+            st.rerun()
+
+
+def solicitacao_ficha_excluir():
+
+    registro_id = solicitacao_ficha_localizar()
+
+    if not registro_id:
+        return
+
+    if st.button(
+        "🗑️ Confirmar Exclusão do Vínculo",
+        type="primary",
+        use_container_width=True,
+        key=f"excluir_sol_ficha_{registro_id}"
+    ):
+        if _sisget_salvar(
+            """
+            DELETE FROM solicitacoes_fichas
+            WHERE id = ?
+            """,
+            (registro_id,)
+        ):
+            st.rerun()
+
+
+def solicitacao_ficha_imprimir():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            s.codigo AS "Solicitação",
+            f.numero_ficha AS "Ficha",
+            f.exercicio AS "Exercício",
+            sf.valor_vinculado AS "Valor",
+            sf.observacao AS "Observação"
+        FROM solicitacoes_fichas sf
+        INNER JOIN solicitacoes s
+            ON s.id = sf.solicitacao_id
+        INNER JOIN fichas_orcamentarias f
+            ON f.id = sf.ficha_orcamentaria_id
+        ORDER BY s.codigo, f.numero_ficha
+        """
+    )
+
+    sisget_relatorio_classificacao(
+        "Fichas Orçamentárias das Solicitações",
+        df,
+        "solicitacoes_fichas.pdf"
+    )
+
+
+# ============================================================
+# FINANCEIRO - CRUD
+# ============================================================
+
+def cadastro_financeiro_solicitacoes():
+    sisget_tela_principal(
+        titulo="Validação Financeira das Solicitações",
+        chave="solicitacoes_financeiro",
+        func_incluir=financeiro_solicitacao_incluir,
+        func_localizar=financeiro_solicitacao_localizar,
+        func_alterar=financeiro_solicitacao_alterar,
+        func_excluir=financeiro_solicitacao_excluir,
+        func_imprimir=financeiro_solicitacao_imprimir,
+        icone="💰"
+    )
+
+
+def financeiro_solicitacao_incluir():
+
+    if "sisget_financeiro_sol_reset" not in st.session_state:
+        st.session_state[
+            "sisget_financeiro_sol_reset"
+        ] = 0
+
+    reset = st.session_state[
+        "sisget_financeiro_sol_reset"
+    ]
+
+    solicitacao_id = sisget_selecionar_solicitacao(
+        "Solicitação *",
+        f"financeiro_sol_{reset}"
+    )
+
+    if not solicitacao_id:
+        return
+
+    codigo = sisget_proximo_codigo(
+        "solicitacoes_financeiro",
+        tamanho=6
+    )
+
+    total = _sisget_fetchone(
+        """
+        SELECT COALESCE(
+            SUM(valor_estimado_total),
+            0
+        )
+        FROM solicitacoes_itens
+        WHERE solicitacao_id = ?
+          AND ativo = TRUE
+        """,
+        (solicitacao_id,)
+    )
+
+    valor_estimado = float(
+        total[0] or 0
+    )
+
+    with st.form(
+        f"form_financeiro_sol_{reset}_{solicitacao_id}"
+    ):
+        st.text_input(
+            "Código",
+            value=codigo,
+            disabled=True
+        )
+
+        st.number_input(
+            "Valor Estimado",
+            value=valor_estimado,
+            disabled=True,
+            format="%.2f"
+        )
+
+        valor_validado = st.number_input(
+            "Valor Validado *",
+            min_value=0.0,
+            value=valor_estimado,
+            format="%.2f"
+        )
+
+        cota = st.number_input(
+            "Cota Financeira",
+            min_value=0.0,
+            value=0.0,
+            format="%.2f"
+        )
+
+        reserva = st.number_input(
+            "Reserva",
+            min_value=0.0,
+            value=0.0,
+            format="%.2f"
+        )
+
+        parecer = st.text_area(
+            "Parecer Financeiro"
+        )
+
+        salvar = st.form_submit_button(
+            "💾 Salvar Validação",
+            type="primary",
+            use_container_width=True
+        )
+
+    if salvar:
+        codigo = sisget_proximo_codigo(
+            "solicitacoes_financeiro",
+            tamanho=6
+        )
+
+        if _sisget_salvar(
+            """
+            INSERT INTO solicitacoes_financeiro
+            (
+                codigo,
+                solicitacao_id,
+                valor_estimado,
+                valor_validado,
+                cota,
+                reserva,
+                parecer,
+                usuario_id
+            )
+            VALUES
+            (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                codigo,
+                solicitacao_id,
+                valor_estimado,
+                float(valor_validado),
+                float(cota),
+                float(reserva),
+                parecer.strip() or None,
+                st.session_state.get("usuario_id")
+            )
+        ):
+            st.session_state[
+                "sisget_financeiro_sol_reset"
+            ] += 1
+            st.rerun()
+
+
+def financeiro_solicitacao_localizar():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            sf.id,
+            sf.codigo AS "Código",
+            s.codigo AS "Solicitação",
+            sf.valor_estimado AS "Estimado",
+            sf.valor_validado AS "Validado",
+            sf.cota AS "Cota",
+            sf.reserva AS "Reserva"
+        FROM solicitacoes_financeiro sf
+        INNER JOIN solicitacoes s
+            ON s.id = sf.solicitacao_id
+        ORDER BY sf.id DESC
+        """
+    )
+
+    if df.empty:
+        return None
+
+    return sisget_grid_localizar(
+        df=df,
+        chave="solicitacoes_financeiro",
+        coluna_id="id",
+        altura=450
+    )
+
+
+def financeiro_solicitacao_alterar(
+    registro_id
+):
+
+    registro = _sisget_fetchone(
+        """
+        SELECT
+            codigo,
+            valor_estimado,
+            valor_validado,
+            cota,
+            reserva,
+            parecer
+        FROM solicitacoes_financeiro
+        WHERE id = ?
+        """,
+        (registro_id,)
+    )
+
+    if not registro:
+        return
+
+    (
+        codigo,
+        estimado_atual,
+        validado_atual,
+        cota_atual,
+        reserva_atual,
+        parecer_atual
+    ) = registro
+
+    with st.form(
+        f"form_financeiro_alterar_{registro_id}"
+    ):
+        st.text_input(
+            "Código",
+            value=codigo or "",
+            disabled=True
+        )
+
+        st.number_input(
+            "Valor Estimado",
+            value=float(estimado_atual or 0),
+            disabled=True,
+            format="%.2f"
+        )
+
+        validado = st.number_input(
+            "Valor Validado",
+            min_value=0.0,
+            value=float(validado_atual or 0),
+            format="%.2f"
+        )
+
+        cota = st.number_input(
+            "Cota",
+            min_value=0.0,
+            value=float(cota_atual or 0),
+            format="%.2f"
+        )
+
+        reserva = st.number_input(
+            "Reserva",
+            min_value=0.0,
+            value=float(reserva_atual or 0),
+            format="%.2f"
+        )
+
+        parecer = st.text_area(
+            "Parecer",
+            value=parecer_atual or ""
+        )
+
+        salvar = st.form_submit_button(
+            "💾 Salvar Alterações",
+            type="primary",
+            use_container_width=True
+        )
+
+    if salvar:
+        if _sisget_salvar(
+            """
+            UPDATE solicitacoes_financeiro
+            SET
+                valor_validado = ?,
+                cota = ?,
+                reserva = ?,
+                parecer = ?
+            WHERE id = ?
+            """,
+            (
+                float(validado),
+                float(cota),
+                float(reserva),
+                parecer.strip() or None,
+                registro_id
+            )
+        ):
+            st.rerun()
+
+
+def financeiro_solicitacao_excluir():
+
+    registro_id = financeiro_solicitacao_localizar()
+
+    if not registro_id:
+        return
+
+    if st.button(
+        "🗑️ Confirmar Exclusão da Validação",
+        type="primary",
+        use_container_width=True,
+        key=f"excluir_financeiro_sol_{registro_id}"
+    ):
+        if _sisget_salvar(
+            """
+            DELETE FROM solicitacoes_financeiro
+            WHERE id = ?
+            """,
+            (registro_id,)
+        ):
+            st.rerun()
+
+
+def financeiro_solicitacao_imprimir():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            s.codigo AS "Solicitação",
+            sf.valor_estimado AS "Estimado",
+            sf.valor_validado AS "Validado",
+            sf.cota AS "Cota",
+            sf.reserva AS "Reserva",
+            sf.parecer AS "Parecer"
+        FROM solicitacoes_financeiro sf
+        INNER JOIN solicitacoes s
+            ON s.id = sf.solicitacao_id
+        ORDER BY sf.id DESC
+        """
+    )
+
+    sisget_relatorio_classificacao(
+        "Validações Financeiras",
+        df,
+        "solicitacoes_financeiro.pdf"
+    )
+
+
+# ============================================================
+# ENQUADRAMENTO - CRUD
+# ============================================================
+
+def cadastro_enquadramento_solicitacoes():
+    sisget_tela_principal(
+        titulo="Enquadramento da Contratação",
+        chave="solicitacoes_enquadramento",
+        func_incluir=enquadramento_incluir,
+        func_localizar=enquadramento_localizar,
+        func_alterar=enquadramento_alterar,
+        func_excluir=enquadramento_excluir,
+        func_imprimir=enquadramento_imprimir,
+        icone="⚖️"
+    )
+
+
+def enquadramento_incluir():
+
+    if "sisget_enquadramento_reset" not in st.session_state:
+        st.session_state[
+            "sisget_enquadramento_reset"
+        ] = 0
+
+    reset = st.session_state[
+        "sisget_enquadramento_reset"
+    ]
+
+    solicitacao_id = sisget_selecionar_solicitacao(
+        "Solicitação para Licitação *",
+        f"enquadramento_sol_{reset}",
+        "LICITACAO"
+    )
+
+    if not solicitacao_id:
+        return
+
+    existe = _sisget_fetchone(
+        """
+        SELECT id
+        FROM solicitacoes_enquadramento
+        WHERE solicitacao_id = ?
+        """,
+        (solicitacao_id,)
+    )
+
+    if existe:
+        st.warning(
+            "⚠️ Esta solicitação já possui enquadramento."
+        )
+        return
+
+    codigo = sisget_proximo_codigo(
+        "solicitacoes_enquadramento",
+        tamanho=6
+    )
+
+    with st.form(
+        f"form_enquadramento_incluir_{reset}_{solicitacao_id}"
+    ):
+        st.text_input(
+            "Código",
+            value=codigo,
+            disabled=True
+        )
+
+        tipo_processo = st.selectbox(
+            "Tipo do Processo *",
+            [
+                "Licitação",
+                "Contratação Direta"
+            ]
+        )
+
+        tipo_objeto = st.selectbox(
+            "Tipo do Objeto *",
+            [
+                "Aquisição de bens",
+                "Serviço",
+                "Serviço de engenharia",
+                "Obra",
+                "Locação",
+                "Tecnologia da Informação",
+                "Outro"
+            ]
+        )
+
+        natureza_objeto = st.text_input(
+            "Natureza do Objeto"
+        )
+
+        modalidade = st.text_input(
+            "Modalidade / Forma *"
+        )
+
+        criterio = st.text_input(
+            "Critério de Julgamento"
+        )
+
+        modo = st.text_input(
+            "Modo de Disputa"
+        )
+
+        forma = st.selectbox(
+            "Forma",
+            [
+                "Eletrônica",
+                "Presencial",
+                "Não se aplica"
+            ]
+        )
+
+        srp = st.checkbox(
+            "Sistema de Registro de Preços - SRP"
+        )
+
+        fundamento = st.text_input(
+            "Fundamento Legal"
+        )
+
+        justificativa = st.text_area(
+            "Justificativa *"
+        )
+
+        salvar = st.form_submit_button(
+            "💾 Salvar Enquadramento",
+            type="primary",
+            use_container_width=True
+        )
+
+    if salvar:
+        codigo = sisget_proximo_codigo(
+            "solicitacoes_enquadramento",
+            tamanho=6
+        )
+
+        if _sisget_salvar(
+            """
+            INSERT INTO solicitacoes_enquadramento
+            (
+                codigo,
+                solicitacao_id,
+                tipo_processo,
+                tipo_objeto,
+                natureza_objeto,
+                modalidade,
+                criterio_julgamento,
+                modo_disputa,
+                forma,
+                registro_precos,
+                fundamento_legal,
+                justificativa
+            )
+            VALUES
+            (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                codigo,
+                solicitacao_id,
+                tipo_processo,
+                tipo_objeto,
+                natureza_objeto.strip() or None,
+                modalidade.strip(),
+                criterio.strip() or None,
+                modo.strip() or None,
+                forma,
+                srp,
+                fundamento.strip() or None,
+                justificativa.strip()
+            )
+        ):
+            st.session_state[
+                "sisget_enquadramento_reset"
+            ] += 1
+            st.rerun()
+
+
+def enquadramento_localizar():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            e.id,
+            e.codigo AS "Código",
+            s.codigo AS "Solicitação",
+            e.tipo_processo AS "Tipo",
+            e.tipo_objeto AS "Objeto",
+            e.modalidade AS "Modalidade",
+            e.criterio_julgamento AS "Critério",
+            CASE
+                WHEN e.registro_precos
+                THEN 'Sim'
+                ELSE 'Não'
+            END AS "SRP"
+        FROM solicitacoes_enquadramento e
+        INNER JOIN solicitacoes s
+            ON s.id = e.solicitacao_id
+        ORDER BY e.id DESC
+        """
+    )
+
+    if df.empty:
+        return None
+
+    return sisget_grid_localizar(
+        df=df,
+        chave="solicitacoes_enquadramento",
+        coluna_id="id",
+        altura=450
+    )
+
+
+def enquadramento_alterar(
+    registro_id
+):
+
+    registro = _sisget_fetchone(
+        """
+        SELECT
+            codigo,
+            tipo_processo,
+            tipo_objeto,
+            natureza_objeto,
+            modalidade,
+            criterio_julgamento,
+            modo_disputa,
+            forma,
+            registro_precos,
+            fundamento_legal,
+            justificativa
+        FROM solicitacoes_enquadramento
+        WHERE id = ?
+        """,
+        (registro_id,)
+    )
+
+    if not registro:
+        return
+
+    (
+        codigo,
+        tipo_atual,
+        objeto_atual,
+        natureza_atual,
+        modalidade_atual,
+        criterio_atual,
+        modo_atual,
+        forma_atual,
+        srp_atual,
+        fundamento_atual,
+        justificativa_atual
+    ) = registro
+
+    tipos = [
+        "Licitação",
+        "Contratação Direta"
+    ]
+
+    formas = [
+        "Eletrônica",
+        "Presencial",
+        "Não se aplica"
+    ]
+
+    with st.form(
+        f"form_enquadramento_alterar_{registro_id}"
+    ):
+        st.text_input(
+            "Código",
+            value=codigo or "",
+            disabled=True
+        )
+
+        tipo = st.selectbox(
+            "Tipo do Processo",
+            tipos,
+            index=(
+                tipos.index(tipo_atual)
+                if tipo_atual in tipos
+                else 0
+            )
+        )
+
+        objeto = st.text_input(
+            "Tipo do Objeto",
+            value=objeto_atual or ""
+        )
+
+        natureza = st.text_input(
+            "Natureza",
+            value=natureza_atual or ""
+        )
+
+        modalidade = st.text_input(
+            "Modalidade",
+            value=modalidade_atual or ""
+        )
+
+        criterio = st.text_input(
+            "Critério",
+            value=criterio_atual or ""
+        )
+
+        modo = st.text_input(
+            "Modo de Disputa",
+            value=modo_atual or ""
+        )
+
+        forma = st.selectbox(
+            "Forma",
+            formas,
+            index=(
+                formas.index(forma_atual)
+                if forma_atual in formas
+                else 0
+            )
+        )
+
+        srp = st.checkbox(
+            "SRP",
+            value=bool(srp_atual)
+        )
+
+        fundamento = st.text_input(
+            "Fundamento Legal",
+            value=fundamento_atual or ""
+        )
+
+        justificativa = st.text_area(
+            "Justificativa",
+            value=justificativa_atual or ""
+        )
+
+        salvar = st.form_submit_button(
+            "💾 Salvar Alterações",
+            type="primary",
+            use_container_width=True
+        )
+
+    if salvar:
+        if _sisget_salvar(
+            """
+            UPDATE solicitacoes_enquadramento
+            SET
+                tipo_processo = ?,
+                tipo_objeto = ?,
+                natureza_objeto = ?,
+                modalidade = ?,
+                criterio_julgamento = ?,
+                modo_disputa = ?,
+                forma = ?,
+                registro_precos = ?,
+                fundamento_legal = ?,
+                justificativa = ?,
+                atualizado_em = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (
+                tipo,
+                objeto.strip(),
+                natureza.strip() or None,
+                modalidade.strip(),
+                criterio.strip() or None,
+                modo.strip() or None,
+                forma,
+                srp,
+                fundamento.strip() or None,
+                justificativa.strip(),
+                registro_id
+            )
+        ):
+            st.rerun()
+
+
+def enquadramento_excluir():
+
+    registro_id = enquadramento_localizar()
+
+    if not registro_id:
+        return
+
+    if st.button(
+        "🗑️ Confirmar Exclusão",
+        type="primary",
+        use_container_width=True,
+        key=f"excluir_enquadramento_{registro_id}"
+    ):
+        if _sisget_salvar(
+            """
+            DELETE FROM solicitacoes_enquadramento
+            WHERE id = ?
+            """,
+            (registro_id,)
+        ):
+            st.rerun()
+
+
+def enquadramento_imprimir():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            s.codigo AS "Solicitação",
+            e.tipo_processo AS "Tipo",
+            e.tipo_objeto AS "Objeto",
+            e.modalidade AS "Modalidade",
+            e.criterio_julgamento AS "Critério",
+            e.modo_disputa AS "Modo",
+            e.forma AS "Forma"
+        FROM solicitacoes_enquadramento e
+        INNER JOIN solicitacoes s
+            ON s.id = e.solicitacao_id
+        ORDER BY e.id DESC
+        """
+    )
+
+    sisget_relatorio_classificacao(
+        "Enquadramentos das Contratações",
+        df,
+        "enquadramentos.pdf"
+    )
+
+
+# ============================================================
+# TR - CRUD
+# ============================================================
+
+def cadastro_tr_solicitacoes():
+    sisget_tela_principal(
+        titulo="Termo de Referência - TR",
+        chave="solicitacoes_tr",
+        func_incluir=tr_incluir,
+        func_localizar=tr_localizar,
+        func_alterar=tr_alterar,
+        func_excluir=tr_excluir,
+        func_imprimir=tr_imprimir,
+        icone="📑"
+    )
+
+
+def tr_incluir():
+
+    if "sisget_tr_reset" not in st.session_state:
+        st.session_state["sisget_tr_reset"] = 0
+
+    reset = st.session_state[
+        "sisget_tr_reset"
+    ]
+
+    solicitacao_id = sisget_selecionar_solicitacao(
+        "Solicitação para Licitação *",
+        f"tr_solicitacao_{reset}",
+        "LICITACAO"
+    )
+
+    if not solicitacao_id:
+        return
+
+    existe = _sisget_fetchone(
+        """
+        SELECT id
+        FROM solicitacoes_tr
+        WHERE solicitacao_id = ?
+        """,
+        (solicitacao_id,)
+    )
+
+    if existe:
+        st.warning(
+            "⚠️ Esta solicitação já possui TR."
+        )
+        return
+
+    solicitacao = _sisget_fetchone(
+        """
+        SELECT objeto
+        FROM solicitacoes
+        WHERE id = ?
+        """,
+        (solicitacao_id,)
+    )
+
+    objeto_base = (
+        solicitacao[0]
+        if solicitacao
+        else ""
+    )
+
+    codigo = sisget_proximo_codigo(
+        "solicitacoes_tr",
+        tamanho=6
+    )
+
+    with st.form(
+        f"form_tr_incluir_{reset}_{solicitacao_id}"
+    ):
+        st.text_input(
+            "Código",
+            value=codigo,
+            disabled=True
+        )
+
+        objeto = st.text_area(
+            "1. Definição do Objeto *",
+            value=objeto_base or ""
+        )
+
+        fundamentacao = st.text_area(
+            "2. Fundamentação *"
+        )
+
+        solucao = st.text_area(
+            "3. Descrição da Solução *"
+        )
+
+        requisitos = st.text_area(
+            "4. Requisitos *"
+        )
+
+        execucao = st.text_area(
+            "5. Modelo de Execução *"
+        )
+
+        gestao = st.text_area(
+            "6. Gestão e Fiscalização"
+        )
+
+        pagamento = st.text_area(
+            "7. Medição e Pagamento"
+        )
+
+        selecao = st.text_area(
+            "8. Critérios de Seleção"
+        )
+
+        estimativa = st.text_area(
+            "9. Estimativa do Valor"
+        )
+
+        adequacao = st.text_area(
+            "10. Adequação Orçamentária"
+        )
+
+        obrigacoes_contratada = st.text_area(
+            "11. Obrigações da Contratada"
+        )
+
+        obrigacoes_adm = st.text_area(
+            "12. Obrigações da Administração"
+        )
+
+        sancoes = st.text_area(
+            "13. Sanções"
+        )
+
+        salvar = st.form_submit_button(
+            "💾 Salvar TR",
+            type="primary",
+            use_container_width=True
+        )
+
+    if salvar:
+        codigo = sisget_proximo_codigo(
+            "solicitacoes_tr",
+            tamanho=6
+        )
+
+        if _sisget_salvar(
+            """
+            INSERT INTO solicitacoes_tr
+            (
+                codigo,
+                solicitacao_id,
+                objeto,
+                fundamentacao,
+                descricao_solucao,
+                requisitos,
+                modelo_execucao,
+                gestao_fiscalizacao,
+                medicao_pagamento,
+                criterios_selecao,
+                estimativa_valor,
+                adequacao_orcamentaria,
+                obrigacoes_contratada,
+                obrigacoes_administracao,
+                sancoes
+            )
+            VALUES
+            (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                codigo,
+                solicitacao_id,
+                objeto.strip(),
+                fundamentacao.strip(),
+                solucao.strip(),
+                requisitos.strip(),
+                execucao.strip(),
+                gestao.strip() or None,
+                pagamento.strip() or None,
+                selecao.strip() or None,
+                estimativa.strip() or None,
+                adequacao.strip() or None,
+                obrigacoes_contratada.strip() or None,
+                obrigacoes_adm.strip() or None,
+                sancoes.strip() or None
+            )
+        ):
+            st.session_state[
+                "sisget_tr_reset"
+            ] += 1
+            st.rerun()
+
+
+def tr_localizar():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            t.id,
+            t.codigo AS "Código",
+            s.codigo AS "Solicitação",
+            s.objeto AS "Objeto"
+        FROM solicitacoes_tr t
+        INNER JOIN solicitacoes s
+            ON s.id = t.solicitacao_id
+        ORDER BY t.id DESC
+        """
+    )
+
+    if df.empty:
+        return None
+
+    return sisget_grid_localizar(
+        df=df,
+        chave="solicitacoes_tr",
+        coluna_id="id",
+        altura=450
+    )
+
+
+def tr_alterar(
+    registro_id
+):
+
+    registro = _sisget_fetchone(
+        """
+        SELECT
+            codigo,
+            objeto,
+            fundamentacao,
+            descricao_solucao,
+            requisitos,
+            modelo_execucao,
+            gestao_fiscalizacao,
+            medicao_pagamento,
+            criterios_selecao,
+            estimativa_valor,
+            adequacao_orcamentaria,
+            obrigacoes_contratada,
+            obrigacoes_administracao,
+            sancoes
+        FROM solicitacoes_tr
+        WHERE id = ?
+        """,
+        (registro_id,)
+    )
+
+    if not registro:
+        return
+
+    (
+        codigo,
+        objeto_atual,
+        fundamentacao_atual,
+        solucao_atual,
+        requisitos_atual,
+        execucao_atual,
+        gestao_atual,
+        pagamento_atual,
+        selecao_atual,
+        estimativa_atual,
+        adequacao_atual,
+        contratada_atual,
+        adm_atual,
+        sancoes_atual
+    ) = registro
+
+    with st.form(
+        f"form_tr_alterar_{registro_id}"
+    ):
+        st.text_input(
+            "Código",
+            value=codigo or "",
+            disabled=True
+        )
+
+        objeto = st.text_area(
+            "1. Objeto",
+            value=objeto_atual or ""
+        )
+
+        fundamentacao = st.text_area(
+            "2. Fundamentação",
+            value=fundamentacao_atual or ""
+        )
+
+        solucao = st.text_area(
+            "3. Solução",
+            value=solucao_atual or ""
+        )
+
+        requisitos = st.text_area(
+            "4. Requisitos",
+            value=requisitos_atual or ""
+        )
+
+        execucao = st.text_area(
+            "5. Execução",
+            value=execucao_atual or ""
+        )
+
+        gestao = st.text_area(
+            "6. Gestão/Fiscalização",
+            value=gestao_atual or ""
+        )
+
+        pagamento = st.text_area(
+            "7. Medição/Pagamento",
+            value=pagamento_atual or ""
+        )
+
+        selecao = st.text_area(
+            "8. Seleção",
+            value=selecao_atual or ""
+        )
+
+        estimativa = st.text_area(
+            "9. Estimativa",
+            value=estimativa_atual or ""
+        )
+
+        adequacao = st.text_area(
+            "10. Adequação Orçamentária",
+            value=adequacao_atual or ""
+        )
+
+        contratada = st.text_area(
+            "11. Obrigações da Contratada",
+            value=contratada_atual or ""
+        )
+
+        adm = st.text_area(
+            "12. Obrigações da Administração",
+            value=adm_atual or ""
+        )
+
+        sancoes = st.text_area(
+            "13. Sanções",
+            value=sancoes_atual or ""
+        )
+
+        salvar = st.form_submit_button(
+            "💾 Salvar Alterações",
+            type="primary",
+            use_container_width=True
+        )
+
+    if salvar:
+        if _sisget_salvar(
+            """
+            UPDATE solicitacoes_tr
+            SET
+                objeto = ?,
+                fundamentacao = ?,
+                descricao_solucao = ?,
+                requisitos = ?,
+                modelo_execucao = ?,
+                gestao_fiscalizacao = ?,
+                medicao_pagamento = ?,
+                criterios_selecao = ?,
+                estimativa_valor = ?,
+                adequacao_orcamentaria = ?,
+                obrigacoes_contratada = ?,
+                obrigacoes_administracao = ?,
+                sancoes = ?,
+                atualizado_em = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (
+                objeto.strip(),
+                fundamentacao.strip(),
+                solucao.strip(),
+                requisitos.strip(),
+                execucao.strip(),
+                gestao.strip() or None,
+                pagamento.strip() or None,
+                selecao.strip() or None,
+                estimativa.strip() or None,
+                adequacao.strip() or None,
+                contratada.strip() or None,
+                adm.strip() or None,
+                sancoes.strip() or None,
+                registro_id
+            )
+        ):
+            st.rerun()
+
+
+def tr_excluir():
+
+    registro_id = tr_localizar()
+
+    if not registro_id:
+        return
+
+    if st.button(
+        "🗑️ Confirmar Exclusão do TR",
+        type="primary",
+        use_container_width=True,
+        key=f"excluir_tr_{registro_id}"
+    ):
+        if _sisget_salvar(
+            """
+            DELETE FROM solicitacoes_tr
+            WHERE id = ?
+            """,
+            (registro_id,)
+        ):
+            st.rerun()
+
+
+def tr_imprimir():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            t.codigo AS "Código",
+            s.codigo AS "Solicitação",
+            t.objeto AS "Objeto",
+            t.fundamentacao AS "Fundamentação",
+            t.estimativa_valor AS "Estimativa"
+        FROM solicitacoes_tr t
+        INNER JOIN solicitacoes s
+            ON s.id = t.solicitacao_id
+        ORDER BY t.id DESC
+        """
+    )
+
+    sisget_relatorio_classificacao(
+        "Termos de Referência",
+        df,
+        "termos_referencia.pdf"
+    )
+
+
+# ============================================================
+# HISTÓRICO - TELA PRÓPRIA
+# ============================================================
+
+def cadastro_historico_solicitacoes():
+    sisget_tela_principal(
+        titulo="Histórico das Solicitações",
+        chave="solicitacoes_historico",
+        func_incluir=historico_solicitacao_incluir,
+        func_localizar=historico_solicitacao_localizar,
+        func_alterar=historico_solicitacao_alterar,
+        func_excluir=historico_solicitacao_excluir,
+        func_imprimir=historico_solicitacao_imprimir,
+        icone="📜"
+    )
+
+
+def historico_solicitacao_incluir():
+
+    if "sisget_historico_reset" not in st.session_state:
+        st.session_state[
+            "sisget_historico_reset"
+        ] = 0
+
+    reset = st.session_state[
+        "sisget_historico_reset"
+    ]
+
+    solicitacao_id = sisget_selecionar_solicitacao(
+        "Solicitação *",
+        f"historico_solicitacao_{reset}"
+    )
+
+    if not solicitacao_id:
+        return
+
+    codigo = sisget_proximo_codigo(
+        "solicitacoes_historico",
+        tamanho=8
+    )
+
+    with st.form(
+        f"form_historico_{reset}_{solicitacao_id}"
+    ):
+        st.text_input(
+            "Código",
+            value=codigo,
+            disabled=True
+        )
+
+        etapa_origem = st.text_input(
+            "Etapa de Origem"
+        )
+
+        etapa_destino = st.text_input(
+            "Etapa de Destino"
+        )
+
+        acao = st.text_input(
+            "Ação *"
+        )
+
+        observacao = st.text_area(
+            "Observação"
+        )
+
+        salvar = st.form_submit_button(
+            "💾 Registrar Histórico",
+            type="primary",
+            use_container_width=True
+        )
+
+    if salvar:
+        codigo = sisget_proximo_codigo(
+            "solicitacoes_historico",
+            tamanho=8
+        )
+
+        if _sisget_salvar(
+            """
+            INSERT INTO solicitacoes_historico
+            (
+                codigo,
+                solicitacao_id,
+                usuario_id,
+                etapa_origem,
+                etapa_destino,
+                acao,
+                observacao
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                codigo,
+                solicitacao_id,
+                st.session_state.get("usuario_id"),
+                etapa_origem.strip() or None,
+                etapa_destino.strip() or None,
+                acao.strip(),
+                observacao.strip() or None
+            )
+        ):
+            st.session_state[
+                "sisget_historico_reset"
+            ] += 1
+            st.rerun()
+
+
+def historico_solicitacao_localizar():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            h.id,
+            h.codigo AS "Código",
+            s.codigo AS "Solicitação",
+            h.etapa_origem AS "Origem",
+            h.etapa_destino AS "Destino",
+            h.acao AS "Ação",
+            h.observacao AS "Observação",
+            h.criado_em AS "Data/Hora"
+        FROM solicitacoes_historico h
+        INNER JOIN solicitacoes s
+            ON s.id = h.solicitacao_id
+        ORDER BY h.id DESC
+        """
+    )
+
+    if df.empty:
+        return None
+
+    return sisget_grid_localizar(
+        df=df,
+        chave="solicitacoes_historico",
+        coluna_id="id",
+        altura=500
+    )
+
+
+def historico_solicitacao_alterar(
+    registro_id
+):
+    st.warning(
+        "🔒 Histórico de tramitação é registro de auditoria "
+        "e não deve ser alterado."
+    )
+
+
+def historico_solicitacao_excluir():
+    st.warning(
+        "🔒 Histórico de tramitação não pode ser excluído. "
+        "Use um novo registro para correção/retificação."
+    )
+
+
+def historico_solicitacao_imprimir():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            s.codigo AS "Solicitação",
+            h.etapa_origem AS "Origem",
+            h.etapa_destino AS "Destino",
+            h.acao AS "Ação",
+            h.observacao AS "Observação",
+            h.criado_em AS "Data/Hora"
+        FROM solicitacoes_historico h
+        INNER JOIN solicitacoes s
+            ON s.id = h.solicitacao_id
+        ORDER BY h.id
+        """
+    )
+
+    sisget_relatorio_classificacao(
+        "Histórico das Solicitações",
+        df,
+        "historico_solicitacoes.pdf"
+    )
+
+
+# ============================================================
+# ASSINATURAS - TELA PRÓPRIA
+# ============================================================
+
+def cadastro_assinaturas_solicitacoes():
+    sisget_tela_principal(
+        titulo="Assinaturas / Aprovações",
+        chave="solicitacoes_assinaturas",
+        func_incluir=assinatura_solicitacao_incluir,
+        func_localizar=assinatura_solicitacao_localizar,
+        func_alterar=assinatura_solicitacao_alterar,
+        func_excluir=assinatura_solicitacao_excluir,
+        func_imprimir=assinatura_solicitacao_imprimir,
+        icone="✍️"
+    )
+
+
+def assinatura_solicitacao_incluir():
+
+    import hashlib
+
+    if "sisget_assinatura_reset" not in st.session_state:
+        st.session_state[
+            "sisget_assinatura_reset"
+        ] = 0
+
+    reset = st.session_state[
+        "sisget_assinatura_reset"
+    ]
+
+    solicitacao_id = sisget_selecionar_solicitacao(
+        "Solicitação *",
+        f"assinatura_solicitacao_{reset}"
+    )
+
+    if not solicitacao_id:
+        return
+
+    codigo = sisget_proximo_codigo(
+        "solicitacoes_assinaturas",
+        tamanho=8
+    )
+
+    with st.form(
+        f"form_assinatura_{reset}_{solicitacao_id}"
+    ):
+        st.text_input(
+            "Código",
+            value=codigo,
+            disabled=True
+        )
+
+        etapa = st.selectbox(
+            "Etapa *",
+            [
+                "APROVACAO",
+                "DFD",
+                "ETP",
+                "RISCOS",
+                "COMPRAS",
+                "CONTABILIDADE",
+                "FINANCEIRO",
+                "ORDENADOR",
+                "LICITACAO",
+                "TR"
+            ]
+        )
+
+        decisao = st.selectbox(
+            "Decisão *",
+            [
+                "ASSINADO",
+                "APROVADO",
+                "VALIDADO",
+                "AUTORIZADO",
+                "DEVOLVIDO",
+                "REJEITADO"
+            ]
+        )
+
+        observacao = st.text_area(
+            "Observação"
+        )
+
+        assinar = st.form_submit_button(
+            "✍️ Assinar / Registrar",
+            type="primary",
+            use_container_width=True
+        )
+
+    if assinar:
+
+        usuario_id = st.session_state.get(
+            "usuario_id"
+        )
+
+        instante = datetime.now().isoformat()
+
+        conteudo = (
+            f"{solicitacao_id}|"
+            f"{usuario_id}|"
+            f"{etapa}|"
+            f"{decisao}|"
+            f"{instante}"
+        )
+
+        hash_assinatura = hashlib.sha256(
+            conteudo.encode("utf-8")
+        ).hexdigest()
+
+        codigo = sisget_proximo_codigo(
+            "solicitacoes_assinaturas",
+            tamanho=8
+        )
+
+        if _sisget_salvar(
+            """
+            INSERT INTO solicitacoes_assinaturas
+            (
+                codigo,
+                solicitacao_id,
+                usuario_id,
+                etapa,
+                decisao,
+                observacao,
+                hash_assinatura,
+                assinado_em
+            )
+            VALUES
+            (
+                ?, ?, ?, ?, ?, ?, ?,
+                CURRENT_TIMESTAMP
+            )
+            """,
+            (
+                codigo,
+                solicitacao_id,
+                usuario_id,
+                etapa,
+                decisao,
+                observacao.strip() or None,
+                hash_assinatura
+            )
+        ):
+            st.session_state[
+                "sisget_assinatura_reset"
+            ] += 1
+            st.rerun()
+
+
+def assinatura_solicitacao_localizar():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            a.id,
+            a.codigo AS "Código",
+            s.codigo AS "Solicitação",
+            a.etapa AS "Etapa",
+            a.decisao AS "Decisão",
+            a.hash_assinatura AS "Hash",
+            a.assinado_em AS "Data/Hora"
+        FROM solicitacoes_assinaturas a
+        INNER JOIN solicitacoes s
+            ON s.id = a.solicitacao_id
+        ORDER BY a.id DESC
+        """
+    )
+
+    if df.empty:
+        return None
+
+    return sisget_grid_localizar(
+        df=df,
+        chave="solicitacoes_assinaturas",
+        coluna_id="id",
+        altura=500
+    )
+
+
+def assinatura_solicitacao_alterar(
+    registro_id
+):
+    st.warning(
+        "🔒 Assinatura registrada não deve ser alterada. "
+        "Se houver erro, registre nova assinatura/decisão."
+    )
+
+
+def assinatura_solicitacao_excluir():
+    st.warning(
+        "🔒 Assinaturas não podem ser excluídas pelo fluxo normal."
+    )
+
+
+def assinatura_solicitacao_imprimir():
+
+    df = _sisget_dataframe(
+        """
+        SELECT
+            s.codigo AS "Solicitação",
+            a.codigo AS "Assinatura",
+            a.etapa AS "Etapa",
+            a.decisao AS "Decisão",
+            a.hash_assinatura AS "Hash",
+            a.assinado_em AS "Data/Hora"
+        FROM solicitacoes_assinaturas a
+        INNER JOIN solicitacoes s
+            ON s.id = a.solicitacao_id
+        ORDER BY a.id DESC
+        """
+    )
+
+    sisget_relatorio_classificacao(
+        "Assinaturas das Solicitações",
+        df,
+        "assinaturas_solicitacoes.pdf"
+    )
+
+
+# ============================================================
+# FIM DO MÓDULO COMPLETO DE SOLICITAÇÕES
+# ============================================================
+
 def login():
 
     st.title("🏛️ SISGET")
