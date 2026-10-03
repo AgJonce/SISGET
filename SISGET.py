@@ -238,30 +238,170 @@ class CursorSISGET:
 # CONEXÃO COM POSTGRESQL / SUPABASE
 # ============================================================
 
+# ============================================================
+# CONEXÃO COM POSTGRESQL / SUPABASE
+# ============================================================
+
 @st.cache_resource
 def conectar_banco():
 
     return psycopg2.connect(
-
         host=st.secrets["postgres"]["host"],
-
         port=st.secrets["postgres"]["port"],
-
         dbname=st.secrets["postgres"]["dbname"],
-
         user=st.secrets["postgres"]["user"],
-
         password=st.secrets["postgres"]["password"],
+        sslmode="require",
 
-        sslmode="require"
+        # Evita conexão morta ficar presa por muito tempo
+        connect_timeout=10,
+
+        # Mantém conexão viva
+        keepalives=1,
+        keepalives_idle=30,
+        keepalives_interval=10,
+        keepalives_count=5
     )
 
 
-conn = conectar_banco()
+# ============================================================
+# PEGAR / RENOVAR CONEXÃO
+# ============================================================
 
-cursor = CursorSISGET(
-    conn.cursor()
-)
+def sisget_obter_conexao():
+
+    global conn
+    global cursor
+
+    precisa_reconectar = False
+
+    try:
+
+        if conn is None:
+
+            precisa_reconectar = True
+
+        elif conn.closed != 0:
+
+            precisa_reconectar = True
+
+        else:
+
+            with conn.cursor() as cursor_teste:
+
+                cursor_teste.execute(
+                    "SELECT 1"
+                )
+
+                cursor_teste.fetchone()
+
+    except Exception:
+
+        precisa_reconectar = True
+
+
+    if precisa_reconectar:
+
+        try:
+
+            conectar_banco.clear()
+
+        except Exception:
+
+            pass
+
+
+        conn = conectar_banco()
+
+        cursor = CursorSISGET(
+            conn.cursor()
+        )
+
+
+    return conn, cursor
+
+
+# ============================================================
+# INICIALIZAR CONEXÃO
+# ============================================================
+
+conn = None
+cursor = None
+
+
+sisget_obter_conexao()
+
+
+# ============================================================
+# ROLLBACK SEGURO
+# ============================================================
+
+def sisget_rollback_seguro():
+
+    global conn
+
+    try:
+
+        if (
+            conn is not None
+            and conn.closed == 0
+        ):
+
+            conn.rollback()
+
+    except Exception:
+
+        pass
+
+
+# ============================================================
+# RECONEXÃO FORÇADA
+# ============================================================
+
+def sisget_reconectar():
+
+    global conn
+    global cursor
+
+    try:
+
+        if cursor is not None:
+
+            cursor.close()
+
+    except Exception:
+
+        pass
+
+
+    try:
+
+        if (
+            conn is not None
+            and conn.closed == 0
+        ):
+
+            conn.close()
+
+    except Exception:
+
+        pass
+
+
+    try:
+
+        conectar_banco.clear()
+
+    except Exception:
+
+        pass
+
+
+    conn = conectar_banco()
+
+    cursor = CursorSISGET(
+        conn.cursor()
+    )
 
 
 # ============================================================
@@ -272,26 +412,23 @@ def testar_conexao():
 
     try:
 
-        with conn.cursor() as cursor_teste:
+        conexao, _ = sisget_obter_conexao()
+
+        with conexao.cursor() as cursor_teste:
 
             cursor_teste.execute(
                 "SELECT 1"
             )
 
-            resultado = (
-                cursor_teste.fetchone()
-            )
+            resultado = cursor_teste.fetchone()
 
 
-        return (
-            resultado is not None
-        )
+        return resultado is not None
 
 
     except Exception:
 
         return False
-
 
 
 # ============================================================
@@ -303,7 +440,16 @@ def _sisget_fetch(
     params=()
 ):
 
+    global conn
+    global cursor
+
+    # ========================================================
+    # PRIMEIRA TENTATIVA
+    # ========================================================
+
     try:
+
+        sisget_obter_conexao()
 
         cursor.execute(
             sql,
@@ -312,9 +458,42 @@ def _sisget_fetch(
 
         return cursor.fetchall()
 
+
+    except (
+        psycopg2.InterfaceError,
+        psycopg2.OperationalError
+    ):
+
+        # ====================================================
+        # CONEXÃO CAIU
+        # RECONECTA E TENTA MAIS UMA VEZ
+        # ====================================================
+
+        try:
+
+            sisget_reconectar()
+
+            cursor.execute(
+                sql,
+                params
+            )
+
+            return cursor.fetchall()
+
+        except Exception as erro:
+
+            sisget_rollback_seguro()
+
+            st.error(
+                f"❌ Erro ao consultar banco: {erro}"
+            )
+
+            return []
+
+
     except Exception as erro:
 
-        conn.rollback()
+        sisget_rollback_seguro()
 
         st.error(
             f"❌ Erro ao consultar banco: {erro}"
@@ -332,7 +511,12 @@ def _sisget_fetchone(
     params=()
 ):
 
+    global conn
+    global cursor
+
     try:
+
+        sisget_obter_conexao()
 
         cursor.execute(
             sql,
@@ -341,9 +525,37 @@ def _sisget_fetchone(
 
         return cursor.fetchone()
 
+
+    except (
+        psycopg2.InterfaceError,
+        psycopg2.OperationalError
+    ):
+
+        try:
+
+            sisget_reconectar()
+
+            cursor.execute(
+                sql,
+                params
+            )
+
+            return cursor.fetchone()
+
+        except Exception as erro:
+
+            sisget_rollback_seguro()
+
+            st.error(
+                f"❌ Erro ao consultar banco: {erro}"
+            )
+
+            return None
+
+
     except Exception as erro:
 
-        conn.rollback()
+        sisget_rollback_seguro()
 
         st.error(
             f"❌ Erro ao consultar banco: {erro}"
@@ -353,7 +565,7 @@ def _sisget_fetchone(
 
 
 # ============================================================
-# EXECUTAR / SALVAR
+# SALVAR
 # ============================================================
 
 def _sisget_salvar(
@@ -361,7 +573,12 @@ def _sisget_salvar(
     params=()
 ):
 
+    global conn
+    global cursor
+
     try:
+
+        sisget_obter_conexao()
 
         cursor.execute(
             sql,
@@ -372,9 +589,39 @@ def _sisget_salvar(
 
         return True
 
+
+    except (
+        psycopg2.InterfaceError,
+        psycopg2.OperationalError
+    ):
+
+        try:
+
+            sisget_reconectar()
+
+            cursor.execute(
+                sql,
+                params
+            )
+
+            conn.commit()
+
+            return True
+
+        except Exception as erro:
+
+            sisget_rollback_seguro()
+
+            st.error(
+                f"❌ Não foi possível salvar: {erro}"
+            )
+
+            return False
+
+
     except Exception as erro:
 
-        conn.rollback()
+        sisget_rollback_seguro()
 
         st.error(
             f"❌ Não foi possível salvar: {erro}"
@@ -384,7 +631,7 @@ def _sisget_salvar(
 
 
 # ============================================================
-# EXECUTAR COM RETORNO
+# SALVAR COM RETORNO
 # ============================================================
 
 def _sisget_salvar_retorno(
@@ -392,24 +639,72 @@ def _sisget_salvar_retorno(
     params=()
 ):
 
+    global conn
+    global cursor
+
     try:
+
+        sisget_obter_conexao()
 
         cursor.execute(
             sql,
             params
         )
 
-        resultado = (
-            cursor.fetchone()
-        )
+        resultado = cursor.fetchone()
 
         conn.commit()
 
+        if resultado:
+
+            # Para RETURNING id
+            if len(resultado) == 1:
+
+                return resultado[0]
+
         return resultado
+
+
+    except (
+        psycopg2.InterfaceError,
+        psycopg2.OperationalError
+    ):
+
+        try:
+
+            sisget_reconectar()
+
+            cursor.execute(
+                sql,
+                params
+            )
+
+            resultado = cursor.fetchone()
+
+            conn.commit()
+
+            if resultado:
+
+                if len(resultado) == 1:
+
+                    return resultado[0]
+
+            return resultado
+
+        except Exception as erro:
+
+            sisget_rollback_seguro()
+
+            st.error(
+                f"❌ Não foi possível salvar: {erro}"
+            )
+
+            return None
+
 
     except Exception as erro:
 
-        conn.rollback()
+        sisget_rollback_seguro()
 
         st.error(
             f"❌ Não foi possível salvar: {erro}"
@@ -427,16 +722,19 @@ def _sisget_dataframe(
     params=()
 ):
 
+    global conn
+    global cursor
+
     try:
+
+        sisget_obter_conexao()
 
         cursor.execute(
             sql,
             params
         )
 
-        dados = (
-            cursor.fetchall()
-        )
+        dados = cursor.fetchall()
 
         colunas = [
             descricao[0]
@@ -449,9 +747,48 @@ def _sisget_dataframe(
             columns=colunas
         )
 
+
+    except (
+        psycopg2.InterfaceError,
+        psycopg2.OperationalError
+    ):
+
+        try:
+
+            sisget_reconectar()
+
+            cursor.execute(
+                sql,
+                params
+            )
+
+            dados = cursor.fetchall()
+
+            colunas = [
+                descricao[0]
+                for descricao
+                in cursor.description
+            ]
+
+            return pd.DataFrame(
+                dados,
+                columns=colunas
+            )
+
+        except Exception as erro:
+
+            sisget_rollback_seguro()
+
+            st.error(
+                f"❌ Erro ao carregar dados: {erro}"
+            )
+
+            return pd.DataFrame()
+
+
     except Exception as erro:
 
-        conn.rollback()
+        sisget_rollback_seguro()
 
         st.error(
             f"❌ Erro ao carregar dados: {erro}"
