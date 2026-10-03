@@ -18309,6 +18309,24 @@ def planejamento_fichas_receita():
 
 def ficha_receita_incluir():
 
+    # ========================================================
+    # CONTROLE DE RESET
+    # ========================================================
+
+    if "sisget_receita_reset" not in st.session_state:
+
+        st.session_state[
+            "sisget_receita_reset"
+        ] = 0
+
+    reset_receita = st.session_state[
+        "sisget_receita_reset"
+    ]
+
+    # ========================================================
+    # CABEÇALHO
+    # ========================================================
+
     st.subheader(
         "💰 Cadastro de Ficha de Receita"
     )
@@ -18317,6 +18335,21 @@ def ficha_receita_incluir():
         "Informe a estrutura administrativa "
         "e os dados da receita."
     )
+
+    # ========================================================
+    # MENSAGEM DE SUCESSO
+    # ========================================================
+
+    if (
+        "sisget_mensagem_receita_incluir"
+        in st.session_state
+    ):
+
+        st.success(
+            st.session_state.pop(
+                "sisget_mensagem_receita_incluir"
+            )
+        )
 
     # ========================================================
     # ESTRUTURA ADMINISTRATIVA
@@ -18338,7 +18371,7 @@ def ficha_receita_incluir():
             _,
             _
         ) = sisget_ficha_estrutura_administrativa(
-            "receita_incluir"
+            f"receita_incluir_{reset_receita}"
         )
 
     # ========================================================
@@ -18355,7 +18388,10 @@ def ficha_receita_incluir():
         max_value=2100,
         value=datetime.now().year,
         step=1,
-        key="receita_incluir_exercicio"
+        key=(
+            f"receita_incluir_exercicio_"
+            f"{reset_receita}"
+        )
     )
 
     numero_ficha = None
@@ -18370,16 +18406,21 @@ def ficha_receita_incluir():
             )
         )
 
-    numero_ficha_digitado = col_ex2.number_input(
-        "Número da Ficha *",
-        min_value=1,
-        value=(
-            int(numero_ficha)
-            if numero_ficha is not None
-            else 1
-        ),
-        step=1,
-        key="receita_numero_ficha"
+    numero_ficha_digitado = (
+        col_ex2.number_input(
+            "Número da Ficha *",
+            min_value=1,
+            value=(
+                int(numero_ficha)
+                if numero_ficha is not None
+                else 1
+            ),
+            step=1,
+            key=(
+                f"receita_numero_ficha_"
+                f"{reset_receita}"
+            )
+        )
     )
 
     # ========================================================
@@ -18401,15 +18442,19 @@ def ficha_receita_incluir():
     # FONTES
     # ========================================================
 
-    fontes = sisget_mapa_fontes_fichas()
+    fontes = (
+        sisget_mapa_fontes_fichas()
+    )
 
     # ========================================================
     # FORMULÁRIO
     # ========================================================
 
     with st.form(
-        "form_ficha_receita_incluir",
-        clear_on_submit=True
+        (
+            f"form_ficha_receita_incluir_"
+            f"{reset_receita}"
+        )
     ):
 
         st.markdown(
@@ -18420,21 +18465,27 @@ def ficha_receita_incluir():
             [1, 3]
         )
 
-        codigo_receita = col1.text_input(
-            "Código",
-            value=codigo_automatico,
-            disabled=True
+        codigo_receita = (
+            col1.text_input(
+                "Código",
+                value=codigo_automatico,
+                disabled=True
+            )
         )
 
-        descricao = col2.text_input(
-            "Descrição da Receita *",
-            max_chars=300
+        descricao = (
+            col2.text_input(
+                "Descrição da Receita *",
+                max_chars=300
+            )
         )
 
-        fonte_nome = st.selectbox(
-            "Fonte de Recurso",
-            list(
-                fontes.keys()
+        fonte_nome = (
+            st.selectbox(
+                "Fonte de Recurso",
+                list(
+                    fontes.keys()
+                )
             )
         )
 
@@ -18448,38 +18499,46 @@ def ficha_receita_incluir():
             "### 💵 Valores"
         )
 
-        col3, col4, col5 = st.columns(
-            3
+        col3, col4, col5 = (
+            st.columns(3)
         )
 
-        valor_inicial = col3.number_input(
-            "Previsão Inicial",
-            min_value=0.0,
-            value=0.0,
-            step=100.0,
-            format="%.2f"
+        valor_inicial = (
+            col3.number_input(
+                "Previsão Inicial",
+                min_value=0.0,
+                value=0.0,
+                step=100.0,
+                format="%.2f"
+            )
         )
 
-        valor_atual = col4.number_input(
-            "Previsão Atualizada",
-            min_value=0.0,
-            value=0.0,
-            step=100.0,
-            format="%.2f"
+        valor_atual = (
+            col4.number_input(
+                "Previsão Atualizada",
+                min_value=0.0,
+                value=0.0,
+                step=100.0,
+                format="%.2f"
+            )
         )
 
-        valor_arrecadado = col5.number_input(
-            "Valor Arrecadado",
-            min_value=0.0,
-            value=0.0,
-            step=100.0,
-            format="%.2f"
+        valor_arrecadado = (
+            col5.number_input(
+                "Valor Arrecadado",
+                min_value=0.0,
+                value=0.0,
+                step=100.0,
+                format="%.2f"
+            )
         )
 
-        salvar = st.form_submit_button(
-            "💾 Salvar Ficha de Receita",
-            type="primary",
-            use_container_width=True
+        salvar = (
+            st.form_submit_button(
+                "💾 Salvar Ficha de Receita",
+                type="primary",
+                use_container_width=True
+            )
         )
 
     # ========================================================
@@ -18489,7 +18548,7 @@ def ficha_receita_incluir():
     if salvar:
 
         # ====================================================
-        # VALIDAR ESTRUTURA
+        # ESTRUTURA
         # ====================================================
 
         if (
@@ -18530,21 +18589,23 @@ def ficha_receita_incluir():
         )
 
         # ====================================================
-        # VERIFICAR NÚMERO DA FICHA DUPLICADO
+        # VALIDAR FICHA DUPLICADA
         # ====================================================
 
-        ficha_existente = _sisget_fetchone(
-            """
-            SELECT id
-            FROM fichas_receitas
-            WHERE exercicio = ?
-              AND entidade_id = ?
-              AND numero_ficha = ?
-            """,
-            (
-                int(exercicio),
-                entidade_id,
-                numero_ficha
+        ficha_existente = (
+            _sisget_fetchone(
+                """
+                SELECT id
+                FROM fichas_receitas
+                WHERE exercicio = ?
+                  AND entidade_id = ?
+                  AND numero_ficha = ?
+                """,
+                (
+                    int(exercicio),
+                    entidade_id,
+                    numero_ficha
+                )
             )
         )
 
@@ -18560,7 +18621,7 @@ def ficha_receita_incluir():
             return
 
         # ====================================================
-        # RECALCULAR CÓDIGO AUTOMÁTICO
+        # CÓDIGO AUTOMÁTICO
         # ====================================================
 
         codigo_receita = (
@@ -18571,21 +18632,23 @@ def ficha_receita_incluir():
         )
 
         # ====================================================
-        # VERIFICAR CÓDIGO DUPLICADO
+        # VALIDAR CÓDIGO
         # ====================================================
 
-        codigo_existente = _sisget_fetchone(
-            """
-            SELECT id
-            FROM fichas_receitas
-            WHERE exercicio = ?
-              AND entidade_id = ?
-              AND codigo_receita = ?
-            """,
-            (
-                int(exercicio),
-                entidade_id,
-                codigo_receita
+        codigo_existente = (
+            _sisget_fetchone(
+                """
+                SELECT id
+                FROM fichas_receitas
+                WHERE exercicio = ?
+                  AND entidade_id = ?
+                  AND codigo_receita = ?
+                """,
+                (
+                    int(exercicio),
+                    entidade_id,
+                    codigo_receita
+                )
             )
         )
 
@@ -18669,16 +18732,24 @@ def ficha_receita_incluir():
         )
 
         # ====================================================
-        # SUCESSO
+        # SUCESSO / RESET
         # ====================================================
 
         if sucesso:
 
-            st.success(
+            st.session_state[
+                "sisget_mensagem_receita_incluir"
+            ] = (
                 f"✅ Ficha de Receita nº "
                 f"{numero_ficha} cadastrada com sucesso! "
                 f"Código: {codigo_receita}"
             )
+
+            st.session_state[
+                "sisget_receita_reset"
+            ] += 1
+
+            st.rerun()
 def ficha_receita_localizar():
 
     st.subheader(
@@ -19433,9 +19504,47 @@ def planejamento_fichas_extraorcamentarias():
 
 def ficha_extraorcamentaria_incluir():
 
+    # ========================================================
+    # CONTROLE DE RESET
+    # ========================================================
+
+    if "sisget_extra_reset" not in st.session_state:
+
+        st.session_state[
+            "sisget_extra_reset"
+        ] = 0
+
+    reset_extra = st.session_state[
+        "sisget_extra_reset"
+    ]
+
+    # ========================================================
+    # CABEÇALHO
+    # ========================================================
+
     st.subheader(
         "🔄 Cadastro de Ficha Extraorçamentária"
     )
+
+    st.caption(
+        "Cadastre receitas e despesas "
+        "extraorçamentárias."
+    )
+
+    # ========================================================
+    # MENSAGEM DE SUCESSO
+    # ========================================================
+
+    if (
+        "sisget_mensagem_extra_incluir"
+        in st.session_state
+    ):
+
+        st.success(
+            st.session_state.pop(
+                "sisget_mensagem_extra_incluir"
+            )
+        )
 
     # ========================================================
     # ESTRUTURA ADMINISTRATIVA
@@ -19457,24 +19566,29 @@ def ficha_extraorcamentaria_incluir():
             _,
             _
         ) = sisget_ficha_estrutura_administrativa(
-            "extra_incluir"
+            f"extra_incluir_{reset_extra}"
         )
 
     # ========================================================
-    # EXERCÍCIO / NÚMERO DA FICHA
+    # EXERCÍCIO / NÚMERO
     # ========================================================
 
     col_ex1, col_ex2 = st.columns(
         [1, 2]
     )
 
-    exercicio = col_ex1.number_input(
-        "Exercício *",
-        min_value=2000,
-        max_value=2100,
-        value=datetime.now().year,
-        step=1,
-        key="extra_incluir_exercicio"
+    exercicio = (
+        col_ex1.number_input(
+            "Exercício *",
+            min_value=2000,
+            max_value=2100,
+            value=datetime.now().year,
+            step=1,
+            key=(
+                f"extra_incluir_exercicio_"
+                f"{reset_extra}"
+            )
+        )
     )
 
     numero_ficha = None
@@ -19489,16 +19603,21 @@ def ficha_extraorcamentaria_incluir():
             )
         )
 
-    numero_ficha_digitado = col_ex2.number_input(
-        "Número da Ficha *",
-        min_value=1,
-        value=(
-            int(numero_ficha)
-            if numero_ficha is not None
-            else 1
-        ),
-        step=1,
-        key="extra_numero_ficha"
+    numero_ficha_digitado = (
+        col_ex2.number_input(
+            "Número da Ficha *",
+            min_value=1,
+            value=(
+                int(numero_ficha)
+                if numero_ficha is not None
+                else 1
+            ),
+            step=1,
+            key=(
+                f"extra_numero_ficha_"
+                f"{reset_extra}"
+            )
+        )
     )
 
     # ========================================================
@@ -19521,8 +19640,10 @@ def ficha_extraorcamentaria_incluir():
     # ========================================================
 
     with st.form(
-        "form_ficha_extraorcamentaria_incluir",
-        clear_on_submit=True
+        (
+            f"form_ficha_extraorcamentaria_"
+            f"incluir_{reset_extra}"
+        )
     ):
 
         tipo = st.selectbox(
@@ -19543,35 +19664,43 @@ def ficha_extraorcamentaria_incluir():
             disabled=True
         )
 
-        descricao = col2.text_input(
-            "Descrição *",
-            max_chars=300
+        descricao = (
+            col2.text_input(
+                "Descrição *",
+                max_chars=300
+            )
         )
 
         st.markdown("---")
 
         col3, col4 = st.columns(2)
 
-        valor_inicial = col3.number_input(
-            "Valor Inicial",
-            min_value=0.0,
-            value=0.0,
-            step=100.0,
-            format="%.2f"
+        valor_inicial = (
+            col3.number_input(
+                "Valor Inicial",
+                min_value=0.0,
+                value=0.0,
+                step=100.0,
+                format="%.2f"
+            )
         )
 
-        valor_movimentado = col4.number_input(
-            "Valor Movimentado",
-            min_value=0.0,
-            value=0.0,
-            step=100.0,
-            format="%.2f"
+        valor_movimentado = (
+            col4.number_input(
+                "Valor Movimentado",
+                min_value=0.0,
+                value=0.0,
+                step=100.0,
+                format="%.2f"
+            )
         )
 
-        salvar = st.form_submit_button(
-            "💾 Salvar Ficha Extraorçamentária",
-            type="primary",
-            use_container_width=True
+        salvar = (
+            st.form_submit_button(
+                "💾 Salvar Ficha Extraorçamentária",
+                type="primary",
+                use_container_width=True
+            )
         )
 
     # ========================================================
@@ -19581,7 +19710,7 @@ def ficha_extraorcamentaria_incluir():
     if salvar:
 
         # ====================================================
-        # VALIDAR ESTRUTURA
+        # ESTRUTURA
         # ====================================================
 
         if (
@@ -19622,21 +19751,23 @@ def ficha_extraorcamentaria_incluir():
         )
 
         # ====================================================
-        # VERIFICAR FICHA DUPLICADA
+        # VALIDAR FICHA DUPLICADA
         # ====================================================
 
-        ficha_existente = _sisget_fetchone(
-            """
-            SELECT id
-            FROM fichas_extraorcamentarias
-            WHERE exercicio = ?
-              AND entidade_id = ?
-              AND numero_ficha = ?
-            """,
-            (
-                int(exercicio),
-                entidade_id,
-                numero_ficha
+        ficha_existente = (
+            _sisget_fetchone(
+                """
+                SELECT id
+                FROM fichas_extraorcamentarias
+                WHERE exercicio = ?
+                  AND entidade_id = ?
+                  AND numero_ficha = ?
+                """,
+                (
+                    int(exercicio),
+                    entidade_id,
+                    numero_ficha
+                )
             )
         )
 
@@ -19652,7 +19783,7 @@ def ficha_extraorcamentaria_incluir():
             return
 
         # ====================================================
-        # RECALCULAR CÓDIGO AUTOMÁTICO
+        # CÓDIGO AUTOMÁTICO
         # ====================================================
 
         codigo = (
@@ -19663,28 +19794,32 @@ def ficha_extraorcamentaria_incluir():
         )
 
         # ====================================================
-        # VERIFICAR CÓDIGO DUPLICADO
+        # VALIDAR CÓDIGO
         # ====================================================
 
-        codigo_existente = _sisget_fetchone(
-            """
-            SELECT id
-            FROM fichas_extraorcamentarias
-            WHERE exercicio = ?
-              AND entidade_id = ?
-              AND codigo = ?
-            """,
-            (
-                int(exercicio),
-                entidade_id,
-                codigo
+        codigo_existente = (
+            _sisget_fetchone(
+                """
+                SELECT id
+                FROM fichas_extraorcamentarias
+                WHERE exercicio = ?
+                  AND entidade_id = ?
+                  AND codigo = ?
+                """,
+                (
+                    int(exercicio),
+                    entidade_id,
+                    codigo
+                )
             )
         )
 
         if codigo_existente:
 
             st.warning(
-                f"⚠️ O código {codigo} já está cadastrado."
+                f"⚠️ O código "
+                f"{codigo} "
+                f"já está cadastrado."
             )
 
             return
@@ -19737,23 +19872,34 @@ def ficha_extraorcamentaria_incluir():
                 codigo,
                 descricao,
 
-                float(valor_inicial),
-                float(valor_movimentado)
+                float(
+                    valor_inicial
+                ),
+                float(
+                    valor_movimentado
+                )
             )
         )
 
         # ====================================================
-        # SUCESSO
+        # SUCESSO / RESET
         # ====================================================
 
         if sucesso:
 
-            st.success(
+            st.session_state[
+                "sisget_mensagem_extra_incluir"
+            ] = (
                 f"✅ Ficha Extraorçamentária nº "
                 f"{numero_ficha} cadastrada com sucesso! "
                 f"Código: {codigo}"
             )
 
+            st.session_state[
+                "sisget_extra_reset"
+            ] += 1
+
+            st.rerun()
 def sisget_proximo_codigo_ficha_receita(
     exercicio,
     entidade_id
