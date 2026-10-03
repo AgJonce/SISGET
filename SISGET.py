@@ -27309,7 +27309,28 @@ def fornecedor_imprimir():
         "fornecedores.pdf"
     )
 
+def fornecedor_pesquisar_pessoa_fisica():
 
+    pessoas = _sisget_fetch(
+        """
+        SELECT
+            id,
+            codigo,
+            cpf_cnpj,
+            razao_social,
+            telefone,
+            whatsapp,
+            email
+        FROM fornecedores
+        WHERE ativo = TRUE
+          AND tipo_pessoa = 'Física'
+        ORDER BY
+            razao_social,
+            codigo
+        """
+    )
+
+    return pessoas
 # ============================================================
 # REPRESENTANTES DO FORNECEDOR
 # ============================================================
@@ -27391,6 +27412,40 @@ def fornecedor_representantes(
     ]
 
     # ========================================================
+    # PESSOA FÍSICA PESQUISADA
+    # ========================================================
+
+    chave_pf = (
+        f"sisget_representante_pf_"
+        f"{fornecedor_id}"
+    )
+
+    if chave_pf not in st.session_state:
+
+        st.session_state[
+            chave_pf
+        ] = {}
+
+    dados_pf = st.session_state[
+        chave_pf
+    ]
+
+    # ========================================================
+    # ESTADO DA PESQUISA
+    # ========================================================
+
+    chave_pesquisa = (
+        f"sisget_representante_pesquisa_"
+        f"{fornecedor_id}"
+    )
+
+    if chave_pesquisa not in st.session_state:
+
+        st.session_state[
+            chave_pesquisa
+        ] = False
+
+    # ========================================================
     # CÓDIGO
     # ========================================================
 
@@ -27432,44 +27487,374 @@ def fornecedor_representantes(
         "### ➕ Incluir Representante"
     )
 
-    with st.form(
-        f"form_representante_{fornecedor_id}_{reset}"
-    ):
+    # ========================================================
+    # IDENTIFICAÇÃO
+    # FORA DO FORM PARA PERMITIR O BOTÃO PESQUISAR
+    # ========================================================
+
+    st.markdown(
+        "#### 👤 Identificação"
+    )
+
+    col1, col2, col3 = st.columns(
+        [1, 1.5, 4]
+    )
+
+    col1.text_input(
+        "Código",
+        value=codigo,
+        disabled=True,
+        key=(
+            f"rep_codigo_"
+            f"{fornecedor_id}_"
+            f"{reset}"
+        )
+    )
+
+    col2.text_input(
+        "Tipo de Pessoa",
+        value="Física",
+        disabled=True,
+        key=(
+            f"rep_tipo_pessoa_"
+            f"{fornecedor_id}_"
+            f"{reset}"
+        )
+    )
+
+    nome = col3.text_input(
+        "Nome Completo *",
+        value=(
+            dados_pf.get(
+                "nome",
+                ""
+            )
+        ),
+        key=(
+            f"rep_nome_"
+            f"{fornecedor_id}_"
+            f"{reset}"
+        )
+    )
+
+    # ========================================================
+    # CPF + PESQUISAR + CARGO
+    # ========================================================
+
+    col4, col5, col6 = st.columns(
+        [3, 1.5, 3]
+    )
+
+    cpf = col4.text_input(
+        "CPF *",
+        value=(
+            dados_pf.get(
+                "cpf",
+                ""
+            )
+        ),
+        max_chars=14,
+        key=(
+            f"rep_cpf_"
+            f"{fornecedor_id}_"
+            f"{reset}"
+        )
+    )
+
+    pesquisar = col5.button(
+        "🔎 Pesquisar",
+        use_container_width=True,
+        key=(
+            f"rep_pesquisar_"
+            f"{fornecedor_id}_"
+            f"{reset}"
+        )
+    )
+
+    cargo = col6.text_input(
+        "Cargo / Função",
+        key=(
+            f"rep_cargo_"
+            f"{fornecedor_id}_"
+            f"{reset}"
+        )
+    )
+
+    # ========================================================
+    # ABRIR PESQUISA
+    # ========================================================
+
+    if pesquisar:
+
+        st.session_state[
+            chave_pesquisa
+        ] = True
+
+        st.rerun()
+
+    # ========================================================
+    # PESQUISAR PESSOA FÍSICA CADASTRADA
+    # ========================================================
+
+    if st.session_state[
+        chave_pesquisa
+    ]:
+
+        st.markdown("---")
 
         st.markdown(
-            "#### 👤 Identificação"
+            "#### 🔎 Pessoas Físicas Cadastradas"
         )
 
-        col1, col2, col3 = st.columns(
-            [1, 1.5, 4]
+        filtro_pessoa = st.text_input(
+            "Pesquisar por Nome ou CPF",
+            key=(
+                f"rep_filtro_pf_"
+                f"{fornecedor_id}"
+            ),
+            placeholder=(
+                "Digite parte do nome ou CPF"
+            )
         )
 
-        col1.text_input(
-            "Código",
-            value=codigo,
-            disabled=True
+        filtro_limpo = (
+            filtro_pessoa.strip()
         )
 
-        col2.text_input(
-            "Tipo de Pessoa",
-            value="Física",
-            disabled=True
-        )
+        if filtro_limpo:
 
-        nome = col3.text_input(
-            "Nome Completo *"
-        )
+            filtro_cpf = re.sub(
+                r"\D",
+                "",
+                filtro_limpo
+            )
 
-        col4, col5 = st.columns(2)
+            pessoas = _sisget_fetch(
+                """
+                SELECT
+                    id,
+                    codigo,
+                    cpf_cnpj,
+                    razao_social,
+                    telefone,
+                    whatsapp,
+                    email
+                FROM fornecedores
+                WHERE ativo = TRUE
+                  AND tipo_pessoa = 'Física'
+                  AND
+                  (
+                      UPPER(razao_social)
+                          LIKE UPPER(?)
 
-        cpf = col4.text_input(
-            "CPF *",
-            max_chars=14
-        )
+                      OR
 
-        cargo = col5.text_input(
-            "Cargo / Função"
-        )
+                      REGEXP_REPLACE(
+                          COALESCE(cpf_cnpj, ''),
+                          '[^0-9]',
+                          '',
+                          'g'
+                      )
+                          LIKE ?
+                  )
+                ORDER BY
+                    razao_social,
+                    codigo
+                """,
+                (
+                    f"%{filtro_limpo}%",
+                    f"%{filtro_cpf}%"
+                )
+            )
+
+        else:
+
+            pessoas = _sisget_fetch(
+                """
+                SELECT
+                    id,
+                    codigo,
+                    cpf_cnpj,
+                    razao_social,
+                    telefone,
+                    whatsapp,
+                    email
+                FROM fornecedores
+                WHERE ativo = TRUE
+                  AND tipo_pessoa = 'Física'
+                ORDER BY
+                    razao_social,
+                    codigo
+                """
+            )
+
+        # ====================================================
+        # NENHUMA PESSOA
+        # ====================================================
+
+        if not pessoas:
+
+            st.info(
+                "Nenhuma Pessoa Física encontrada."
+            )
+
+            if st.button(
+                "❌ Fechar Pesquisa",
+                key=(
+                    f"rep_fechar_pesquisa_"
+                    f"{fornecedor_id}"
+                )
+            ):
+
+                st.session_state[
+                    chave_pesquisa
+                ] = False
+
+                st.rerun()
+
+        else:
+
+            mapa_pessoas = {}
+
+            for registro in pessoas:
+
+                (
+                    pessoa_id,
+                    codigo_pf,
+                    cpf_pf,
+                    nome_pf,
+                    telefone_pf,
+                    whatsapp_pf,
+                    email_pf
+                ) = registro
+
+                descricao = (
+                    f"{codigo_pf} - "
+                    f"{nome_pf} - "
+                    f"{cpf_pf or ''}"
+                )
+
+                mapa_pessoas[
+                    descricao
+                ] = {
+
+                    "id": pessoa_id,
+
+                    "nome": (
+                        nome_pf
+                        or ""
+                    ),
+
+                    "cpf": (
+                        cpf_pf
+                        or ""
+                    ),
+
+                    "telefone": (
+                        telefone_pf
+                        or ""
+                    ),
+
+                    "whatsapp": (
+                        whatsapp_pf
+                        or ""
+                    ),
+
+                    "email": (
+                        email_pf
+                        or ""
+                    )
+                }
+
+            pessoa_selecionada = st.selectbox(
+                "Selecione a Pessoa Física",
+                list(
+                    mapa_pessoas.keys()
+                ),
+                key=(
+                    f"rep_pf_selecionada_"
+                    f"{fornecedor_id}"
+                )
+            )
+
+            col_busca1, col_busca2 = st.columns(
+                2
+            )
+
+            usar_pessoa = col_busca1.button(
+                "✅ Usar Pessoa",
+                type="primary",
+                use_container_width=True,
+                key=(
+                    f"rep_usar_pf_"
+                    f"{fornecedor_id}"
+                )
+            )
+
+            cancelar_pesquisa = col_busca2.button(
+                "❌ Cancelar",
+                use_container_width=True,
+                key=(
+                    f"rep_cancelar_pf_"
+                    f"{fornecedor_id}"
+                )
+            )
+
+            # ================================================
+            # USAR PESSOA
+            # ================================================
+
+            if usar_pessoa:
+
+                st.session_state[
+                    chave_pf
+                ] = mapa_pessoas[
+                    pessoa_selecionada
+                ]
+
+                st.session_state[
+                    chave_pesquisa
+                ] = False
+
+                # NOVAS CHAVES DOS WIDGETS
+                st.session_state[
+                    chave_reset
+                ] += 1
+
+                st.rerun()
+
+            # ================================================
+            # CANCELAR
+            # ================================================
+
+            if cancelar_pesquisa:
+
+                st.session_state[
+                    chave_pesquisa
+                ] = False
+
+                st.rerun()
+
+        st.markdown("---")
+
+    # ========================================================
+    # ATUALIZAR DADOS PF
+    # ========================================================
+
+    dados_pf = st.session_state.get(
+        chave_pf,
+        {}
+    )
+
+    # ========================================================
+    # FORMULÁRIO
+    # ========================================================
+
+    with st.form(
+        f"form_representante_"
+        f"{fornecedor_id}_"
+        f"{reset}"
+    ):
 
         # ====================================================
         # QUALIFICAÇÃO
@@ -27492,14 +27877,14 @@ def fornecedor_representantes(
             "#### 🏛️ Registro"
         )
 
-        col6, col7 = st.columns(2)
+        col7, col8 = st.columns(2)
 
-        tipo_registro = col6.selectbox(
+        tipo_registro = col7.selectbox(
             "Tipo do Registro *",
             tipos_registro
         )
 
-        numero_registro = col7.text_input(
+        numero_registro = col8.text_input(
             "Número do Registro *"
         )
 
@@ -27511,18 +27896,36 @@ def fornecedor_representantes(
             "#### ☎️ Contato"
         )
 
-        col8, col9 = st.columns(2)
+        col9, col10 = st.columns(2)
 
-        telefone = col8.text_input(
-            "Telefone"
+        telefone = col9.text_input(
+            "Telefone",
+            value=(
+                dados_pf.get(
+                    "telefone",
+                    ""
+                )
+            )
         )
 
-        whatsapp = col9.text_input(
-            "WhatsApp"
+        whatsapp = col10.text_input(
+            "WhatsApp",
+            value=(
+                dados_pf.get(
+                    "whatsapp",
+                    ""
+                )
+            )
         )
 
         email = st.text_input(
-            "E-mail"
+            "E-mail",
+            value=(
+                dados_pf.get(
+                    "email",
+                    ""
+                )
+            )
         )
 
         # ====================================================
@@ -27533,13 +27936,13 @@ def fornecedor_representantes(
             "#### ⚙️ Controle"
         )
 
-        col10, col11 = st.columns(2)
+        col11, col12 = st.columns(2)
 
-        principal = col10.checkbox(
+        principal = col11.checkbox(
             "Representante Principal"
         )
 
-        autorizado_assinar = col11.checkbox(
+        autorizado_assinar = col12.checkbox(
             "Autorizado a Assinar Documentos"
         )
 
@@ -27571,6 +27974,10 @@ def fornecedor_representantes(
         numero_registro = (
             numero_registro.strip()
         )
+
+        # ====================================================
+        # VALIDAÇÃO
+        # ====================================================
 
         if not nome:
 
@@ -27628,7 +28035,7 @@ def fornecedor_representantes(
             return
 
         # ====================================================
-        # REPRESENTANTE PRINCIPAL
+        # PRINCIPAL
         # ====================================================
 
         if principal:
@@ -27729,6 +28136,18 @@ def fornecedor_representantes(
         )
 
         if sucesso:
+
+            # ================================================
+            # LIMPAR PF PESQUISADA
+            # ================================================
+
+            st.session_state[
+                chave_pf
+            ] = {}
+
+            st.session_state[
+                chave_pesquisa
+            ] = False
 
             st.session_state[
                 chave_reset
