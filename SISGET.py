@@ -25055,10 +25055,6 @@ def cadastro_fornecedores():
 
 def fornecedor_representantes_principal():
 
-    st.subheader(
-        "👥 Representantes dos Fornecedores"
-    )
-
     fornecedores = _sisget_fetch(
         """
         SELECT
@@ -25066,12 +25062,9 @@ def fornecedor_representantes_principal():
             codigo,
             razao_social,
             cpf_cnpj
-
         FROM fornecedores
-
         WHERE ativo = TRUE
           AND tipo_pessoa = 'Jurídica'
-
         ORDER BY
             razao_social,
             codigo
@@ -25079,40 +25072,40 @@ def fornecedor_representantes_principal():
     )
 
     if not fornecedores:
-
         st.info(
-            "Nenhum fornecedor Pessoa Jurídica "
-            "cadastrado."
+            "Nenhum fornecedor Pessoa Jurídica cadastrado."
         )
-
         return
 
-    mapa_fornecedores = {
+    mapa_fornecedores = {}
 
-        (
+    for registro in fornecedores:
+
+        fornecedor_id = registro[0]
+        codigo = registro[1]
+        razao_social = registro[2]
+        cnpj = registro[3]
+
+        descricao = (
             f"{codigo} - "
             f"{razao_social} - "
-            f"{cpf_cnpj}"
-        ): fornecedor_id
+            f"{cnpj or ''}"
+        )
 
-        for (
-            fornecedor_id,
-            codigo,
-            razao_social,
-            cpf_cnpj
-        ) in fornecedores
-    }
+        mapa_fornecedores[
+            descricao
+        ] = fornecedor_id
 
-    fornecedor_nome = st.selectbox(
+    fornecedor_selecionado = st.selectbox(
         "Fornecedor *",
         list(
             mapa_fornecedores.keys()
         ),
-        key="fornecedor_representante_selecionar"
+        key="sisget_representante_fornecedor"
     )
 
     fornecedor_id = mapa_fornecedores[
-        fornecedor_nome
+        fornecedor_selecionado
     ]
 
     st.markdown("---")
@@ -27325,11 +27318,17 @@ def fornecedor_representantes(
     fornecedor_id
 ):
 
+    # ========================================================
+    # FORNECEDOR
+    # ========================================================
+
     fornecedor = _sisget_fetchone(
         """
         SELECT
             codigo,
-            razao_social
+            razao_social,
+            cpf_cnpj,
+            tipo_pessoa
         FROM fornecedores
         WHERE id = ?
         """,
@@ -27340,14 +27339,36 @@ def fornecedor_representantes(
 
     if not fornecedor:
 
+        st.warning(
+            "⚠️ Fornecedor não encontrado."
+        )
+
         return
 
-    codigo_fornecedor, razao_social = fornecedor
+    (
+        codigo_fornecedor,
+        razao_social,
+        cnpj_fornecedor,
+        tipo_pessoa_fornecedor
+    ) = fornecedor
+
+    # ========================================================
+    # SOMENTE FORNECEDOR PESSOA JURÍDICA
+    # ========================================================
+
+    if tipo_pessoa_fornecedor != "Jurídica":
+
+        st.warning(
+            "⚠️ Representantes somente podem ser "
+            "vinculados a fornecedores Pessoa Jurídica."
+        )
+
+        return
 
     st.info(
-        f"Fornecedor: "
-        f"{codigo_fornecedor} - "
-        f"{razao_social}"
+        f"🏢 {codigo_fornecedor} - "
+        f"{razao_social} | "
+        f"CNPJ: {cnpj_fornecedor or ''}"
     )
 
     # ========================================================
@@ -27369,30 +27390,58 @@ def fornecedor_representantes(
         chave_reset
     ]
 
+    # ========================================================
+    # CÓDIGO
+    # ========================================================
+
     codigo = sisget_proximo_codigo(
         "fornecedores_representantes",
         tamanho=3,
-        filtro_sql="AND fornecedor_id = ?",
+        filtro_sql=(
+            "AND fornecedor_id = ?"
+        ),
         parametros=(
             fornecedor_id,
         )
     )
 
     # ========================================================
+    # OPÇÕES
+    # ========================================================
+
+    tipos_representante = [
+        "1 - Representante legal",
+        "2 - Demais membros do quadro societário",
+        "3 - Microempreendedor Individual (MEI)",
+        "4 - Empresário Individual (EI)",
+        "5 - Empresa Individual de Responsabilidade Limitada (EIRELI)",
+        "6 - Sociedade LTDA Unipessoal (Lei 13.874/2019)"
+    ]
+
+    tipos_registro = [
+        "Junta Comercial",
+        "Portal do Empreendedor",
+        "Cartório de Registro"
+    ]
+
+    # ========================================================
     # INCLUIR
     # ========================================================
 
     st.markdown(
-        "### ➕ Novo Representante"
+        "### ➕ Incluir Representante"
     )
 
     with st.form(
-        f"form_representante_"
-        f"{fornecedor_id}_{reset}"
+        f"form_representante_{fornecedor_id}_{reset}"
     ):
 
-        col1, col2 = st.columns(
-            [1, 4]
+        st.markdown(
+            "#### 👤 Identificação"
+        )
+
+        col1, col2, col3 = st.columns(
+            [1, 1.5, 4]
         )
 
         col1.text_input(
@@ -27401,27 +27450,74 @@ def fornecedor_representantes(
             disabled=True
         )
 
-        nome = col2.text_input(
-            "Nome *"
+        col2.text_input(
+            "Tipo de Pessoa",
+            value="Física",
+            disabled=True
         )
 
-        col3, col4 = st.columns(2)
-
-        cpf = col3.text_input(
-            "CPF"
+        nome = col3.text_input(
+            "Nome Completo *"
         )
 
-        cargo = col4.text_input(
+        col4, col5 = st.columns(2)
+
+        cpf = col4.text_input(
+            "CPF *",
+            max_chars=14
+        )
+
+        cargo = col5.text_input(
             "Cargo / Função"
         )
 
-        col5, col6 = st.columns(2)
+        # ====================================================
+        # QUALIFICAÇÃO
+        # ====================================================
 
-        telefone = col5.text_input(
+        st.markdown(
+            "#### 📋 Qualificação"
+        )
+
+        tipo_representante = st.selectbox(
+            "Tipo / Qualificação *",
+            tipos_representante
+        )
+
+        # ====================================================
+        # REGISTRO
+        # ====================================================
+
+        st.markdown(
+            "#### 🏛️ Registro"
+        )
+
+        col6, col7 = st.columns(2)
+
+        tipo_registro = col6.selectbox(
+            "Tipo do Registro *",
+            tipos_registro
+        )
+
+        numero_registro = col7.text_input(
+            "Número do Registro *"
+        )
+
+        # ====================================================
+        # CONTATO
+        # ====================================================
+
+        st.markdown(
+            "#### ☎️ Contato"
+        )
+
+        col8, col9 = st.columns(2)
+
+        telefone = col8.text_input(
             "Telefone"
         )
 
-        whatsapp = col6.text_input(
+        whatsapp = col9.text_input(
             "WhatsApp"
         )
 
@@ -27429,16 +27525,27 @@ def fornecedor_representantes(
             "E-mail"
         )
 
-        principal = st.checkbox(
+        # ====================================================
+        # CONTROLE
+        # ====================================================
+
+        st.markdown(
+            "#### ⚙️ Controle"
+        )
+
+        col10, col11 = st.columns(2)
+
+        principal = col10.checkbox(
             "Representante Principal"
         )
 
-        autorizado_assinar = st.checkbox(
+        autorizado_assinar = col11.checkbox(
             "Autorizado a Assinar Documentos"
         )
 
         observacao = st.text_area(
-            "Observações"
+            "Observações",
+            height=100
         )
 
         salvar = st.form_submit_button(
@@ -27447,24 +27554,82 @@ def fornecedor_representantes(
             use_container_width=True
         )
 
+    # ========================================================
+    # SALVAR
+    # ========================================================
+
     if salvar:
 
-        if not nome.strip():
+        nome = nome.strip()
+
+        cpf_limpo = re.sub(
+            r"\D",
+            "",
+            cpf
+        )
+
+        numero_registro = (
+            numero_registro.strip()
+        )
+
+        if not nome:
 
             st.warning(
-                "⚠️ Informe o nome."
+                "⚠️ Informe o nome do representante."
             )
 
             return
 
-        codigo = sisget_proximo_codigo(
-            "fornecedores_representantes",
-            tamanho=3,
-            filtro_sql="AND fornecedor_id = ?",
-            parametros=(
+        if len(cpf_limpo) != 11:
+
+            st.warning(
+                "⚠️ Informe um CPF com 11 números."
+            )
+
+            return
+
+        if not numero_registro:
+
+            st.warning(
+                "⚠️ Informe o número do registro."
+            )
+
+            return
+
+        # ====================================================
+        # DUPLICIDADE
+        # ====================================================
+
+        duplicado = _sisget_fetchone(
+            """
+            SELECT id
+            FROM fornecedores_representantes
+            WHERE fornecedor_id = ?
+              AND REGEXP_REPLACE(
+                    COALESCE(cpf, ''),
+                    '[^0-9]',
+                    '',
+                    'g'
+                  ) = ?
+            """,
+            (
                 fornecedor_id,
+                cpf_limpo
             )
         )
+
+        if duplicado:
+
+            st.warning(
+                "⚠️ Esta pessoa já está cadastrada "
+                "para este fornecedor."
+            )
+
+            return
+
+        # ====================================================
+        # REPRESENTANTE PRINCIPAL
+        # ====================================================
 
         if principal:
 
@@ -27479,7 +27644,26 @@ def fornecedor_representantes(
                 )
             )
 
-        if _sisget_salvar(
+        # ====================================================
+        # NOVO CÓDIGO
+        # ====================================================
+
+        codigo = sisget_proximo_codigo(
+            "fornecedores_representantes",
+            tamanho=3,
+            filtro_sql=(
+                "AND fornecedor_id = ?"
+            ),
+            parametros=(
+                fornecedor_id,
+            )
+        )
+
+        # ====================================================
+        # INSERT
+        # ====================================================
+
+        sucesso = _sisget_salvar(
             """
             INSERT INTO fornecedores_representantes
             (
@@ -27488,6 +27672,9 @@ def fornecedor_representantes(
                 nome,
                 cpf,
                 cargo,
+                tipo_representante,
+                tipo_registro,
+                numero_registro,
                 telefone,
                 whatsapp,
                 email,
@@ -27499,7 +27686,13 @@ def fornecedor_representantes(
             )
             VALUES
             (
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, ?,
+                ?, ?, ?,
+                ?,
+                ?, ?,
+                ?, ?, ?,
+                ?, ?,
+                ?,
                 TRUE,
                 CURRENT_TIMESTAMP
             )
@@ -27507,27 +27700,51 @@ def fornecedor_representantes(
             (
                 fornecedor_id,
                 codigo,
-                nome.strip(),
-                cpf.strip() or None,
-                cargo.strip() or None,
-                telefone.strip() or None,
-                whatsapp.strip() or None,
-                email.strip() or None,
+                nome,
+                cpf_limpo,
+
+                cargo.strip()
+                or None,
+
+                tipo_representante,
+
+                tipo_registro,
+                numero_registro,
+
+                telefone.strip()
+                or None,
+
+                whatsapp.strip()
+                or None,
+
+                email.strip()
+                or None,
+
                 principal,
                 autorizado_assinar,
-                observacao.strip() or None
+
+                observacao.strip()
+                or None
             )
-        ):
+        )
+
+        if sucesso:
 
             st.session_state[
                 chave_reset
             ] += 1
+
+            st.success(
+                "✅ Representante cadastrado com sucesso."
+            )
 
             st.rerun()
 
     # ========================================================
     # LISTAGEM
     # ========================================================
+
+    st.markdown("---")
 
     st.markdown(
         "### 👥 Representantes Cadastrados"
@@ -27537,28 +27754,44 @@ def fornecedor_representantes(
         """
         SELECT
             id,
+
             codigo AS "Código",
+
             nome AS "Nome",
+
             cpf AS "CPF",
+
+            tipo_representante
+                AS "Qualificação",
+
+            tipo_registro
+                AS "Tipo Registro",
+
+            numero_registro
+                AS "Número Registro",
+
             cargo AS "Cargo",
+
             telefone AS "Telefone",
+
             whatsapp AS "WhatsApp",
+
             email AS "E-mail",
 
             CASE
-                WHEN principal
+                WHEN principal = TRUE
                 THEN 'Sim'
                 ELSE 'Não'
             END AS "Principal",
 
             CASE
-                WHEN autorizado_assinar
+                WHEN autorizado_assinar = TRUE
                 THEN 'Sim'
                 ELSE 'Não'
             END AS "Pode Assinar",
 
             CASE
-                WHEN ativo
+                WHEN ativo = TRUE
                 THEN 'Ativo'
                 ELSE 'Inativo'
             END AS "Situação"
@@ -27569,7 +27802,7 @@ def fornecedor_representantes(
 
         ORDER BY
             principal DESC,
-            codigo
+            nome
         """,
         (
             fornecedor_id,
@@ -27591,10 +27824,10 @@ def fornecedor_representantes(
     )
 
     # ========================================================
-    # ALTERAR REPRESENTANTE
+    # ALTERAÇÃO
     # ========================================================
 
-    ids = _sisget_fetch(
+    representantes = _sisget_fetch(
         """
         SELECT
             id,
@@ -27604,44 +27837,51 @@ def fornecedor_representantes(
         WHERE fornecedor_id = ?
         ORDER BY
             principal DESC,
-            codigo
+            nome
         """,
         (
             fornecedor_id,
         )
     )
 
-    mapa = {
-        f"{codigo} - {nome}": id_
-        for id_, codigo, nome in ids
-    }
+    mapa_representantes = {}
 
-    if mapa:
+    for registro in representantes:
+
+        representante_id = registro[0]
+        codigo_rep = registro[1]
+        nome_rep = registro[2]
+
+        mapa_representantes[
+            f"{codigo_rep} - {nome_rep}"
+        ] = representante_id
+
+    if mapa_representantes:
 
         st.markdown(
             "### ✏️ Alterar Representante"
         )
 
-        representante_nome = st.selectbox(
+        representante_selecionado = st.selectbox(
             "Representante",
             list(
-                mapa.keys()
+                mapa_representantes.keys()
             ),
-            key=f"selecionar_rep_{fornecedor_id}"
+            key=(
+                f"sisget_representante_alterar_"
+                f"{fornecedor_id}"
+            )
         )
 
-        representante_id = mapa[
-            representante_nome
-        ]
+        representante_id = (
+            mapa_representantes[
+                representante_selecionado
+            ]
+        )
 
         fornecedor_representante_alterar(
             representante_id
         )
-
-
-# ============================================================
-# REPRESENTANTE - ALTERAR
-# ============================================================
 
 def fornecedor_representante_alterar(
     representante_id
@@ -27655,6 +27895,9 @@ def fornecedor_representante_alterar(
             nome,
             cpf,
             cargo,
+            tipo_representante,
+            tipo_registro,
+            numero_registro,
             telefone,
             whatsapp,
             email,
@@ -27672,6 +27915,10 @@ def fornecedor_representante_alterar(
 
     if not registro:
 
+        st.warning(
+            "⚠️ Representante não encontrado."
+        )
+
         return
 
     (
@@ -27680,51 +27927,133 @@ def fornecedor_representante_alterar(
         nome_atual,
         cpf_atual,
         cargo_atual,
+        tipo_representante_atual,
+        tipo_registro_atual,
+        numero_registro_atual,
         telefone_atual,
         whatsapp_atual,
         email_atual,
         principal_atual,
-        assinar_atual,
+        autorizado_atual,
         observacao_atual,
-        ativo
+        ativo_atual
     ) = registro
 
+    tipos_representante = [
+        "1 - Representante legal",
+        "2 - Demais membros do quadro societário",
+        "3 - Microempreendedor Individual (MEI)",
+        "4 - Empresário Individual (EI)",
+        "5 - Empresa Individual de Responsabilidade Limitada (EIRELI)",
+        "6 - Sociedade LTDA Unipessoal (Lei 13.874/2019)"
+    ]
+
+    tipos_registro = [
+        "Junta Comercial",
+        "Portal do Empreendedor",
+        "Cartório de Registro"
+    ]
+
+    try:
+
+        indice_tipo = tipos_representante.index(
+            tipo_representante_atual
+        )
+
+    except Exception:
+
+        indice_tipo = 0
+
+    try:
+
+        indice_registro = tipos_registro.index(
+            tipo_registro_atual
+        )
+
+    except Exception:
+
+        indice_registro = 0
+
     with st.form(
-        f"form_representante_alterar_"
-        f"{representante_id}"
+        f"form_alterar_representante_{representante_id}"
     ):
 
-        st.text_input(
+        st.markdown(
+            "#### 👤 Identificação"
+        )
+
+        col1, col2, col3 = st.columns(
+            [1, 1.5, 4]
+        )
+
+        col1.text_input(
             "Código",
             value=codigo or "",
             disabled=True
         )
 
-        nome = st.text_input(
-            "Nome *",
+        col2.text_input(
+            "Tipo de Pessoa",
+            value="Física",
+            disabled=True
+        )
+
+        nome = col3.text_input(
+            "Nome Completo *",
             value=nome_atual or ""
         )
 
-        col1, col2 = st.columns(2)
+        col4, col5 = st.columns(2)
 
-        cpf = col1.text_input(
-            "CPF",
+        cpf = col4.text_input(
+            "CPF *",
             value=cpf_atual or ""
         )
 
-        cargo = col2.text_input(
+        cargo = col5.text_input(
             "Cargo / Função",
             value=cargo_atual or ""
         )
 
-        col3, col4 = st.columns(2)
+        st.markdown(
+            "#### 📋 Qualificação"
+        )
 
-        telefone = col3.text_input(
+        tipo_representante = st.selectbox(
+            "Tipo / Qualificação *",
+            tipos_representante,
+            index=indice_tipo
+        )
+
+        st.markdown(
+            "#### 🏛️ Registro"
+        )
+
+        col6, col7 = st.columns(2)
+
+        tipo_registro = col6.selectbox(
+            "Tipo do Registro *",
+            tipos_registro,
+            index=indice_registro
+        )
+
+        numero_registro = col7.text_input(
+            "Número do Registro *",
+            value=numero_registro_atual or ""
+        )
+
+        st.markdown(
+            "#### ☎️ Contato"
+        )
+
+        col8, col9 = st.columns(2)
+
+        telefone = col8.text_input(
             "Telefone",
             value=telefone_atual or ""
         )
 
-        whatsapp = col4.text_input(
+        whatsapp = col9.text_input(
             "WhatsApp",
             value=whatsapp_atual or ""
         )
@@ -27734,17 +28063,19 @@ def fornecedor_representante_alterar(
             value=email_atual or ""
         )
 
-        principal = st.checkbox(
+        col10, col11 = st.columns(2)
+
+        principal = col10.checkbox(
             "Representante Principal",
             value=bool(
                 principal_atual
             )
         )
 
-        autorizado_assinar = st.checkbox(
+        autorizado_assinar = col11.checkbox(
             "Autorizado a Assinar Documentos",
             value=bool(
-                assinar_atual
+                autorizado_atual
             )
         )
 
@@ -27753,43 +28084,75 @@ def fornecedor_representante_alterar(
             value=observacao_atual or ""
         )
 
-        col5, col6 = st.columns(2)
+        col12, col13 = st.columns(2)
 
-        salvar = col5.form_submit_button(
+        salvar = col12.form_submit_button(
             "💾 Salvar Alterações",
             type="primary",
             use_container_width=True
         )
 
-        mudar_status = col6.form_submit_button(
-            "🚫 Inativar"
-            if ativo
-            else "✅ Ativar",
+        status = col13.form_submit_button(
+            (
+                "🚫 Inativar"
+                if ativo_atual
+                else "✅ Ativar"
+            ),
             use_container_width=True
         )
 
-    if mudar_status:
+    if status:
 
-        if _sisget_salvar(
+        sucesso = _sisget_salvar(
             """
             UPDATE fornecedores_representantes
             SET ativo = ?
             WHERE id = ?
             """,
             (
-                not ativo,
+                not ativo_atual,
                 representante_id
             )
-        ):
+        )
+
+        if sucesso:
 
             st.rerun()
 
     if salvar:
 
-        if not nome.strip():
+        nome = nome.strip()
+
+        cpf_limpo = re.sub(
+            r"\D",
+            "",
+            cpf
+        )
+
+        numero_registro = (
+            numero_registro.strip()
+        )
+
+        if not nome:
 
             st.warning(
                 "⚠️ Informe o nome."
+            )
+
+            return
+
+        if len(cpf_limpo) != 11:
+
+            st.warning(
+                "⚠️ Informe um CPF com 11 números."
+            )
+
+            return
+
+        if not numero_registro:
+
+            st.warning(
+                "⚠️ Informe o número do registro."
             )
 
             return
@@ -27809,13 +28172,16 @@ def fornecedor_representante_alterar(
                 )
             )
 
-        if _sisget_salvar(
+        sucesso = _sisget_salvar(
             """
             UPDATE fornecedores_representantes
             SET
                 nome = ?,
                 cpf = ?,
                 cargo = ?,
+                tipo_representante = ?,
+                tipo_registro = ?,
+                numero_registro = ?,
                 telefone = ?,
                 whatsapp = ?,
                 email = ?,
@@ -27825,21 +28191,43 @@ def fornecedor_representante_alterar(
             WHERE id = ?
             """,
             (
-                nome.strip(),
-                cpf.strip() or None,
-                cargo.strip() or None,
-                telefone.strip() or None,
-                whatsapp.strip() or None,
-                email.strip() or None,
+                nome,
+                cpf_limpo,
+
+                cargo.strip()
+                or None,
+
+                tipo_representante,
+
+                tipo_registro,
+                numero_registro,
+
+                telefone.strip()
+                or None,
+
+                whatsapp.strip()
+                or None,
+
+                email.strip()
+                or None,
+
                 principal,
                 autorizado_assinar,
-                observacao.strip() or None,
+
+                observacao.strip()
+                or None,
+
                 representante_id
             )
-        ):
+        )
+
+        if sucesso:
+
+            st.success(
+                "✅ Representante alterado com sucesso."
+            )
 
             st.rerun()
-
 
 # ============================================================
 # GRUPOS
