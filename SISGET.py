@@ -25003,167 +25003,297 @@ def modulo_solicitacoes():
 # FORNECEDORES
 # ============================================================
 
+# ============================================================
+# FORNECEDORES - TELA PRINCIPAL
+# ============================================================
+
 def cadastro_fornecedores():
 
-    st.title(
-        "🏢 Fornecedores"
-    )
-
-    st.divider()
-
     # ========================================================
-    # CONTROLE DE TELA
+    # ESTADO DA TELA
     # ========================================================
 
-    if "sisget_fornecedores_acao" not in st.session_state:
+    chave_tela = "sisget_tela_fornecedores"
+
+    if chave_tela not in st.session_state:
 
         st.session_state[
-            "sisget_fornecedores_acao"
-        ] = "incluir"
+            chave_tela
+        ] = "principal"
 
-    acao = st.session_state[
-        "sisget_fornecedores_acao"
+    tela = st.session_state[
+        chave_tela
     ]
 
     # ========================================================
-    # BOTÕES PRINCIPAIS
+    # TELA PRINCIPAL
     # ========================================================
 
-    col1, col2, col3 = st.columns(3)
+    if tela == "principal":
 
-    if col1.button(
-        "➕ Incluir",
-        use_container_width=True,
-        type=(
-            "primary"
-            if acao == "incluir"
-            else "secondary"
-        ),
-        key="fornecedor_btn_incluir"
-    ):
+        # ====================================================
+        # CABEÇALHO + VOLTAR
+        # ====================================================
 
-        st.session_state[
-            "sisget_fornecedores_acao"
-        ] = "incluir"
+        col_titulo, col_voltar = st.columns(
+            [6, 1]
+        )
 
-        st.rerun()
+        with col_titulo:
 
-    if col2.button(
-        "🔎 Localizar",
-        use_container_width=True,
-        type=(
-            "primary"
-            if acao == "localizar"
-            else "secondary"
-        ),
-        key="fornecedor_btn_localizar"
-    ):
+            st.title(
+                "🏢 Fornecedores"
+            )
 
-        st.session_state[
-            "sisget_fornecedores_acao"
-        ] = "localizar"
+        with col_voltar:
 
-        st.rerun()
+            if st.button(
+                "⬅️ Voltar",
+                use_container_width=True,
+                key="voltar_fornecedores_solicitacoes"
+            ):
 
-    if col3.button(
-        "👥 Representantes",
-        use_container_width=True,
-        type=(
-            "primary"
-            if acao == "representantes"
-            else "secondary"
-        ),
-        key="fornecedor_btn_representantes"
-    ):
+                st.session_state[
+                    "sisget_tela_fornecedores"
+                ] = "principal"
 
-        st.session_state[
-            "sisget_fornecedores_acao"
-        ] = "representantes"
+                st.session_state[
+                    "sisget_fornecedor_id"
+                ] = None
 
-        st.rerun()
+                # VOLTA PARA O MENU PRINCIPAL DE SOLICITAÇÕES
+                st.session_state[
+                    "sisget_modulo_solicitacoes"
+                ] = "Selecione..."
 
-    col4, col5, col6 = st.columns(3)
+                st.rerun()
 
-    if col4.button(
-        "📑 Regularidades / Documentos",
-        use_container_width=True,
-        type=(
-            "primary"
-            if acao == "documentos"
-            else "secondary"
-        ),
-        key="fornecedor_btn_documentos"
-    ):
+        st.markdown("---")
 
-        st.session_state[
-            "sisget_fornecedores_acao"
-        ] = "documentos"
+        # ====================================================
+        # PRIMEIRA LINHA
+        # ====================================================
 
-        st.rerun()
+        col1, col2, col3 = st.columns(3)
 
-    if col5.button(
-        "🗑 Excluir",
-        use_container_width=True,
-        type=(
-            "primary"
-            if acao == "excluir"
-            else "secondary"
-        ),
-        key="fornecedor_btn_excluir"
-    ):
+        if col1.button(
+            "➕ Incluir",
+            type="primary",
+            use_container_width=True,
+            key="fornecedor_principal_incluir"
+        ):
 
-        st.session_state[
-            "sisget_fornecedores_acao"
-        ] = "excluir"
+            st.session_state[
+                chave_tela
+            ] = "incluir"
 
-        st.rerun()
+            st.rerun()
 
-    if col6.button(
-        "🖨 Imprimir",
-        use_container_width=True,
-        type=(
-            "primary"
-            if acao == "imprimir"
-            else "secondary"
-        ),
-        key="fornecedor_btn_imprimir"
-    ):
+        if col2.button(
+            "🔎 Localizar",
+            use_container_width=True,
+            key="fornecedor_principal_localizar"
+        ):
 
-        st.session_state[
-            "sisget_fornecedores_acao"
-        ] = "imprimir"
+            st.session_state[
+                chave_tela
+            ] = "localizar"
 
-        st.rerun()
+            st.rerun()
 
-    st.divider()
+        if col3.button(
+            "👥 Representantes",
+            use_container_width=True,
+            key="fornecedor_principal_representantes"
+        ):
+
+            st.session_state[
+                chave_tela
+            ] = "representantes"
+
+            st.rerun()
+
+        # ====================================================
+        # SEGUNDA LINHA
+        # ====================================================
+
+        col4, col5, col6 = st.columns(3)
+
+        if col4.button(
+            "📑 Regularidades / Documentos",
+            use_container_width=True,
+            key="fornecedor_principal_documentos"
+        ):
+
+            st.session_state[
+                chave_tela
+            ] = "documentos"
+
+            st.rerun()
+
+        if col5.button(
+            "🗑️ Excluir",
+            use_container_width=True,
+            key="fornecedor_principal_excluir"
+        ):
+
+            st.session_state[
+                chave_tela
+            ] = "excluir"
+
+            st.rerun()
+
+        if col6.button(
+            "🖨️ Imprimir",
+            use_container_width=True,
+            key="fornecedor_principal_imprimir"
+        ):
+
+            st.session_state[
+                chave_tela
+            ] = "imprimir"
+
+            st.rerun()
+
+        st.markdown("---")
+
+        return
 
     # ========================================================
-    # TELAS
+    # INCLUIR
     # ========================================================
 
-    if acao == "incluir":
+    elif tela == "incluir":
+
+        sisget_cabecalho_tela(
+            "➕ Incluir Fornecedor",
+            voltar=lambda: fornecedor_voltar_principal(),
+            chave="fornecedor_incluir"
+        )
 
         fornecedor_incluir()
 
-    elif acao == "localizar":
+    # ========================================================
+    # LOCALIZAR
+    # ========================================================
 
-        fornecedor_localizar_principal()
+    elif tela == "localizar":
 
-    elif acao == "representantes":
+        sisget_cabecalho_tela(
+            "🔎 Localizar Fornecedor",
+            voltar=lambda: fornecedor_voltar_principal(),
+            chave="fornecedor_localizar"
+        )
+
+        registro_id = fornecedor_localizar()
+
+        if registro_id:
+
+            st.session_state[
+                "sisget_fornecedor_id"
+            ] = registro_id
+
+            st.session_state[
+                chave_tela
+            ] = "alterar"
+
+            st.rerun()
+
+    # ========================================================
+    # ALTERAR
+    # ========================================================
+
+    elif tela == "alterar":
+
+        registro_id = st.session_state.get(
+            "sisget_fornecedor_id"
+        )
+
+        if not registro_id:
+
+            st.session_state[
+                chave_tela
+            ] = "localizar"
+
+            st.rerun()
+
+        sisget_cabecalho_tela(
+            "✏️ Alterar Fornecedor",
+            voltar=lambda: fornecedor_voltar_localizar(),
+            chave="fornecedor_alterar"
+        )
+
+        fornecedor_alterar(
+            registro_id
+        )
+
+    # ========================================================
+    # REPRESENTANTES
+    # ========================================================
+
+    elif tela == "representantes":
+
+        sisget_cabecalho_tela(
+            "👥 Representantes",
+            voltar=lambda: fornecedor_voltar_principal(),
+            chave="fornecedor_representantes"
+        )
 
         fornecedor_representantes_principal()
 
-    elif acao == "documentos":
+    # ========================================================
+    # DOCUMENTOS
+    # ========================================================
+
+    elif tela == "documentos":
+
+        sisget_cabecalho_tela(
+            "📑 Regularidades / Documentos",
+            voltar=lambda: fornecedor_voltar_principal(),
+            chave="fornecedor_documentos"
+        )
 
         fornecedor_documentos_principal()
 
-    elif acao == "excluir":
+    # ========================================================
+    # EXCLUIR
+    # ========================================================
+
+    elif tela == "excluir":
+
+        sisget_cabecalho_tela(
+            "🗑️ Excluir Fornecedor",
+            voltar=lambda: fornecedor_voltar_principal(),
+            chave="fornecedor_excluir"
+        )
 
         fornecedor_excluir()
 
-    elif acao == "imprimir":
+    # ========================================================
+    # IMPRIMIR
+    # ========================================================
+
+    elif tela == "imprimir":
+
+        sisget_cabecalho_tela(
+            "🖨️ Imprimir Fornecedores",
+            voltar=lambda: fornecedor_voltar_principal(),
+            chave="fornecedor_imprimir"
+        )
 
         fornecedor_imprimir()
+
+    # ========================================================
+    # SEGURANÇA
+    # ========================================================
+
+    else:
+
+        st.session_state[
+            chave_tela
+        ] = "principal"
+
+        st.rerun()
 
 def fornecedor_representantes_principal():
 
