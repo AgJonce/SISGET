@@ -20854,17 +20854,40 @@ def planejamento_funcoes():
 
 def funcao_orcamentaria_incluir():
 
+    # ========================================================
+    # CÓDIGO AUTOMÁTICO
+    # ========================================================
+
+    codigo = (
+        sisget_proximo_codigo_funcao()
+    )
+
+    # ========================================================
+    # FORMULÁRIO
+    # ========================================================
+
     with st.form(
         "form_funcao_incluir",
         clear_on_submit=True
     ):
 
-        col1, col2 = st.columns([1, 4])
-
-        codigo = col1.text_input(
-            "Código *",
-            max_chars=10
+        col1, col2 = st.columns(
+            [1, 4]
         )
+
+        # ====================================================
+        # CÓDIGO AUTOMÁTICO / BLOQUEADO
+        # ====================================================
+
+        col1.text_input(
+            "Código *",
+            value=codigo,
+            disabled=True
+        )
+
+        # ====================================================
+        # DESCRIÇÃO
+        # ====================================================
 
         descricao = col2.text_input(
             "Descrição *",
@@ -20877,14 +20900,35 @@ def funcao_orcamentaria_incluir():
             use_container_width=True
         )
 
+    # ========================================================
+    # SALVAR
+    # ========================================================
+
     if salvar:
 
-        codigo = codigo.strip()
-        descricao = descricao.strip()
+        descricao = (
+            descricao.strip()
+        )
 
-        if not codigo or not descricao:
-            st.warning("⚠️ Informe código e descrição.")
+        if not descricao:
+
+            st.warning(
+                "⚠️ Informe a descrição."
+            )
+
             return
+
+        # ====================================================
+        # RECALCULAR CÓDIGO ANTES DE SALVAR
+        # ====================================================
+
+        codigo = (
+            sisget_proximo_codigo_funcao()
+        )
+
+        # ====================================================
+        # VERIFICAR DUPLICIDADE
+        # ====================================================
 
         existe = _sisget_fetchone(
             """
@@ -20892,14 +20936,24 @@ def funcao_orcamentaria_incluir():
             FROM funcoes_orcamentarias
             WHERE codigo = ?
             """,
-            (codigo,)
+            (
+                codigo,
+            )
         )
 
         if existe:
-            st.warning("⚠️ Esta Função já está cadastrada.")
+
+            st.warning(
+                "⚠️ Esta Função já está cadastrada."
+            )
+
             return
 
-        if _sisget_salvar(
+        # ====================================================
+        # SALVAR
+        # ====================================================
+
+        sucesso = _sisget_salvar(
             """
             INSERT INTO funcoes_orcamentarias
             (
@@ -20907,22 +20961,80 @@ def funcao_orcamentaria_incluir():
                 descricao,
                 ativo
             )
-            VALUES (?, ?, TRUE)
+            VALUES
+            (
+                ?,
+                ?,
+                TRUE
+            )
             """,
             (
                 codigo,
                 descricao
             )
-        ):
+        )
 
-            st.success("✅ Função cadastrada com sucesso!")
+        # ====================================================
+        # SUCESSO
+        # ====================================================
+
+        if sucesso:
+
+            st.success(
+                f"✅ Função cadastrada com sucesso! "
+                f"Código: {codigo}"
+            )
+
             st.rerun()
 
 
 # ============================================================
 # FUNÇÃO - LOCALIZAR
 # ============================================================
+# ============================================================
+# FUNÇÃO - LOCALIZAR
+# ============================================================
 
+def sisget_proximo_codigo_funcao():
+
+    dados = _sisget_fetch(
+        """
+        SELECT codigo
+        FROM funcoes_orcamentarias
+        ORDER BY codigo
+        """
+    )
+
+    codigos_usados = set()
+
+    for registro in dados:
+
+        codigo = str(
+            registro[0] or ""
+        ).strip()
+
+        try:
+
+            codigos_usados.add(
+                int(codigo)
+            )
+
+        except (
+            ValueError,
+            TypeError
+        ):
+
+            pass
+
+    proximo = 1
+
+    while proximo in codigos_usados:
+
+        proximo += 1
+
+    return str(
+        proximo
+    ).zfill(2)
 def funcao_orcamentaria_localizar():
 
     pesquisa = st.text_input(
@@ -21222,9 +21334,16 @@ def planejamento_subfuncoes_orcamentarias():
 
 def subfuncao_orcamentaria_incluir():
 
+    # ========================================================
+    # CARREGAR FUNÇÕES
+    # ========================================================
+
     funcoes = _sisget_fetch(
         """
-        SELECT id, codigo, descricao
+        SELECT
+            id,
+            codigo,
+            descricao
         FROM funcoes_orcamentarias
         WHERE ativo = TRUE
         ORDER BY codigo
@@ -21232,45 +21351,122 @@ def subfuncao_orcamentaria_incluir():
     )
 
     if not funcoes:
-        st.warning("⚠️ Cadastre uma Função primeiro.")
+
+        st.warning(
+            "⚠️ Cadastre uma Função primeiro."
+        )
+
         return
+
+    # ========================================================
+    # MAPA DAS FUNÇÕES
+    # ========================================================
 
     mapa = {
         f"{codigo} - {descricao}": id_
-        for id_, codigo, descricao in funcoes
+        for (
+            id_,
+            codigo,
+            descricao
+        ) in funcoes
     }
+
+    # ========================================================
+    # SELECIONAR FUNÇÃO
+    # ========================================================
+
+    funcao_nome = st.selectbox(
+        "Função *",
+        list(
+            mapa.keys()
+        ),
+        key="subfuncao_incluir_funcao"
+    )
+
+    funcao_id = mapa[
+        funcao_nome
+    ]
+
+    # ========================================================
+    # CÓDIGO AUTOMÁTICO
+    # ========================================================
+
+    codigo = (
+        sisget_proximo_codigo_subfuncao(
+            funcao_id
+        )
+    )
+
+    # ========================================================
+    # FORMULÁRIO
+    # ========================================================
 
     with st.form(
         "form_subfuncao_incluir",
         clear_on_submit=True
     ):
 
-        funcao_nome = st.selectbox(
-            "Função *",
-            list(mapa.keys())
+        col1, col2 = st.columns(
+            [1, 4]
         )
 
-        col1, col2 = st.columns([1, 4])
+        # ====================================================
+        # CÓDIGO AUTOMÁTICO / BLOQUEADO
+        # ====================================================
 
-        codigo = col1.text_input("Código *")
-        descricao = col2.text_input("Descrição *")
-
-        salvar = st.form_submit_button(
-            "💾 Salvar",
-            type="primary",
-            use_container_width=True
+        col1.text_input(
+            "Código *",
+            value=codigo,
+            disabled=True
         )
+
+        # ====================================================
+        # DESCRIÇÃO
+        # ====================================================
+
+        descricao = col2.text_input(
+            "Descrição *"
+        )
+
+        salvar = (
+            st.form_submit_button(
+                "💾 Salvar",
+                type="primary",
+                use_container_width=True
+            )
+        )
+
+    # ========================================================
+    # SALVAR
+    # ========================================================
 
     if salvar:
 
-        funcao_id = mapa[funcao_nome]
+        descricao = (
+            descricao.strip()
+        )
 
-        codigo = codigo.strip()
-        descricao = descricao.strip()
+        if not descricao:
 
-        if not codigo or not descricao:
-            st.warning("⚠️ Informe código e descrição.")
+            st.warning(
+                "⚠️ Informe a descrição."
+            )
+
             return
+
+        # ====================================================
+        # RECALCULAR CÓDIGO ANTES DE SALVAR
+        # ====================================================
+
+        codigo = (
+            sisget_proximo_codigo_subfuncao(
+                funcao_id
+            )
+        )
+
+        # ====================================================
+        # VERIFICAR DUPLICIDADE
+        # ====================================================
 
         existe = _sisget_fetchone(
             """
@@ -21286,10 +21482,18 @@ def subfuncao_orcamentaria_incluir():
         )
 
         if existe:
-            st.warning("⚠️ Subfunção já cadastrada.")
+
+            st.warning(
+                "⚠️ Subfunção já cadastrada."
+            )
+
             return
 
-        if _sisget_salvar(
+        # ====================================================
+        # INSERT
+        # ====================================================
+
+        sucesso = _sisget_salvar(
             """
             INSERT INTO subfuncoes_orcamentarias
             (
@@ -21298,19 +21502,79 @@ def subfuncao_orcamentaria_incluir():
                 descricao,
                 ativo
             )
-            VALUES (?, ?, ?, TRUE)
+            VALUES
+            (
+                ?,
+                ?,
+                ?,
+                TRUE
+            )
             """,
             (
                 funcao_id,
                 codigo,
                 descricao
             )
+        )
+
+        # ====================================================
+        # SUCESSO
+        # ====================================================
+
+        if sucesso:
+
+            st.success(
+                f"✅ Subfunção cadastrada com sucesso! "
+                f"Código: {codigo}"
+            )
+
+            st.rerun()
+def sisget_proximo_codigo_subfuncao(
+    funcao_id
+):
+
+    dados = _sisget_fetch(
+        """
+        SELECT codigo
+        FROM subfuncoes_orcamentarias
+        WHERE funcao_id = ?
+        ORDER BY codigo
+        """,
+        (
+            funcao_id,
+        )
+    )
+
+    codigos_usados = set()
+
+    for registro in dados:
+
+        codigo = str(
+            registro[0] or ""
+        ).strip()
+
+        try:
+
+            codigos_usados.add(
+                int(codigo)
+            )
+
+        except (
+            ValueError,
+            TypeError
         ):
 
-            st.success("✅ Subfunção cadastrada.")
-            st.rerun()
+            pass
 
+    proximo = 1
 
+    while proximo in codigos_usados:
+
+        proximo += 1
+
+    return str(
+        proximo
+    ).zfill(3)
 def subfuncao_orcamentaria_localizar():
 
     df = _sisget_dataframe(
