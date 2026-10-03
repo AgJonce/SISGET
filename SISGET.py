@@ -13346,6 +13346,55 @@ def modulo_planejamento():
 
         planejamento_fichas_orcamentarias()
 
+def sisget_proximo_codigo_ficha_extra(
+    exercicio,
+    entidade_id
+):
+
+    registros = _sisget_fetch(
+        """
+        SELECT codigo
+        FROM fichas_extraorcamentarias
+        WHERE exercicio = ?
+          AND entidade_id = ?
+        ORDER BY codigo
+        """,
+        (
+            int(exercicio),
+            entidade_id
+        )
+    )
+
+    numeros_utilizados = set()
+
+    for registro in registros:
+
+        codigo = str(
+            registro[0] or ""
+        ).strip()
+
+        try:
+
+            numeros_utilizados.add(
+                int(codigo)
+            )
+
+        except (
+            ValueError,
+            TypeError
+        ):
+
+            pass
+
+    proximo = 1
+
+    while proximo in numeros_utilizados:
+
+        proximo += 1
+
+    return str(
+        proximo
+    ).zfill(3)
 def ficha_orcamentaria_incluir():
 
   # ========================================================
@@ -18264,7 +18313,18 @@ def ficha_receita_incluir():
         "💰 Cadastro de Ficha de Receita"
     )
 
-    with st.container(border=True):
+    st.caption(
+        "Informe a estrutura administrativa "
+        "e os dados da receita."
+    )
+
+    # ========================================================
+    # ESTRUTURA ADMINISTRATIVA
+    # ========================================================
+
+    with st.container(
+        border=True
+    ):
 
         st.markdown(
             "### 🏛️ Estrutura Administrativa"
@@ -18280,6 +18340,10 @@ def ficha_receita_incluir():
         ) = sisget_ficha_estrutura_administrativa(
             "receita_incluir"
         )
+
+    # ========================================================
+    # EXERCÍCIO / NÚMERO DA FICHA
+    # ========================================================
 
     col_ex1, col_ex2 = st.columns(
         [1, 2]
@@ -18318,20 +18382,48 @@ def ficha_receita_incluir():
         key="receita_numero_ficha"
     )
 
+    # ========================================================
+    # CÓDIGO AUTOMÁTICO
+    # ========================================================
+
+    codigo_automatico = ""
+
+    if entidade_id is not None:
+
+        codigo_automatico = (
+            sisget_proximo_codigo_ficha_receita(
+                exercicio,
+                entidade_id
+            )
+        )
+
+    # ========================================================
+    # FONTES
+    # ========================================================
+
     fontes = sisget_mapa_fontes_fichas()
+
+    # ========================================================
+    # FORMULÁRIO
+    # ========================================================
 
     with st.form(
         "form_ficha_receita_incluir",
         clear_on_submit=True
     ):
 
+        st.markdown(
+            "### 💰 Classificação da Receita"
+        )
+
         col1, col2 = st.columns(
             [1, 3]
         )
 
         codigo_receita = col1.text_input(
-            "Código da Receita *",
-            max_chars=50
+            "Código",
+            value=codigo_automatico,
+            disabled=True
         )
 
         descricao = col2.text_input(
@@ -18348,7 +18440,17 @@ def ficha_receita_incluir():
 
         st.markdown("---")
 
-        col3, col4, col5 = st.columns(3)
+        # ====================================================
+        # VALORES
+        # ====================================================
+
+        st.markdown(
+            "### 💵 Valores"
+        )
+
+        col3, col4, col5 = st.columns(
+            3
+        )
 
         valor_inicial = col3.number_input(
             "Previsão Inicial",
@@ -18380,7 +18482,15 @@ def ficha_receita_incluir():
             use_container_width=True
         )
 
+    # ========================================================
+    # SALVAR
+    # ========================================================
+
     if salvar:
+
+        # ====================================================
+        # VALIDAR ESTRUTURA
+        # ====================================================
 
         if (
             orgao_id is None
@@ -18395,21 +18505,13 @@ def ficha_receita_incluir():
 
             return
 
-        codigo_receita = (
-            codigo_receita.strip()
-        )
+        # ====================================================
+        # DESCRIÇÃO
+        # ====================================================
 
         descricao = (
             descricao.strip()
         )
-
-        if not codigo_receita:
-
-            st.warning(
-                "⚠️ Informe o Código da Receita."
-            )
-
-            return
 
         if not descricao:
 
@@ -18419,17 +18521,95 @@ def ficha_receita_incluir():
 
             return
 
-        numero_ficha = (
-            sisget_proximo_numero_ficha_nova(
-                "fichas_receitas",
+        # ====================================================
+        # NÚMERO DA FICHA
+        # ====================================================
+
+        numero_ficha = int(
+            numero_ficha_digitado
+        )
+
+        # ====================================================
+        # VERIFICAR NÚMERO DA FICHA DUPLICADO
+        # ====================================================
+
+        ficha_existente = _sisget_fetchone(
+            """
+            SELECT id
+            FROM fichas_receitas
+            WHERE exercicio = ?
+              AND entidade_id = ?
+              AND numero_ficha = ?
+            """,
+            (
+                int(exercicio),
+                entidade_id,
+                numero_ficha
+            )
+        )
+
+        if ficha_existente:
+
+            st.warning(
+                f"⚠️ Já existe a Ficha nº "
+                f"{numero_ficha} cadastrada "
+                f"para esta Entidade no exercício "
+                f"{int(exercicio)}."
+            )
+
+            return
+
+        # ====================================================
+        # RECALCULAR CÓDIGO AUTOMÁTICO
+        # ====================================================
+
+        codigo_receita = (
+            sisget_proximo_codigo_ficha_receita(
                 exercicio,
                 entidade_id
             )
         )
 
+        # ====================================================
+        # VERIFICAR CÓDIGO DUPLICADO
+        # ====================================================
+
+        codigo_existente = _sisget_fetchone(
+            """
+            SELECT id
+            FROM fichas_receitas
+            WHERE exercicio = ?
+              AND entidade_id = ?
+              AND codigo_receita = ?
+            """,
+            (
+                int(exercicio),
+                entidade_id,
+                codigo_receita
+            )
+        )
+
+        if codigo_existente:
+
+            st.warning(
+                f"⚠️ O código "
+                f"{codigo_receita} "
+                f"já está cadastrado."
+            )
+
+            return
+
+        # ====================================================
+        # FONTE
+        # ====================================================
+
         fonte_id = fontes[
             fonte_nome
         ]
+
+        # ====================================================
+        # INSERT
+        # ====================================================
 
         sucesso = _sisget_salvar(
             """
@@ -18437,15 +18617,20 @@ def ficha_receita_incluir():
             (
                 exercicio,
                 numero_ficha,
+
                 orgao_id,
                 entidade_id,
                 unidade_orcamentaria_id,
+
                 codigo_receita,
                 descricao,
+
                 fonte_recurso_id,
+
                 valor_previsto_inicial,
                 valor_previsto_atual,
                 valor_arrecadado,
+
                 ativo
             )
             VALUES
@@ -18461,30 +18646,39 @@ def ficha_receita_incluir():
             (
                 int(exercicio),
                 numero_ficha,
+
                 orgao_id,
                 entidade_id,
                 unidade_id,
+
                 codigo_receita,
                 descricao,
+
                 fonte_id,
-                float(valor_inicial),
-                float(valor_atual),
-                float(valor_arrecadado)
+
+                float(
+                    valor_inicial
+                ),
+                float(
+                    valor_atual
+                ),
+                float(
+                    valor_arrecadado
+                )
             )
         )
+
+        # ====================================================
+        # SUCESSO
+        # ====================================================
 
         if sucesso:
 
             st.success(
                 f"✅ Ficha de Receita nº "
-                f"{numero_ficha} cadastrada com sucesso!"
+                f"{numero_ficha} cadastrada com sucesso! "
+                f"Código: {codigo_receita}"
             )
-
-
-# ============================================================
-# FICHA DE RECEITA - LOCALIZAR
-# ============================================================
-
 def ficha_receita_localizar():
 
     st.subheader(
@@ -19243,7 +19437,13 @@ def ficha_extraorcamentaria_incluir():
         "🔄 Cadastro de Ficha Extraorçamentária"
     )
 
-    with st.container(border=True):
+    # ========================================================
+    # ESTRUTURA ADMINISTRATIVA
+    # ========================================================
+
+    with st.container(
+        border=True
+    ):
 
         st.markdown(
             "### 🏛️ Estrutura Administrativa"
@@ -19259,6 +19459,10 @@ def ficha_extraorcamentaria_incluir():
         ) = sisget_ficha_estrutura_administrativa(
             "extra_incluir"
         )
+
+    # ========================================================
+    # EXERCÍCIO / NÚMERO DA FICHA
+    # ========================================================
 
     col_ex1, col_ex2 = st.columns(
         [1, 2]
@@ -19297,6 +19501,25 @@ def ficha_extraorcamentaria_incluir():
         key="extra_numero_ficha"
     )
 
+    # ========================================================
+    # CÓDIGO AUTOMÁTICO
+    # ========================================================
+
+    codigo_automatico = ""
+
+    if entidade_id is not None:
+
+        codigo_automatico = (
+            sisget_proximo_codigo_ficha_extra(
+                exercicio,
+                entidade_id
+            )
+        )
+
+    # ========================================================
+    # FORMULÁRIO
+    # ========================================================
+
     with st.form(
         "form_ficha_extraorcamentaria_incluir",
         clear_on_submit=True
@@ -19315,14 +19538,17 @@ def ficha_extraorcamentaria_incluir():
         )
 
         codigo = col1.text_input(
-            "Código *",
-            max_chars=50
+            "Código",
+            value=codigo_automatico,
+            disabled=True
         )
 
         descricao = col2.text_input(
             "Descrição *",
             max_chars=300
         )
+
+        st.markdown("---")
 
         col3, col4 = st.columns(2)
 
@@ -19348,7 +19574,15 @@ def ficha_extraorcamentaria_incluir():
             use_container_width=True
         )
 
+    # ========================================================
+    # SALVAR
+    # ========================================================
+
     if salvar:
+
+        # ====================================================
+        # VALIDAR ESTRUTURA
+        # ====================================================
 
         if (
             orgao_id is None
@@ -19363,16 +19597,13 @@ def ficha_extraorcamentaria_incluir():
 
             return
 
-        codigo = codigo.strip()
-        descricao = descricao.strip()
+        # ====================================================
+        # DESCRIÇÃO
+        # ====================================================
 
-        if not codigo:
-
-            st.warning(
-                "⚠️ Informe o código."
-            )
-
-            return
+        descricao = (
+            descricao.strip()
+        )
 
         if not descricao:
 
@@ -19382,28 +19613,105 @@ def ficha_extraorcamentaria_incluir():
 
             return
 
-        numero_ficha = (
-            sisget_proximo_numero_ficha_nova(
-                "fichas_extraorcamentarias",
+        # ====================================================
+        # NÚMERO DA FICHA
+        # ====================================================
+
+        numero_ficha = int(
+            numero_ficha_digitado
+        )
+
+        # ====================================================
+        # VERIFICAR FICHA DUPLICADA
+        # ====================================================
+
+        ficha_existente = _sisget_fetchone(
+            """
+            SELECT id
+            FROM fichas_extraorcamentarias
+            WHERE exercicio = ?
+              AND entidade_id = ?
+              AND numero_ficha = ?
+            """,
+            (
+                int(exercicio),
+                entidade_id,
+                numero_ficha
+            )
+        )
+
+        if ficha_existente:
+
+            st.warning(
+                f"⚠️ Já existe a Ficha nº "
+                f"{numero_ficha} cadastrada "
+                f"para esta Entidade no exercício "
+                f"{int(exercicio)}."
+            )
+
+            return
+
+        # ====================================================
+        # RECALCULAR CÓDIGO AUTOMÁTICO
+        # ====================================================
+
+        codigo = (
+            sisget_proximo_codigo_ficha_extra(
                 exercicio,
                 entidade_id
             )
         )
 
-        if _sisget_salvar(
+        # ====================================================
+        # VERIFICAR CÓDIGO DUPLICADO
+        # ====================================================
+
+        codigo_existente = _sisget_fetchone(
+            """
+            SELECT id
+            FROM fichas_extraorcamentarias
+            WHERE exercicio = ?
+              AND entidade_id = ?
+              AND codigo = ?
+            """,
+            (
+                int(exercicio),
+                entidade_id,
+                codigo
+            )
+        )
+
+        if codigo_existente:
+
+            st.warning(
+                f"⚠️ O código {codigo} já está cadastrado."
+            )
+
+            return
+
+        # ====================================================
+        # INSERT
+        # ====================================================
+
+        sucesso = _sisget_salvar(
             """
             INSERT INTO fichas_extraorcamentarias
             (
                 exercicio,
                 numero_ficha,
+
                 orgao_id,
                 entidade_id,
                 unidade_orcamentaria_id,
+
                 tipo,
+
                 codigo,
                 descricao,
+
                 valor_inicial,
                 valor_movimentado,
+
                 ativo
             )
             VALUES
@@ -19419,27 +19727,82 @@ def ficha_extraorcamentaria_incluir():
             (
                 int(exercicio),
                 numero_ficha,
+
                 orgao_id,
                 entidade_id,
                 unidade_id,
+
                 tipo,
+
                 codigo,
                 descricao,
+
                 float(valor_inicial),
                 float(valor_movimentado)
             )
-        ):
+        )
+
+        # ====================================================
+        # SUCESSO
+        # ====================================================
+
+        if sucesso:
 
             st.success(
                 f"✅ Ficha Extraorçamentária nº "
-                f"{numero_ficha} cadastrada com sucesso!"
+                f"{numero_ficha} cadastrada com sucesso! "
+                f"Código: {codigo}"
             )
 
+def sisget_proximo_codigo_ficha_receita(
+    exercicio,
+    entidade_id
+):
 
-# ============================================================
-# EXTRAORÇAMENTÁRIA - LOCALIZAR
-# ============================================================
+    registros = _sisget_fetch(
+        """
+        SELECT codigo_receita
+        FROM fichas_receitas
+        WHERE exercicio = ?
+          AND entidade_id = ?
+        ORDER BY codigo_receita
+        """,
+        (
+            int(exercicio),
+            entidade_id
+        )
+    )
 
+    numeros_utilizados = set()
+
+    for registro in registros:
+
+        codigo = str(
+            registro[0] or ""
+        ).strip()
+
+        try:
+
+            numeros_utilizados.add(
+                int(codigo)
+            )
+
+        except (
+            ValueError,
+            TypeError
+        ):
+
+            pass
+
+    proximo = 1
+
+    while proximo in numeros_utilizados:
+
+        proximo += 1
+
+    return str(
+        proximo
+    ).zfill(3)
 def ficha_extraorcamentaria_localizar():
 
     st.subheader(
