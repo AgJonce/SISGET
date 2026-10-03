@@ -18375,7 +18375,7 @@ def ficha_receita_incluir():
         )
 
     # ========================================================
-    # EXERCÍCIO / NÚMERO DA FICHA
+    # EXERCÍCIO
     # ========================================================
 
     col_ex1, col_ex2 = st.columns(
@@ -18394,6 +18394,10 @@ def ficha_receita_incluir():
         )
     )
 
+    # ========================================================
+    # PRÓXIMO NÚMERO DA FICHA
+    # ========================================================
+
     numero_ficha = None
 
     if entidade_id is not None:
@@ -18406,19 +18410,37 @@ def ficha_receita_incluir():
             )
         )
 
+    elif (
+        "sisget_proxima_ficha_receita"
+        in st.session_state
+    ):
+
+        numero_ficha = (
+            st.session_state[
+                "sisget_proxima_ficha_receita"
+            ]
+        )
+
+    else:
+
+        numero_ficha = 1
+
+    # ========================================================
+    # NÚMERO DA FICHA EDITÁVEL
+    # ========================================================
+
     numero_ficha_digitado = (
         col_ex2.number_input(
             "Número da Ficha *",
             min_value=1,
-            value=(
-                int(numero_ficha)
-                if numero_ficha is not None
-                else 1
+            value=int(
+                numero_ficha
             ),
             step=1,
             key=(
                 f"receita_numero_ficha_"
-                f"{reset_receita}"
+                f"{reset_receita}_"
+                f"{entidade_id}"
             )
         )
     )
@@ -18439,7 +18461,7 @@ def ficha_receita_incluir():
         )
 
     # ========================================================
-    # FONTES
+    # FONTES DE RECURSOS
     # ========================================================
 
     fontes = (
@@ -18453,7 +18475,8 @@ def ficha_receita_incluir():
     with st.form(
         (
             f"form_ficha_receita_incluir_"
-            f"{reset_receita}"
+            f"{reset_receita}_"
+            f"{entidade_id}"
         )
     ):
 
@@ -18548,7 +18571,7 @@ def ficha_receita_incluir():
     if salvar:
 
         # ====================================================
-        # ESTRUTURA
+        # VALIDAR ESTRUTURA
         # ====================================================
 
         if (
@@ -18621,7 +18644,7 @@ def ficha_receita_incluir():
             return
 
         # ====================================================
-        # CÓDIGO AUTOMÁTICO
+        # RECALCULAR CÓDIGO AUTOMÁTICO
         # ====================================================
 
         codigo_receita = (
@@ -18632,7 +18655,7 @@ def ficha_receita_incluir():
         )
 
         # ====================================================
-        # VALIDAR CÓDIGO
+        # VALIDAR CÓDIGO DUPLICADO
         # ====================================================
 
         codigo_existente = (
@@ -18663,7 +18686,7 @@ def ficha_receita_incluir():
             return
 
         # ====================================================
-        # FONTE
+        # FONTE DE RECURSO
         # ====================================================
 
         fonte_id = fontes[
@@ -18732,10 +18755,14 @@ def ficha_receita_incluir():
         )
 
         # ====================================================
-        # SUCESSO / RESET
+        # SUCESSO
         # ====================================================
 
         if sucesso:
+
+            # =================================================
+            # MENSAGEM
+            # =================================================
 
             st.session_state[
                 "sisget_mensagem_receita_incluir"
@@ -18745,9 +18772,27 @@ def ficha_receita_incluir():
                 f"Código: {codigo_receita}"
             )
 
+            # =================================================
+            # GUARDAR PRÓXIMO NÚMERO
+            # =================================================
+
+            st.session_state[
+                "sisget_proxima_ficha_receita"
+            ] = (
+                int(numero_ficha) + 1
+            )
+
+            # =================================================
+            # RESETAR TODOS OS CAMPOS
+            # =================================================
+
             st.session_state[
                 "sisget_receita_reset"
             ] += 1
+
+            # =================================================
+            # RECARREGAR
+            # =================================================
 
             st.rerun()
 def ficha_receita_localizar():
@@ -19570,7 +19615,7 @@ def ficha_extraorcamentaria_incluir():
         )
 
     # ========================================================
-    # EXERCÍCIO / NÚMERO
+    # EXERCÍCIO
     # ========================================================
 
     col_ex1, col_ex2 = st.columns(
@@ -19591,6 +19636,10 @@ def ficha_extraorcamentaria_incluir():
         )
     )
 
+    # ========================================================
+    # PRÓXIMO NÚMERO DA FICHA
+    # ========================================================
+
     numero_ficha = None
 
     if entidade_id is not None:
@@ -19603,19 +19652,37 @@ def ficha_extraorcamentaria_incluir():
             )
         )
 
+    elif (
+        "sisget_proxima_ficha_extra"
+        in st.session_state
+    ):
+
+        numero_ficha = (
+            st.session_state[
+                "sisget_proxima_ficha_extra"
+            ]
+        )
+
+    else:
+
+        numero_ficha = 1
+
+    # ========================================================
+    # NÚMERO DA FICHA EDITÁVEL
+    # ========================================================
+
     numero_ficha_digitado = (
         col_ex2.number_input(
             "Número da Ficha *",
             min_value=1,
-            value=(
-                int(numero_ficha)
-                if numero_ficha is not None
-                else 1
+            value=int(
+                numero_ficha
             ),
             step=1,
             key=(
                 f"extra_numero_ficha_"
-                f"{reset_extra}"
+                f"{reset_extra}_"
+                f"{entidade_id}"
             )
         )
     )
@@ -19642,9 +19709,14 @@ def ficha_extraorcamentaria_incluir():
     with st.form(
         (
             f"form_ficha_extraorcamentaria_"
-            f"incluir_{reset_extra}"
+            f"incluir_{reset_extra}_"
+            f"{entidade_id}"
         )
     ):
+
+        # ====================================================
+        # TIPO
+        # ====================================================
 
         tipo = st.selectbox(
             "Tipo *",
@@ -19653,6 +19725,10 @@ def ficha_extraorcamentaria_incluir():
                 "Despesa Extraorçamentária"
             ]
         )
+
+        # ====================================================
+        # CÓDIGO / DESCRIÇÃO
+        # ====================================================
 
         col1, col2 = st.columns(
             [1, 3]
@@ -19672,6 +19748,10 @@ def ficha_extraorcamentaria_incluir():
         )
 
         st.markdown("---")
+
+        # ====================================================
+        # VALORES
+        # ====================================================
 
         col3, col4 = st.columns(2)
 
@@ -19710,7 +19790,7 @@ def ficha_extraorcamentaria_incluir():
     if salvar:
 
         # ====================================================
-        # ESTRUTURA
+        # VALIDAR ESTRUTURA
         # ====================================================
 
         if (
@@ -19783,7 +19863,7 @@ def ficha_extraorcamentaria_incluir():
             return
 
         # ====================================================
-        # CÓDIGO AUTOMÁTICO
+        # RECALCULAR CÓDIGO AUTOMÁTICO
         # ====================================================
 
         codigo = (
@@ -19794,7 +19874,7 @@ def ficha_extraorcamentaria_incluir():
         )
 
         # ====================================================
-        # VALIDAR CÓDIGO
+        # VALIDAR CÓDIGO DUPLICADO
         # ====================================================
 
         codigo_existente = (
@@ -19882,10 +19962,14 @@ def ficha_extraorcamentaria_incluir():
         )
 
         # ====================================================
-        # SUCESSO / RESET
+        # SUCESSO
         # ====================================================
 
         if sucesso:
+
+            # =================================================
+            # MENSAGEM
+            # =================================================
 
             st.session_state[
                 "sisget_mensagem_extra_incluir"
@@ -19895,9 +19979,27 @@ def ficha_extraorcamentaria_incluir():
                 f"Código: {codigo}"
             )
 
+            # =================================================
+            # GUARDAR PRÓXIMO NÚMERO
+            # =================================================
+
+            st.session_state[
+                "sisget_proxima_ficha_extra"
+            ] = (
+                int(numero_ficha) + 1
+            )
+
+            # =================================================
+            # RESETAR TODOS OS CAMPOS
+            # =================================================
+
             st.session_state[
                 "sisget_extra_reset"
             ] += 1
+
+            # =================================================
+            # RECARREGAR
+            # =================================================
 
             st.rerun()
 def sisget_proximo_codigo_ficha_receita(
