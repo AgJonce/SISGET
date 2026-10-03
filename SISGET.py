@@ -1,7 +1,8 @@
 # ============================================================
 # IMPORTS
 # ============================================================
-
+import requests
+import re
 import os
 import psycopg2
 import plotly.express as px
@@ -25149,6 +25150,338 @@ def fornecedor_documentos_principal():
     fornecedor_regularidades_documentos(
         fornecedor_id
     )
+
+# ============================================================
+# CONSULTAR CNPJ
+# ============================================================
+
+def consultar_cnpj_fornecedor(
+    cnpj
+):
+
+    try:
+
+        # ====================================================
+        # LIMPAR CNPJ
+        # IMPORTANTE: CNPJ AGORA PODE SER ALFANUMÉRICO
+        # ====================================================
+
+        cnpj_limpo = re.sub(
+            r"[^0-9A-Za-z]",
+            "",
+            str(cnpj)
+        ).upper()
+
+        if len(cnpj_limpo) != 14:
+
+            st.warning(
+                "⚠️ Informe um CNPJ com 14 caracteres."
+            )
+
+            return None
+
+        # ====================================================
+        # CONSULTA
+        # ====================================================
+
+        url = (
+            "https://brasilapi.com.br/api/cnpj/v1/"
+            f"{cnpj_limpo}"
+        )
+
+        resposta = requests.get(
+            url,
+            timeout=15
+        )
+
+        # ====================================================
+        # NÃO ENCONTRADO
+        # ====================================================
+
+        if resposta.status_code == 404:
+
+            st.warning(
+                "⚠️ CNPJ não encontrado."
+            )
+
+            return None
+
+        # ====================================================
+        # CNPJ INVÁLIDO
+        # ====================================================
+
+        if resposta.status_code == 400:
+
+            st.warning(
+                "⚠️ CNPJ inválido."
+            )
+
+            return None
+
+        # ====================================================
+        # OUTRO ERRO
+        # ====================================================
+
+        if resposta.status_code != 200:
+
+            st.error(
+                "❌ Não foi possível consultar o CNPJ."
+            )
+
+            return None
+
+        dados = resposta.json()
+
+        # ====================================================
+        # CNAE PRINCIPAL
+        # ====================================================
+
+        cnae_codigo = (
+            dados.get(
+                "cnae_fiscal"
+            )
+            or ""
+        )
+
+        cnae_descricao = (
+            dados.get(
+                "cnae_fiscal_descricao"
+            )
+            or ""
+        )
+
+        if (
+            cnae_codigo
+            and cnae_descricao
+        ):
+
+            cnae_completo = (
+                f"{cnae_codigo} - "
+                f"{cnae_descricao}"
+            )
+
+        else:
+
+            cnae_completo = (
+                str(
+                    cnae_codigo
+                    or cnae_descricao
+                    or ""
+                )
+            )
+
+        # ====================================================
+        # NATUREZA JURÍDICA
+        # ====================================================
+
+        natureza_juridica = (
+            dados.get(
+                "natureza_juridica"
+            )
+            or ""
+        )
+
+        # ====================================================
+        # TELEFONE
+        # ====================================================
+
+        ddd1 = str(
+            dados.get(
+                "ddd_telefone_1"
+            )
+            or ""
+        ).strip()
+
+        ddd2 = str(
+            dados.get(
+                "ddd_telefone_2"
+            )
+            or ""
+        ).strip()
+
+        telefone = (
+            ddd1
+            if ddd1
+            else ddd2
+        )
+
+        # ====================================================
+        # DATA DE ABERTURA
+        # ====================================================
+
+        data_inicio = (
+            dados.get(
+                "data_inicio_atividade"
+            )
+            or None
+        )
+
+        # ====================================================
+        # PORTE
+        # ====================================================
+
+        porte = (
+            dados.get(
+                "porte"
+            )
+            or ""
+        )
+
+        # ====================================================
+        # SITUAÇÃO
+        # ====================================================
+
+        situacao = (
+            dados.get(
+                "descricao_situacao_cadastral"
+            )
+            or ""
+        )
+
+        # ====================================================
+        # RETORNO PADRONIZADO
+        # ====================================================
+
+        return {
+
+            "cnpj": (
+                dados.get(
+                    "cnpj"
+                )
+                or cnpj_limpo
+            ),
+
+            "razao_social": (
+                dados.get(
+                    "razao_social"
+                )
+                or ""
+            ),
+
+            "nome_fantasia": (
+                dados.get(
+                    "nome_fantasia"
+                )
+                or ""
+            ),
+
+            "natureza_juridica": (
+                natureza_juridica
+            ),
+
+            "cnae": (
+                cnae_completo
+            ),
+
+            "categoria_fornecedor": (
+                cnae_descricao
+            ),
+
+            "porte": (
+                porte
+            ),
+
+            "telefone": (
+                telefone
+            ),
+
+            "email": (
+                dados.get(
+                    "email"
+                )
+                or ""
+            ),
+
+            "cep": str(
+                dados.get(
+                    "cep"
+                )
+                or ""
+            ),
+
+            "logradouro": (
+                dados.get(
+                    "logradouro"
+                )
+                or ""
+            ),
+
+            "numero": str(
+                dados.get(
+                    "numero"
+                )
+                or ""
+            ),
+
+            "complemento": (
+                dados.get(
+                    "complemento"
+                )
+                or ""
+            ),
+
+            "bairro": (
+                dados.get(
+                    "bairro"
+                )
+                or ""
+            ),
+
+            "cidade": (
+                dados.get(
+                    "municipio"
+                )
+                or ""
+            ),
+
+            "uf": (
+                dados.get(
+                    "uf"
+                )
+                or ""
+            ),
+
+            "situacao_receita": (
+                situacao
+            ),
+
+            "data_abertura": (
+                data_inicio
+            ),
+
+            "fonte": (
+                "BrasilAPI / dados públicos do CNPJ"
+            )
+        }
+
+    except requests.exceptions.Timeout:
+
+        st.error(
+            "❌ A consulta demorou demais. "
+            "Tente novamente."
+        )
+
+        return None
+
+    except requests.exceptions.RequestException as erro:
+
+        st.error(
+            f"❌ Erro de comunicação na consulta: {erro}"
+        )
+
+        return None
+
+    except Exception as erro:
+
+        st.error(
+            f"❌ Erro ao consultar CNPJ: {erro}"
+        )
+
+        return None
+# ============================================================
+# FORNECEDOR - INCLUIR
+# ============================================================
+
 def fornecedor_incluir():
 
     # ========================================================
@@ -25163,6 +25496,20 @@ def fornecedor_incluir():
 
     reset = st.session_state[
         "sisget_fornecedor_reset"
+    ]
+
+    # ========================================================
+    # DADOS DA CONSULTA
+    # ========================================================
+
+    if "sisget_fornecedor_receita" not in st.session_state:
+
+        st.session_state[
+            "sisget_fornecedor_receita"
+        ] = {}
+
+    dados_receita = st.session_state[
+        "sisget_fornecedor_receita"
     ]
 
     # ========================================================
@@ -25185,6 +25532,129 @@ def fornecedor_incluir():
         "fornecedores",
         tamanho=6
     )
+
+    # ========================================================
+    # CONSULTA CNPJ
+    # ========================================================
+
+    st.markdown(
+        "### 🔎 Consultar CNPJ"
+    )
+
+    col_consulta1, col_consulta2 = st.columns(
+        [4, 1]
+    )
+
+    cnpj_consulta = col_consulta1.text_input(
+        "CNPJ",
+        value=(
+            dados_receita.get(
+                "cnpj",
+                ""
+            )
+        ),
+        key=(
+            f"sisget_fornecedor_"
+            f"consulta_cnpj_{reset}"
+        ),
+        placeholder="Digite o CNPJ"
+    )
+
+    consultar = col_consulta2.button(
+        "🔎 Consultar",
+        use_container_width=True,
+        key=(
+            f"sisget_fornecedor_"
+            f"btn_consultar_{reset}"
+        )
+    )
+
+    # ========================================================
+    # CONSULTAR
+    # ========================================================
+
+    if consultar:
+
+        if not cnpj_consulta.strip():
+
+            st.warning(
+                "⚠️ Informe o CNPJ."
+            )
+
+            return
+
+        with st.spinner(
+            "Consultando dados do CNPJ..."
+        ):
+
+            dados = consultar_cnpj_fornecedor(
+                cnpj_consulta
+            )
+
+        if dados:
+
+            st.session_state[
+                "sisget_fornecedor_receita"
+            ] = dados
+
+            st.success(
+                "✅ Dados encontrados."
+            )
+
+            st.rerun()
+
+    # ========================================================
+    # RESULTADO DA CONSULTA
+    # ========================================================
+
+    dados_receita = st.session_state.get(
+        "sisget_fornecedor_receita",
+        {}
+    )
+
+    if dados_receita:
+
+        situacao = dados_receita.get(
+            "situacao_receita",
+            ""
+        )
+
+        if str(
+            situacao
+        ).upper() == "ATIVA":
+
+            st.success(
+                f"✅ Situação Cadastral: {situacao}"
+            )
+
+        elif situacao:
+
+            st.warning(
+                f"⚠️ Situação Cadastral: {situacao}"
+            )
+
+        col_info1, col_info2 = st.columns(2)
+
+        col_info1.caption(
+            "Fonte: "
+            + dados_receita.get(
+                "fonte",
+                ""
+            )
+        )
+
+        data_abertura = dados_receita.get(
+            "data_abertura"
+        )
+
+        if data_abertura:
+
+            col_info2.caption(
+                f"Data de abertura: "
+                f"{data_abertura}"
+            )
+
+    st.markdown("---")
 
     # ========================================================
     # FORMULÁRIO
@@ -25217,27 +25687,52 @@ def fornecedor_incluir():
             [
                 "Jurídica",
                 "Física"
-            ]
+            ],
+            index=0
         )
 
         col3, col4 = st.columns(2)
 
         cpf_cnpj = col3.text_input(
-            "CPF / CNPJ *"
+            "CPF / CNPJ *",
+            value=(
+                dados_receita.get(
+                    "cnpj",
+                    ""
+                )
+            )
         )
 
         razao_social = col4.text_input(
-            "Razão Social / Nome *"
+            "Razão Social / Nome *",
+            value=(
+                dados_receita.get(
+                    "razao_social",
+                    ""
+                )
+            )
         )
 
         col5, col6 = st.columns(2)
 
         nome_fantasia = col5.text_input(
-            "Nome Fantasia"
+            "Nome Fantasia",
+            value=(
+                dados_receita.get(
+                    "nome_fantasia",
+                    ""
+                )
+            )
         )
 
         natureza_juridica = col6.text_input(
-            "Natureza Jurídica"
+            "Natureza Jurídica",
+            value=(
+                dados_receita.get(
+                    "natureza_juridica",
+                    ""
+                )
+            )
         )
 
         col7, col8 = st.columns(2)
@@ -25250,17 +25745,45 @@ def fornecedor_incluir():
             "Inscrição Municipal"
         )
 
+        # ====================================================
+        # PORTE
+        # ====================================================
+
+        portes = [
+            "Não informado",
+            "MEI",
+            "ME",
+            "EPP",
+            "Demais"
+        ]
+
+        porte_receita = str(
+            dados_receita.get(
+                "porte",
+                ""
+            )
+        ).upper()
+
+        indice_porte = 0
+
+        if "MICRO EMPRESA" in porte_receita:
+
+            indice_porte = 2
+
+        elif "EMPRESA DE PEQUENO PORTE" in porte_receita:
+
+            indice_porte = 3
+
+        elif porte_receita:
+
+            indice_porte = 4
+
         col9, col10, col11 = st.columns(3)
 
         porte_empresa = col9.selectbox(
             "Porte",
-            [
-                "Não informado",
-                "MEI",
-                "ME",
-                "EPP",
-                "Demais"
-            ]
+            portes,
+            index=indice_porte
         )
 
         optante_simples = col10.selectbox(
@@ -25273,13 +25796,26 @@ def fornecedor_incluir():
         )
 
         cnae = col11.text_input(
-            "CNAE Principal"
+            "CNAE Principal",
+            value=(
+                dados_receita.get(
+                    "cnae",
+                    ""
+                )
+            )
         )
 
         categoria_fornecedor = st.text_input(
             "Categoria / Ramo de Atividade",
+            value=(
+                dados_receita.get(
+                    "categoria_fornecedor",
+                    ""
+                )
+            ),
             placeholder=(
-                "Ex.: Medicamentos, material de expediente, "
+                "Ex.: Medicamentos, "
+                "material de expediente, "
                 "serviços de engenharia..."
             )
         )
@@ -25295,7 +25831,13 @@ def fornecedor_incluir():
         col12, col13 = st.columns(2)
 
         telefone = col12.text_input(
-            "Telefone"
+            "Telefone",
+            value=(
+                dados_receita.get(
+                    "telefone",
+                    ""
+                )
+            )
         )
 
         whatsapp = col13.text_input(
@@ -25305,7 +25847,13 @@ def fornecedor_incluir():
         col14, col15 = st.columns(2)
 
         email = col14.text_input(
-            "E-mail"
+            "E-mail",
+            value=(
+                dados_receita.get(
+                    "email",
+                    ""
+                )
+            )
         )
 
         site = col15.text_input(
@@ -25325,25 +25873,55 @@ def fornecedor_incluir():
         )
 
         cep = col16.text_input(
-            "CEP"
+            "CEP",
+            value=(
+                dados_receita.get(
+                    "cep",
+                    ""
+                )
+            )
         )
 
         logradouro = col17.text_input(
-            "Logradouro"
+            "Logradouro",
+            value=(
+                dados_receita.get(
+                    "logradouro",
+                    ""
+                )
+            )
         )
 
         numero_endereco = col18.text_input(
-            "Número"
+            "Número",
+            value=(
+                dados_receita.get(
+                    "numero",
+                    ""
+                )
+            )
         )
 
         col19, col20 = st.columns(2)
 
         complemento = col19.text_input(
-            "Complemento"
+            "Complemento",
+            value=(
+                dados_receita.get(
+                    "complemento",
+                    ""
+                )
+            )
         )
 
         bairro = col20.text_input(
-            "Bairro"
+            "Bairro",
+            value=(
+                dados_receita.get(
+                    "bairro",
+                    ""
+                )
+            )
         )
 
         col21, col22, col23 = st.columns(
@@ -25351,11 +25929,23 @@ def fornecedor_incluir():
         )
 
         cidade = col21.text_input(
-            "Cidade"
+            "Cidade",
+            value=(
+                dados_receita.get(
+                    "cidade",
+                    ""
+                )
+            )
         )
 
         uf = col22.text_input(
             "UF",
+            value=(
+                dados_receita.get(
+                    "uf",
+                    ""
+                )
+            ),
             max_chars=2
         )
 
@@ -25421,6 +26011,39 @@ def fornecedor_incluir():
         )
 
         # ====================================================
+        # DADOS RECEITA
+        # ====================================================
+
+        st.markdown(
+            "### 🏛️ Dados da Consulta"
+        )
+
+        col31, col32 = st.columns(2)
+
+        situacao_receita = col31.text_input(
+            "Situação Cadastral",
+            value=(
+                dados_receita.get(
+                    "situacao_receita",
+                    ""
+                )
+            ),
+            disabled=True
+        )
+
+        data_abertura = col32.text_input(
+            "Data de Abertura",
+            value=str(
+                dados_receita.get(
+                    "data_abertura",
+                    ""
+                )
+                or ""
+            ),
+            disabled=True
+        )
+
+        # ====================================================
         # OBSERVAÇÕES
         # ====================================================
 
@@ -25446,6 +26069,7 @@ def fornecedor_incluir():
     if salvar:
 
         cpf_cnpj = cpf_cnpj.strip()
+
         razao_social = razao_social.strip()
 
         # ====================================================
@@ -25474,8 +26098,11 @@ def fornecedor_incluir():
 
         existe = _sisget_fetchone(
             """
-            SELECT id
+            SELECT
+                id
+
             FROM fornecedores
+
             WHERE cpf_cnpj = ?
             """,
             (
@@ -25493,7 +26120,7 @@ def fornecedor_incluir():
             return
 
         # ====================================================
-        # GERAR CÓDIGO NOVAMENTE
+        # CÓDIGO NOVAMENTE
         # ====================================================
 
         codigo = sisget_proximo_codigo(
@@ -25502,7 +26129,37 @@ def fornecedor_incluir():
         )
 
         # ====================================================
-        # SALVAR
+        # DADOS DA CONSULTA
+        # ====================================================
+
+        dados_receita = st.session_state.get(
+            "sisget_fornecedor_receita",
+            {}
+        )
+
+        situacao_receita_salvar = (
+            dados_receita.get(
+                "situacao_receita"
+            )
+            or None
+        )
+
+        data_abertura_salvar = (
+            dados_receita.get(
+                "data_abertura"
+            )
+            or None
+        )
+
+        fonte_dados = (
+            dados_receita.get(
+                "fonte"
+            )
+            or None
+        )
+
+        # ====================================================
+        # INSERT
         # ====================================================
 
         sucesso = _sisget_salvar(
@@ -25544,6 +26201,11 @@ def fornecedor_incluir():
                 tipo_chave_pix,
                 chave_pix,
 
+                situacao_receita,
+                data_abertura,
+                consulta_receita_em,
+                fonte_dados_cnpj,
+
                 observacoes,
 
                 ativo,
@@ -25551,10 +26213,10 @@ def fornecedor_incluir():
             )
             VALUES
             (
-                ?, ?, ?, ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, CURRENT_TIMESTAMP, ?, ?,
                 TRUE,
                 CURRENT_TIMESTAMP
             )
@@ -25564,52 +26226,104 @@ def fornecedor_incluir():
                 tipo_pessoa,
                 cpf_cnpj,
                 razao_social,
-                nome_fantasia.strip() or None,
-                natureza_juridica.strip() or None,
-                inscricao_estadual.strip() or None,
-                inscricao_municipal.strip() or None,
+
+                nome_fantasia.strip()
+                or None,
+
+                natureza_juridica.strip()
+                or None,
+
+                inscricao_estadual.strip()
+                or None,
+
+                inscricao_municipal.strip()
+                or None,
 
                 None
-                if porte_empresa == "Não informado"
+                if porte_empresa
+                == "Não informado"
                 else porte_empresa,
 
                 None
-                if optante_simples == "Não informado"
+                if optante_simples
+                == "Não informado"
                 else optante_simples,
 
-                cnae.strip() or None,
-                categoria_fornecedor.strip() or None,
+                cnae.strip()
+                or None,
 
-                telefone.strip() or None,
-                whatsapp.strip() or None,
-                email.strip() or None,
-                site.strip() or None,
+                categoria_fornecedor.strip()
+                or None,
 
-                cep.strip() or None,
-                logradouro.strip() or None,
-                numero_endereco.strip() or None,
-                complemento.strip() or None,
-                bairro.strip() or None,
-                cidade.strip() or None,
-                uf.strip().upper() or None,
-                pais.strip() or None,
+                telefone.strip()
+                or None,
 
-                banco.strip() or None,
-                codigo_banco.strip() or None,
-                agencia.strip() or None,
-                conta.strip() or None,
+                whatsapp.strip()
+                or None,
+
+                email.strip()
+                or None,
+
+                site.strip()
+                or None,
+
+                cep.strip()
+                or None,
+
+                logradouro.strip()
+                or None,
+
+                numero_endereco.strip()
+                or None,
+
+                complemento.strip()
+                or None,
+
+                bairro.strip()
+                or None,
+
+                cidade.strip()
+                or None,
+
+                uf.strip().upper()
+                or None,
+
+                pais.strip()
+                or None,
+
+                banco.strip()
+                or None,
+
+                codigo_banco.strip()
+                or None,
+
+                agencia.strip()
+                or None,
+
+                conta.strip()
+                or None,
 
                 None
-                if tipo_conta == "Não informado"
+                if tipo_conta
+                == "Não informado"
                 else tipo_conta,
 
                 None
-                if tipo_chave_pix == "Não informado"
+                if tipo_chave_pix
+                == "Não informado"
                 else tipo_chave_pix,
 
-                chave_pix.strip() or None,
+                chave_pix.strip()
+                or None,
 
-                observacoes.strip() or None
+                situacao_receita_salvar,
+
+                data_abertura_salvar,
+
+                fonte_dados,
+
+                observacoes.strip()
+                or None
             )
         )
 
@@ -25626,12 +26340,20 @@ def fornecedor_incluir():
                 f"Código: {codigo}"
             )
 
+            # =================================================
+            # LIMPAR CONSULTA
+            # =================================================
+
+            st.session_state.pop(
+                "sisget_fornecedor_receita",
+                None
+            )
+
             st.session_state[
                 "sisget_fornecedor_reset"
             ] += 1
 
             st.rerun()
-
 # ============================================================
 # FORNECEDOR - LOCALIZAR
 # ============================================================
