@@ -25592,70 +25592,58 @@ def fornecedor_incluir():
 
     # ========================================================
     # TIPO DE PESSOA
-    # FORA DO FORM PARA PERMITIR ATUALIZAÇÃO DA TELA
+    # FORA DO FORM, MAS VISUALMENTE DENTRO DO BLOCO
     # ========================================================
 
     st.markdown(
-        "### 🏢 Tipo do Fornecedor"
+        "### 🏢 Dados Gerais"
     )
 
-    tipo_pessoa = st.selectbox(
+    col_tipo1, col_tipo2 = st.columns(
+        [1, 3]
+    )
+
+    col_tipo1.text_input(
+        "Código",
+        value=codigo,
+        disabled=True,
+        key=f"fornecedor_codigo_{reset}"
+    )
+
+    tipo_pessoa = col_tipo2.selectbox(
         "Tipo de Pessoa *",
         [
             "Jurídica",
             "Física"
         ],
-        key=(
-            f"sisget_fornecedor_"
-            f"tipo_pessoa_{reset}"
-        )
+        key=f"fornecedor_tipo_pessoa_{reset}"
     )
 
     # ========================================================
-    # CONSULTA SOMENTE PARA PESSOA JURÍDICA
+    # CNPJ + CONSULTAR
     # ========================================================
 
     if tipo_pessoa == "Jurídica":
 
-        st.markdown(
-            "### 🔎 Consulta de CNPJ"
-        )
-
-        col_consulta1, col_consulta2 = st.columns(
+        col_cnpj1, col_cnpj2 = st.columns(
             [4, 1]
         )
 
-        cnpj_consulta = col_consulta1.text_input(
-            "CNPJ para consulta",
+        cnpj_consulta = col_cnpj1.text_input(
+            "CNPJ *",
             value=(
                 dados_receita.get(
                     "cnpj",
                     ""
                 )
             ),
-            key=(
-                f"sisget_fornecedor_"
-                f"consulta_cnpj_{reset}"
-            ),
-            placeholder="Digite o CNPJ"
+            key=f"fornecedor_cnpj_consulta_{reset}"
         )
 
-        importar_todos_cnaes = st.checkbox(
-            "📚 Importar todos os CNAEs da empresa",
-            value=True,
-            key=(
-                f"sisget_fornecedor_"
-                f"todos_cnaes_{reset}"
-            )
-        )
-
-        consultar = col_consulta2.button(
-            "🔎 Consultar",
+        consultar = col_cnpj2.button(
+            "🔎 Consultar CNPJ",
             use_container_width=True,
-            key=(
-                f"sisget_fornecedor_"
-                f"consultar_cnpj_{reset}"
-            )
+            key=f"fornecedor_consultar_cnpj_{reset}"
         )
 
         if consultar:
@@ -25674,7 +25662,7 @@ def fornecedor_incluir():
 
                 dados = consultar_cnpj_fornecedor(
                     cnpj_consulta,
-                    importar_todos_cnaes
+                    True
                 )
 
             if dados:
@@ -25685,10 +25673,6 @@ def fornecedor_incluir():
 
                 st.rerun()
 
-        # ====================================================
-        # RESULTADO DA CONSULTA
-        # ====================================================
-
         dados_receita = st.session_state.get(
             "sisget_fornecedor_receita",
             {}
@@ -25696,47 +25680,36 @@ def fornecedor_incluir():
 
         if dados_receita:
 
-            situacao = str(
+            situacao_receita = (
                 dados_receita.get(
                     "situacao_receita",
                     ""
                 )
             )
 
-            if situacao.upper() == "ATIVA":
+            if str(
+                situacao_receita
+            ).upper() == "ATIVA":
 
                 st.success(
-                    f"✅ Situação na Receita: "
-                    f"{situacao}"
+                    f"✅ Situação Cadastral: "
+                    f"{situacao_receita}"
                 )
 
-            elif situacao:
+            elif situacao_receita:
 
                 st.warning(
-                    f"⚠️ Situação na Receita: "
-                    f"{situacao}"
-                )
-
-            quantidade_cnaes = len(
-                dados_receita.get(
-                    "lista_cnaes",
-                    []
-                )
-            )
-
-            if quantidade_cnaes:
-
-                st.info(
-                    f"📚 {quantidade_cnaes} CNAE(s) "
-                    f"encontrado(s)."
+                    f"⚠️ Situação Cadastral: "
+                    f"{situacao_receita}"
                 )
 
     else:
 
         # ====================================================
         # PESSOA FÍSICA
-        # NÃO MANTER DADOS DE CONSULTA CNPJ
         # ====================================================
+
+        cnpj_consulta = ""
 
         dados_receita = {}
 
@@ -25751,48 +25724,30 @@ def fornecedor_incluir():
     ):
 
         # ====================================================
-        # DADOS GERAIS
+        # DADOS PRINCIPAIS
         # ====================================================
 
-        st.markdown(
-            "### 🏢 Dados Gerais"
-        )
+        if tipo_pessoa == "Jurídica":
 
-        col1, col2 = st.columns(
-            [1, 3]
-        )
-
-        col1.text_input(
-            "Código",
-            value=codigo,
-            disabled=True
-        )
-
-        col2.text_input(
-            "Tipo de Pessoa",
-            value=tipo_pessoa,
-            disabled=True
-        )
-
-        col3, col4 = st.columns(2)
-
-        cpf_cnpj = col3.text_input(
-            (
-                "CNPJ *"
-                if tipo_pessoa == "Jurídica"
-                else "CPF *"
-            ),
-            value=(
-                dados_receita.get(
-                    "cnpj",
-                    ""
+            cpf_cnpj = st.text_input(
+                "CNPJ *",
+                value=(
+                    dados_receita.get(
+                        "cnpj",
+                        ""
+                    )
                 )
-                if tipo_pessoa == "Jurídica"
-                else ""
             )
-        )
 
-        razao_social = col4.text_input(
+        else:
+
+            cpf_cnpj = st.text_input(
+                "CPF *"
+            )
+
+        col1, col2 = st.columns(2)
+
+        razao_social = col1.text_input(
             (
                 "Razão Social *"
                 if tipo_pessoa == "Jurídica"
@@ -25808,25 +25763,30 @@ def fornecedor_incluir():
             )
         )
 
+        nome_fantasia = col2.text_input(
+            "Nome Fantasia",
+            value=(
+                dados_receita.get(
+                    "nome_fantasia",
+                    ""
+                )
+                if tipo_pessoa == "Jurídica"
+                else ""
+            ),
+            disabled=(
+                tipo_pessoa == "Física"
+            )
+        )
+
         # ====================================================
-        # CAMPOS EMPRESARIAIS
+        # CAMPOS DA PESSOA JURÍDICA
         # ====================================================
 
         if tipo_pessoa == "Jurídica":
 
-            col5, col6 = st.columns(2)
+            col3, col4 = st.columns(2)
 
-            nome_fantasia = col5.text_input(
-                "Nome Fantasia",
-                value=(
-                    dados_receita.get(
-                        "nome_fantasia",
-                        ""
-                    )
-                )
-            )
-
-            natureza_juridica = col6.text_input(
+            natureza_juridica = col3.text_input(
                 "Natureza Jurídica",
                 value=(
                     dados_receita.get(
@@ -25836,19 +25796,30 @@ def fornecedor_incluir():
                 )
             )
 
-            col7, col8 = st.columns(2)
+            col4.text_input(
+                "Situação na Receita",
+                value=(
+                    dados_receita.get(
+                        "situacao_receita",
+                        ""
+                    )
+                ),
+                disabled=True
+            )
 
-            inscricao_estadual = col7.text_input(
+            col5, col6 = st.columns(2)
+
+            inscricao_estadual = col5.text_input(
                 "Inscrição Estadual"
             )
 
-            inscricao_municipal = col8.text_input(
+            inscricao_municipal = col6.text_input(
                 "Inscrição Municipal"
             )
 
-            # ================================================
+            # =================================================
             # PORTE
-            # ================================================
+            # =================================================
 
             portes = [
                 "Não informado",
@@ -25882,15 +25853,15 @@ def fornecedor_incluir():
 
                 indice_porte = 4
 
-            col9, col10 = st.columns(2)
+            col7, col8 = st.columns(2)
 
-            porte_empresa = col9.selectbox(
+            porte_empresa = col7.selectbox(
                 "Porte",
                 portes,
                 index=indice_porte
             )
 
-            optante_simples = col10.selectbox(
+            optante_simples = col8.selectbox(
                 "Simples Nacional",
                 [
                     "Não informado",
@@ -25899,9 +25870,9 @@ def fornecedor_incluir():
                 ]
             )
 
-            # ================================================
-            # CNAE
-            # ================================================
+            # =================================================
+            # CNAES
+            # =================================================
 
             st.markdown(
                 "### 📚 Atividades Econômicas"
@@ -25925,12 +25896,7 @@ def fornecedor_incluir():
                         ""
                     )
                 ),
-                height=180,
-                help=(
-                    "Inclui o CNAE principal e "
-                    "os CNAEs secundários retornados "
-                    "pela consulta."
-                )
+                height=180
             )
 
             categoria_fornecedor = st.text_input(
@@ -25945,11 +25911,6 @@ def fornecedor_incluir():
 
         else:
 
-            # ================================================
-            # PESSOA FÍSICA
-            # ================================================
-
-            nome_fantasia = ""
             natureza_juridica = ""
             inscricao_estadual = ""
             inscricao_municipal = ""
@@ -25959,11 +25920,7 @@ def fornecedor_incluir():
             todos_cnaes = ""
 
             categoria_fornecedor = st.text_input(
-                "Categoria / Atividade",
-                placeholder=(
-                    "Ex.: Prestador de serviço, "
-                    "consultor..."
-                )
+                "Categoria / Atividade"
             )
 
         # ====================================================
@@ -25974,9 +25931,9 @@ def fornecedor_incluir():
             "### ☎️ Contato"
         )
 
-        col11, col12 = st.columns(2)
+        col9, col10 = st.columns(2)
 
-        telefone = col11.text_input(
+        telefone = col9.text_input(
             "Telefone",
             value=(
                 dados_receita.get(
@@ -25988,13 +25945,13 @@ def fornecedor_incluir():
             )
         )
 
-        whatsapp = col12.text_input(
+        whatsapp = col10.text_input(
             "WhatsApp"
         )
 
-        col13, col14 = st.columns(2)
+        col11, col12 = st.columns(2)
 
-        email = col13.text_input(
+        email = col11.text_input(
             "E-mail",
             value=(
                 dados_receita.get(
@@ -26006,7 +25963,7 @@ def fornecedor_incluir():
             )
         )
 
-        site = col14.text_input(
+        site = col12.text_input(
             "Site"
         )
 
@@ -26018,11 +25975,11 @@ def fornecedor_incluir():
             "### 📍 Endereço"
         )
 
-        col15, col16, col17 = st.columns(
+        col13, col14, col15 = st.columns(
             [1, 3, 1]
         )
 
-        cep = col15.text_input(
+        cep = col13.text_input(
             "CEP",
             value=(
                 dados_receita.get(
@@ -26034,7 +25991,7 @@ def fornecedor_incluir():
             )
         )
 
-        logradouro = col16.text_input(
+        logradouro = col14.text_input(
             "Logradouro",
             value=(
                 dados_receita.get(
@@ -26046,7 +26003,7 @@ def fornecedor_incluir():
             )
         )
 
-        numero_endereco = col17.text_input(
+        numero_endereco = col15.text_input(
             "Número",
             value=(
                 dados_receita.get(
@@ -26058,9 +26015,9 @@ def fornecedor_incluir():
             )
         )
 
-        col18, col19 = st.columns(2)
+        col16, col17 = st.columns(2)
 
-        complemento = col18.text_input(
+        complemento = col16.text_input(
             "Complemento",
             value=(
                 dados_receita.get(
@@ -26072,7 +26029,7 @@ def fornecedor_incluir():
             )
         )
 
-        bairro = col19.text_input(
+        bairro = col17.text_input(
             "Bairro",
             value=(
                 dados_receita.get(
@@ -26084,11 +26041,11 @@ def fornecedor_incluir():
             )
         )
 
-        col20, col21, col22 = st.columns(
+        col18, col19, col20 = st.columns(
             [2, 1, 1]
         )
 
-        cidade = col20.text_input(
+        cidade = col18.text_input(
             "Cidade",
             value=(
                 dados_receita.get(
@@ -26100,7 +26057,7 @@ def fornecedor_incluir():
             )
         )
 
-        uf = col21.text_input(
+        uf = col19.text_input(
             "UF",
             value=(
                 dados_receita.get(
@@ -26113,7 +26070,7 @@ def fornecedor_incluir():
             max_chars=2
         )
 
-        pais = col22.text_input(
+        pais = col20.text_input(
             "País",
             value="Brasil"
         )
@@ -26126,27 +26083,27 @@ def fornecedor_incluir():
             "### 🏦 Dados Bancários"
         )
 
-        col23, col24 = st.columns(2)
+        col21, col22 = st.columns(2)
 
-        banco = col23.text_input(
+        banco = col21.text_input(
             "Banco"
         )
 
-        codigo_banco = col24.text_input(
+        codigo_banco = col22.text_input(
             "Código do Banco"
         )
 
-        col25, col26, col27 = st.columns(3)
+        col23, col24, col25 = st.columns(3)
 
-        agencia = col25.text_input(
+        agencia = col23.text_input(
             "Agência"
         )
 
-        conta = col26.text_input(
+        conta = col24.text_input(
             "Conta"
         )
 
-        tipo_conta = col27.selectbox(
+        tipo_conta = col25.selectbox(
             "Tipo da Conta",
             [
                 "Não informado",
@@ -26156,9 +26113,9 @@ def fornecedor_incluir():
             ]
         )
 
-        col28, col29 = st.columns(2)
+        col26, col27 = st.columns(2)
 
-        tipo_chave_pix = col28.selectbox(
+        tipo_chave_pix = col26.selectbox(
             "Tipo da Chave Pix",
             [
                 "Não informado",
@@ -26170,47 +26127,9 @@ def fornecedor_incluir():
             ]
         )
 
-        chave_pix = col29.text_input(
+        chave_pix = col27.text_input(
             "Chave Pix"
         )
-
-        # ====================================================
-        # DADOS DA CONSULTA
-        # ====================================================
-
-        if (
-            tipo_pessoa == "Jurídica"
-            and dados_receita
-        ):
-
-            st.markdown(
-                "### 🏛️ Consulta Cadastral"
-            )
-
-            col30, col31 = st.columns(2)
-
-            col30.text_input(
-                "Situação Cadastral",
-                value=(
-                    dados_receita.get(
-                        "situacao_receita",
-                        ""
-                    )
-                ),
-                disabled=True
-            )
-
-            col31.text_input(
-                "Data de Abertura",
-                value=str(
-                    dados_receita.get(
-                        "data_abertura",
-                        ""
-                    )
-                    or ""
-                ),
-                disabled=True
-            )
 
         # ====================================================
         # OBSERVAÇÕES
@@ -26243,11 +26162,7 @@ def fornecedor_incluir():
         if not cpf_cnpj:
 
             st.warning(
-                (
-                    "⚠️ Informe o CNPJ."
-                    if tipo_pessoa == "Jurídica"
-                    else "⚠️ Informe o CPF."
-                )
+                "⚠️ Informe CPF/CNPJ."
             )
 
             return
@@ -26255,18 +26170,10 @@ def fornecedor_incluir():
         if not razao_social:
 
             st.warning(
-                (
-                    "⚠️ Informe a Razão Social."
-                    if tipo_pessoa == "Jurídica"
-                    else "⚠️ Informe o Nome."
-                )
+                "⚠️ Informe Razão Social/Nome."
             )
 
             return
-
-        # ====================================================
-        # DUPLICIDADE
-        # ====================================================
 
         existe = _sisget_fetchone(
             """
@@ -26282,8 +26189,8 @@ def fornecedor_incluir():
         if existe:
 
             st.warning(
-                "⚠️ Já existe fornecedor cadastrado "
-                "com este CPF/CNPJ."
+                "⚠️ Já existe fornecedor com "
+                "este CPF/CNPJ."
             )
 
             return
@@ -26292,10 +26199,6 @@ def fornecedor_incluir():
             "fornecedores",
             tamanho=6
         )
-
-        # ====================================================
-        # DADOS RECEITA
-        # ====================================================
 
         situacao_receita = None
         data_abertura = None
@@ -26323,10 +26226,6 @@ def fornecedor_incluir():
                 )
                 or None
             )
-
-        # ====================================================
-        # INSERT
-        # ====================================================
 
         sucesso = _sisget_salvar(
             """
@@ -26493,16 +26392,12 @@ def fornecedor_incluir():
             )
         )
 
-        # ====================================================
-        # SUCESSO
-        # ====================================================
-
         if sucesso:
 
             st.session_state[
                 "sisget_mensagem_fornecedor"
             ] = (
-                f"✅ Fornecedor cadastrado com sucesso. "
+                f"✅ Fornecedor cadastrado. "
                 f"Código: {codigo}"
             )
 
@@ -26516,7 +26411,6 @@ def fornecedor_incluir():
             ] += 1
 
             st.rerun()
-
 def fornecedor_localizar():
 
     df = _sisget_dataframe(
