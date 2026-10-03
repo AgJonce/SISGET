@@ -27374,7 +27374,7 @@ def fornecedor_representantes(
     ) = fornecedor
 
     # ========================================================
-    # SOMENTE FORNECEDOR PESSOA JURÍDICA
+    # SOMENTE PESSOA JURÍDICA
     # ========================================================
 
     if tipo_pessoa_fornecedor != "Jurídica":
@@ -27386,6 +27386,10 @@ def fornecedor_representantes(
 
         return
 
+    # ========================================================
+    # CABEÇALHO
+    # ========================================================
+
     st.info(
         f"🏢 {codigo_fornecedor} - "
         f"{razao_social} | "
@@ -27393,13 +27397,45 @@ def fornecedor_representantes(
     )
 
     # ========================================================
-    # RESET
+    # ESTADOS
     # ========================================================
+
+    chave_tela = (
+        f"sisget_representante_tela_"
+        f"{fornecedor_id}"
+    )
+
+    chave_id = (
+        f"sisget_representante_id_"
+        f"{fornecedor_id}"
+    )
 
     chave_reset = (
         f"sisget_representante_reset_"
         f"{fornecedor_id}"
     )
+
+    chave_pf = (
+        f"sisget_representante_pf_"
+        f"{fornecedor_id}"
+    )
+
+    chave_pesquisa = (
+        f"sisget_representante_pesquisa_"
+        f"{fornecedor_id}"
+    )
+
+    if chave_tela not in st.session_state:
+
+        st.session_state[
+            chave_tela
+        ] = "lista"
+
+    if chave_id not in st.session_state:
+
+        st.session_state[
+            chave_id
+        ] = None
 
     if chave_reset not in st.session_state:
 
@@ -27407,37 +27443,11 @@ def fornecedor_representantes(
             chave_reset
         ] = 0
 
-    reset = st.session_state[
-        chave_reset
-    ]
-
-    # ========================================================
-    # PESSOA FÍSICA PESQUISADA
-    # ========================================================
-
-    chave_pf = (
-        f"sisget_representante_pf_"
-        f"{fornecedor_id}"
-    )
-
     if chave_pf not in st.session_state:
 
         st.session_state[
             chave_pf
         ] = {}
-
-    dados_pf = st.session_state[
-        chave_pf
-    ]
-
-    # ========================================================
-    # ESTADO DA PESQUISA
-    # ========================================================
-
-    chave_pesquisa = (
-        f"sisget_representante_pesquisa_"
-        f"{fornecedor_id}"
-    )
 
     if chave_pesquisa not in st.session_state:
 
@@ -27445,20 +27455,17 @@ def fornecedor_representantes(
             chave_pesquisa
         ] = False
 
-    # ========================================================
-    # CÓDIGO
-    # ========================================================
+    tela = st.session_state[
+        chave_tela
+    ]
 
-    codigo = sisget_proximo_codigo(
-        "fornecedores_representantes",
-        tamanho=3,
-        filtro_sql=(
-            "AND fornecedor_id = ?"
-        ),
-        parametros=(
-            fornecedor_id,
-        )
-    )
+    reset = st.session_state[
+        chave_reset
+    ]
+
+    dados_pf = st.session_state[
+        chave_pf
+    ]
 
     # ========================================================
     # OPÇÕES
@@ -27480,579 +27487,164 @@ def fornecedor_representantes(
     ]
 
     # ========================================================
-    # INCLUIR
+    # TELA - LISTA
     # ========================================================
 
-    st.markdown(
-        "### ➕ Incluir Representante"
-    )
+    if tela == "lista":
 
-    # ========================================================
-    # IDENTIFICAÇÃO
-    # FORA DO FORM PARA PERMITIR O BOTÃO PESQUISAR
-    # ========================================================
-
-    st.markdown(
-        "#### 👤 Identificação"
-    )
-
-    col1, col2, col3 = st.columns(
-        [1, 1.5, 4]
-    )
-
-    col1.text_input(
-        "Código",
-        value=codigo,
-        disabled=True,
-        key=(
-            f"rep_codigo_"
-            f"{fornecedor_id}_"
-            f"{reset}"
-        )
-    )
-
-    col2.text_input(
-        "Tipo de Pessoa",
-        value="Física",
-        disabled=True,
-        key=(
-            f"rep_tipo_pessoa_"
-            f"{fornecedor_id}_"
-            f"{reset}"
-        )
-    )
-
-    nome = col3.text_input(
-        "Nome Completo *",
-        value=(
-            dados_pf.get(
-                "nome",
-                ""
-            )
-        ),
-        key=(
-            f"rep_nome_"
-            f"{fornecedor_id}_"
-            f"{reset}"
-        )
-    )
-
-    # ========================================================
-    # CPF + PESQUISAR + CARGO
-    # ========================================================
-
-    col4, col5, col6 = st.columns(
-        [3, 1.5, 3]
-    )
-
-    cpf = col4.text_input(
-        "CPF *",
-        value=(
-            dados_pf.get(
-                "cpf",
-                ""
-            )
-        ),
-        max_chars=14,
-        key=(
-            f"rep_cpf_"
-            f"{fornecedor_id}_"
-            f"{reset}"
-        )
-    )
-
-    pesquisar = col5.button(
-        "🔎 Pesquisar",
-        use_container_width=True,
-        key=(
-            f"rep_pesquisar_"
-            f"{fornecedor_id}_"
-            f"{reset}"
-        )
-    )
-
-    cargo = col6.text_input(
-        "Cargo / Função",
-        key=(
-            f"rep_cargo_"
-            f"{fornecedor_id}_"
-            f"{reset}"
-        )
-    )
-
-    # ========================================================
-    # ABRIR PESQUISA
-    # ========================================================
-
-    if pesquisar:
-
-        st.session_state[
-            chave_pesquisa
-        ] = True
-
-        st.rerun()
-
-    # ========================================================
-    # PESQUISAR PESSOA FÍSICA CADASTRADA
-    # ========================================================
-
-    if st.session_state[
-        chave_pesquisa
-    ]:
-
-        st.markdown("---")
-
-        st.markdown(
-            "#### 🔎 Pessoas Físicas Cadastradas"
+        col1, col2 = st.columns(
+            [4, 1]
         )
 
-        filtro_pessoa = st.text_input(
-            "Pesquisar por Nome ou CPF",
-            key=(
-                f"rep_filtro_pf_"
-                f"{fornecedor_id}"
-            ),
-            placeholder=(
-                "Digite parte do nome ou CPF"
-            )
-        )
+        with col1:
 
-        filtro_limpo = (
-            filtro_pessoa.strip()
-        )
-
-        if filtro_limpo:
-
-            filtro_cpf = re.sub(
-                r"\D",
-                "",
-                filtro_limpo
+            st.markdown(
+                "### 👥 Pessoas Vinculadas"
             )
 
-            pessoas = _sisget_fetch(
-                """
-                SELECT
-                    id,
-                    codigo,
-                    cpf_cnpj,
-                    razao_social,
-                    telefone,
-                    whatsapp,
-                    email
-                FROM fornecedores
-                WHERE ativo = TRUE
-                  AND tipo_pessoa = 'Física'
-                  AND
-                  (
-                      UPPER(razao_social)
-                          LIKE UPPER(?)
+        with col2:
 
-                      OR
-
-                      REGEXP_REPLACE(
-                          COALESCE(cpf_cnpj, ''),
-                          '[^0-9]',
-                          '',
-                          'g'
-                      )
-                          LIKE ?
-                  )
-                ORDER BY
-                    razao_social,
-                    codigo
-                """,
-                (
-                    f"%{filtro_limpo}%",
-                    f"%{filtro_cpf}%"
-                )
-            )
-
-        else:
-
-            pessoas = _sisget_fetch(
-                """
-                SELECT
-                    id,
-                    codigo,
-                    cpf_cnpj,
-                    razao_social,
-                    telefone,
-                    whatsapp,
-                    email
-                FROM fornecedores
-                WHERE ativo = TRUE
-                  AND tipo_pessoa = 'Física'
-                ORDER BY
-                    razao_social,
-                    codigo
-                """
-            )
-
-        # ====================================================
-        # NENHUMA PESSOA
-        # ====================================================
-
-        if not pessoas:
-
-            st.info(
-                "Nenhuma Pessoa Física encontrada."
-            )
-
-            if st.button(
-                "❌ Fechar Pesquisa",
-                key=(
-                    f"rep_fechar_pesquisa_"
-                    f"{fornecedor_id}"
-                )
-            ):
-
-                st.session_state[
-                    chave_pesquisa
-                ] = False
-
-                st.rerun()
-
-        else:
-
-            mapa_pessoas = {}
-
-            for registro in pessoas:
-
-                (
-                    pessoa_id,
-                    codigo_pf,
-                    cpf_pf,
-                    nome_pf,
-                    telefone_pf,
-                    whatsapp_pf,
-                    email_pf
-                ) = registro
-
-                descricao = (
-                    f"{codigo_pf} - "
-                    f"{nome_pf} - "
-                    f"{cpf_pf or ''}"
-                )
-
-                mapa_pessoas[
-                    descricao
-                ] = {
-
-                    "id": pessoa_id,
-
-                    "nome": (
-                        nome_pf
-                        or ""
-                    ),
-
-                    "cpf": (
-                        cpf_pf
-                        or ""
-                    ),
-
-                    "telefone": (
-                        telefone_pf
-                        or ""
-                    ),
-
-                    "whatsapp": (
-                        whatsapp_pf
-                        or ""
-                    ),
-
-                    "email": (
-                        email_pf
-                        or ""
-                    )
-                }
-
-            pessoa_selecionada = st.selectbox(
-                "Selecione a Pessoa Física",
-                list(
-                    mapa_pessoas.keys()
-                ),
-                key=(
-                    f"rep_pf_selecionada_"
-                    f"{fornecedor_id}"
-                )
-            )
-
-            col_busca1, col_busca2 = st.columns(
-                2
-            )
-
-            usar_pessoa = col_busca1.button(
-                "✅ Usar Pessoa",
+            adicionar = st.button(
+                "➕ Adicionar Pessoa",
+                use_container_width=True,
                 type="primary",
-                use_container_width=True,
                 key=(
-                    f"rep_usar_pf_"
+                    f"btn_adicionar_representante_"
                     f"{fornecedor_id}"
                 )
             )
 
-            cancelar_pesquisa = col_busca2.button(
-                "❌ Cancelar",
-                use_container_width=True,
-                key=(
-                    f"rep_cancelar_pf_"
-                    f"{fornecedor_id}"
-                )
-            )
+        if adicionar:
 
-            # ================================================
-            # USAR PESSOA
-            # ================================================
+            st.session_state[
+                chave_pf
+            ] = {}
 
-            if usar_pessoa:
+            st.session_state[
+                chave_pesquisa
+            ] = False
 
-                st.session_state[
-                    chave_pf
-                ] = mapa_pessoas[
-                    pessoa_selecionada
-                ]
+            st.session_state[
+                chave_tela
+            ] = "incluir"
 
-                st.session_state[
-                    chave_pesquisa
-                ] = False
-
-                # NOVAS CHAVES DOS WIDGETS
-                st.session_state[
-                    chave_reset
-                ] += 1
-
-                st.rerun()
-
-            # ================================================
-            # CANCELAR
-            # ================================================
-
-            if cancelar_pesquisa:
-
-                st.session_state[
-                    chave_pesquisa
-                ] = False
-
-                st.rerun()
-
-        st.markdown("---")
-
-    # ========================================================
-    # ATUALIZAR DADOS PF
-    # ========================================================
-
-    dados_pf = st.session_state.get(
-        chave_pf,
-        {}
-    )
-
-    # ========================================================
-    # FORMULÁRIO
-    # ========================================================
-
-    with st.form(
-        f"form_representante_"
-        f"{fornecedor_id}_"
-        f"{reset}"
-    ):
+            st.rerun()
 
         # ====================================================
-        # QUALIFICAÇÃO
+        # LISTAGEM
         # ====================================================
 
-        st.markdown(
-            "#### 📋 Qualificação"
-        )
-
-        tipo_representante = st.selectbox(
-            "Tipo / Qualificação *",
-            tipos_representante
-        )
-
-        # ====================================================
-        # REGISTRO
-        # ====================================================
-
-        st.markdown(
-            "#### 🏛️ Registro"
-        )
-
-        col7, col8 = st.columns(2)
-
-        tipo_registro = col7.selectbox(
-            "Tipo do Registro *",
-            tipos_registro
-        )
-
-        numero_registro = col8.text_input(
-            "Número do Registro *"
-        )
-
-        # ====================================================
-        # CONTATO
-        # ====================================================
-
-        st.markdown(
-            "#### ☎️ Contato"
-        )
-
-        col9, col10 = st.columns(2)
-
-        telefone = col9.text_input(
-            "Telefone",
-            value=(
-                dados_pf.get(
-                    "telefone",
-                    ""
-                )
-            )
-        )
-
-        whatsapp = col10.text_input(
-            "WhatsApp",
-            value=(
-                dados_pf.get(
-                    "whatsapp",
-                    ""
-                )
-            )
-        )
-
-        email = st.text_input(
-            "E-mail",
-            value=(
-                dados_pf.get(
-                    "email",
-                    ""
-                )
-            )
-        )
-
-        # ====================================================
-        # CONTROLE
-        # ====================================================
-
-        st.markdown(
-            "#### ⚙️ Controle"
-        )
-
-        col11, col12 = st.columns(2)
-
-        principal = col11.checkbox(
-            "Representante Principal"
-        )
-
-        autorizado_assinar = col12.checkbox(
-            "Autorizado a Assinar Documentos"
-        )
-
-        observacao = st.text_area(
-            "Observações",
-            height=100
-        )
-
-        salvar = st.form_submit_button(
-            "💾 Salvar Representante",
-            type="primary",
-            use_container_width=True
-        )
-
-    # ========================================================
-    # SALVAR
-    # ========================================================
-
-    if salvar:
-
-        nome = nome.strip()
-
-        cpf_limpo = re.sub(
-            r"\D",
-            "",
-            cpf
-        )
-
-        numero_registro = (
-            numero_registro.strip()
-        )
-
-        # ====================================================
-        # VALIDAÇÃO
-        # ====================================================
-
-        if not nome:
-
-            st.warning(
-                "⚠️ Informe o nome do representante."
-            )
-
-            return
-
-        if len(cpf_limpo) != 11:
-
-            st.warning(
-                "⚠️ Informe um CPF com 11 números."
-            )
-
-            return
-
-        if not numero_registro:
-
-            st.warning(
-                "⚠️ Informe o número do registro."
-            )
-
-            return
-
-        # ====================================================
-        # DUPLICIDADE
-        # ====================================================
-
-        duplicado = _sisget_fetchone(
+        df = _sisget_dataframe(
             """
-            SELECT id
+            SELECT
+                id,
+
+                codigo AS "Código",
+
+                nome AS "Nome",
+
+                cpf AS "CPF",
+
+                tipo_representante
+                    AS "Qualificação",
+
+                cargo
+                    AS "Cargo / Função",
+
+                tipo_registro
+                    AS "Tipo Registro",
+
+                numero_registro
+                    AS "Nº Registro",
+
+                CASE
+                    WHEN principal = TRUE
+                    THEN '⭐ Sim'
+                    ELSE 'Não'
+                END AS "Responsável",
+
+                CASE
+                    WHEN autorizado_assinar = TRUE
+                    THEN 'Sim'
+                    ELSE 'Não'
+                END AS "Pode Assinar",
+
+                CASE
+                    WHEN ativo = TRUE
+                    THEN 'Ativo'
+                    ELSE 'Inativo'
+                END AS "Situação"
+
             FROM fornecedores_representantes
+
             WHERE fornecedor_id = ?
-              AND REGEXP_REPLACE(
-                    COALESCE(cpf, ''),
-                    '[^0-9]',
-                    '',
-                    'g'
-                  ) = ?
+
+            ORDER BY
+                principal DESC,
+                nome
             """,
             (
                 fornecedor_id,
-                cpf_limpo
             )
         )
 
-        if duplicado:
+        if df.empty:
 
-            st.warning(
-                "⚠️ Esta pessoa já está cadastrada "
-                "para este fornecedor."
+            st.info(
+                "Nenhuma pessoa vinculada a este fornecedor."
             )
 
             return
 
-        # ====================================================
-        # PRINCIPAL
-        # ====================================================
+        st.caption(
+            "Dê duplo clique em uma pessoa para alterar."
+        )
 
-        if principal:
+        representante_id = sisget_grid_localizar(
+            df=df,
+            chave=(
+                f"representantes_"
+                f"{fornecedor_id}"
+            ),
+            coluna_id="id",
+            altura=450
+        )
 
-            _sisget_salvar(
-                """
-                UPDATE fornecedores_representantes
-                SET principal = FALSE
-                WHERE fornecedor_id = ?
-                """,
-                (
-                    fornecedor_id,
-                )
+        if representante_id:
+
+            st.session_state[
+                chave_id
+            ] = representante_id
+
+            st.session_state[
+                chave_tela
+            ] = "alterar"
+
+            st.rerun()
+
+    # ========================================================
+    # TELA - INCLUIR
+    # ========================================================
+
+    elif tela == "incluir":
+
+        sisget_cabecalho_tela(
+            "➕ Adicionar Pessoa",
+            voltar=lambda: (
+                st.session_state.__setitem__(
+                    chave_tela,
+                    "lista"
+                ),
+                st.rerun()
+            ),
+            chave=(
+                f"representante_incluir_"
+                f"{fornecedor_id}"
             )
+        )
 
         # ====================================================
-        # NOVO CÓDIGO
+        # CÓDIGO
         # ====================================================
 
         codigo = sisget_proximo_codigo(
@@ -28067,235 +27659,682 @@ def fornecedor_representantes(
         )
 
         # ====================================================
-        # INSERT
+        # IDENTIFICAÇÃO
         # ====================================================
 
-        sucesso = _sisget_salvar(
-            """
-            INSERT INTO fornecedores_representantes
-            (
-                fornecedor_id,
-                codigo,
-                nome,
-                cpf,
-                cargo,
-                tipo_representante,
-                tipo_registro,
-                numero_registro,
-                telefone,
-                whatsapp,
-                email,
-                principal,
-                autorizado_assinar,
-                observacao,
-                ativo,
-                criado_em
-            )
-            VALUES
-            (
-                ?, ?,
-                ?, ?, ?,
-                ?,
-                ?, ?,
-                ?, ?, ?,
-                ?, ?,
-                ?,
-                TRUE,
-                CURRENT_TIMESTAMP
-            )
-            """,
-            (
-                fornecedor_id,
-                codigo,
-                nome,
-                cpf_limpo,
+        st.markdown(
+            "### 👤 Pessoa Física"
+        )
 
-                cargo.strip()
-                or None,
+        col1, col2 = st.columns(
+            [1, 4]
+        )
 
-                tipo_representante,
-
-                tipo_registro,
-                numero_registro,
-
-                telefone.strip()
-                or None,
-
-                whatsapp.strip()
-                or None,
-
-                email.strip()
-                or None,
-
-                principal,
-                autorizado_assinar,
-
-                observacao.strip()
-                or None
+        col1.text_input(
+            "Código",
+            value=codigo,
+            disabled=True,
+            key=(
+                f"rep_codigo_"
+                f"{fornecedor_id}_"
+                f"{reset}"
             )
         )
 
-        if sucesso:
+        nome = col2.text_input(
+            "Nome Completo *",
+            value=(
+                dados_pf.get(
+                    "nome",
+                    ""
+                )
+            ),
+            key=(
+                f"rep_nome_"
+                f"{fornecedor_id}_"
+                f"{reset}"
+            )
+        )
 
-            # ================================================
-            # LIMPAR PF PESQUISADA
-            # ================================================
+        # ====================================================
+        # CPF + PESQUISAR + CARGO
+        # ====================================================
 
-            st.session_state[
-                chave_pf
-            ] = {}
+        col3, col4, col5 = st.columns(
+            [3, 1.3, 3]
+        )
+
+        cpf = col3.text_input(
+            "CPF *",
+            value=(
+                dados_pf.get(
+                    "cpf",
+                    ""
+                )
+            ),
+            max_chars=14,
+            key=(
+                f"rep_cpf_"
+                f"{fornecedor_id}_"
+                f"{reset}"
+            )
+        )
+
+        pesquisar = col4.button(
+            "🔎 Pesquisar",
+            use_container_width=True,
+            key=(
+                f"rep_pesquisar_"
+                f"{fornecedor_id}_"
+                f"{reset}"
+            )
+        )
+
+        cargo = col5.text_input(
+            "Cargo / Função",
+            key=(
+                f"rep_cargo_"
+                f"{fornecedor_id}_"
+                f"{reset}"
+            )
+        )
+
+        if pesquisar:
 
             st.session_state[
                 chave_pesquisa
-            ] = False
-
-            st.session_state[
-                chave_reset
-            ] += 1
-
-            st.success(
-                "✅ Representante cadastrado com sucesso."
-            )
+            ] = True
 
             st.rerun()
 
-    # ========================================================
-    # LISTAGEM
-    # ========================================================
+        # ====================================================
+        # PESQUISA DE PESSOA FÍSICA
+        # ====================================================
 
-    st.markdown("---")
+        if st.session_state[
+            chave_pesquisa
+        ]:
 
-    st.markdown(
-        "### 👥 Representantes Cadastrados"
-    )
+            with st.container(
+                border=True
+            ):
 
-    df = _sisget_dataframe(
-        """
-        SELECT
-            id,
+                st.markdown(
+                    "#### 🔎 Localizar Pessoa Física"
+                )
 
-            codigo AS "Código",
+                filtro = st.text_input(
+                    "Pesquisar por Nome ou CPF",
+                    key=(
+                        f"filtro_pf_"
+                        f"{fornecedor_id}"
+                    )
+                )
 
-            nome AS "Nome",
+                parametros = []
 
-            cpf AS "CPF",
+                sql = """
+                    SELECT
+                        id,
+                        codigo,
+                        cpf_cnpj,
+                        razao_social,
+                        telefone,
+                        whatsapp,
+                        email
 
-            tipo_representante
-                AS "Qualificação",
+                    FROM fornecedores
 
-            tipo_registro
-                AS "Tipo Registro",
+                    WHERE ativo = TRUE
+                      AND tipo_pessoa = 'Física'
+                """
 
-            numero_registro
-                AS "Número Registro",
+                if filtro.strip():
 
-            cargo AS "Cargo",
+                    filtro_cpf = re.sub(
+                        r"\D",
+                        "",
+                        filtro
+                    )
 
-            telefone AS "Telefone",
+                    sql += """
+                        AND
+                        (
+                            UPPER(
+                                razao_social
+                            )
+                            LIKE UPPER(?)
 
-            whatsapp AS "WhatsApp",
+                            OR
 
-            email AS "E-mail",
+                            REGEXP_REPLACE(
+                                COALESCE(
+                                    cpf_cnpj,
+                                    ''
+                                ),
+                                '[^0-9]',
+                                '',
+                                'g'
+                            )
+                            LIKE ?
+                        )
+                    """
 
-            CASE
-                WHEN principal = TRUE
-                THEN 'Sim'
-                ELSE 'Não'
-            END AS "Principal",
+                    parametros.extend(
+                        [
+                            f"%{filtro.strip()}%",
+                            f"%{filtro_cpf}%"
+                        ]
+                    )
 
-            CASE
-                WHEN autorizado_assinar = TRUE
-                THEN 'Sim'
-                ELSE 'Não'
-            END AS "Pode Assinar",
+                sql += """
+                    ORDER BY
+                        razao_social
+                """
 
-            CASE
-                WHEN ativo = TRUE
-                THEN 'Ativo'
-                ELSE 'Inativo'
-            END AS "Situação"
+                pessoas = _sisget_fetch(
+                    sql,
+                    tuple(
+                        parametros
+                    )
+                )
 
-        FROM fornecedores_representantes
+                if pessoas:
 
-        WHERE fornecedor_id = ?
+                    mapa_pessoas = {}
 
-        ORDER BY
-            principal DESC,
-            nome
-        """,
-        (
-            fornecedor_id,
+                    for registro in pessoas:
+
+                        (
+                            pessoa_id,
+                            codigo_pf,
+                            cpf_pf,
+                            nome_pf,
+                            telefone_pf,
+                            whatsapp_pf,
+                            email_pf
+                        ) = registro
+
+                        descricao = (
+                            f"{codigo_pf} - "
+                            f"{nome_pf} - "
+                            f"{cpf_pf or ''}"
+                        )
+
+                        mapa_pessoas[
+                            descricao
+                        ] = {
+
+                            "id": pessoa_id,
+
+                            "nome": (
+                                nome_pf
+                                or ""
+                            ),
+
+                            "cpf": (
+                                cpf_pf
+                                or ""
+                            ),
+
+                            "telefone": (
+                                telefone_pf
+                                or ""
+                            ),
+
+                            "whatsapp": (
+                                whatsapp_pf
+                                or ""
+                            ),
+
+                            "email": (
+                                email_pf
+                                or ""
+                            )
+                        }
+
+                    pessoa_selecionada = st.selectbox(
+                        "Pessoa Física",
+                        list(
+                            mapa_pessoas.keys()
+                        ),
+                        key=(
+                            f"rep_pf_select_"
+                            f"{fornecedor_id}"
+                        )
+                    )
+
+                    col6, col7 = st.columns(2)
+
+                    selecionar = col6.button(
+                        "✅ Selecionar Pessoa",
+                        type="primary",
+                        use_container_width=True,
+                        key=(
+                            f"rep_usar_pf_"
+                            f"{fornecedor_id}"
+                        )
+                    )
+
+                    fechar = col7.button(
+                        "❌ Fechar",
+                        use_container_width=True,
+                        key=(
+                            f"rep_fechar_pf_"
+                            f"{fornecedor_id}"
+                        )
+                    )
+
+                    if selecionar:
+
+                        st.session_state[
+                            chave_pf
+                        ] = mapa_pessoas[
+                            pessoa_selecionada
+                        ]
+
+                        st.session_state[
+                            chave_pesquisa
+                        ] = False
+
+                        st.session_state[
+                            chave_reset
+                        ] += 1
+
+                        st.rerun()
+
+                    if fechar:
+
+                        st.session_state[
+                            chave_pesquisa
+                        ] = False
+
+                        st.rerun()
+
+                else:
+
+                    st.info(
+                        "Nenhuma Pessoa Física encontrada."
+                    )
+
+        # ====================================================
+        # RECARREGAR PF
+        # ====================================================
+
+        dados_pf = st.session_state.get(
+            chave_pf,
+            {}
         )
-    )
 
-    if df.empty:
-
-        st.info(
-            "Nenhum representante cadastrado."
-        )
-
-        return
-
-    st.dataframe(
-        df,
-        use_container_width=True,
-        hide_index=True
-    )
-
-    # ========================================================
-    # ALTERAÇÃO
-    # ========================================================
-
-    representantes = _sisget_fetch(
-        """
-        SELECT
-            id,
-            codigo,
-            nome
-        FROM fornecedores_representantes
-        WHERE fornecedor_id = ?
-        ORDER BY
-            principal DESC,
-            nome
-        """,
-        (
-            fornecedor_id,
-        )
-    )
-
-    mapa_representantes = {}
-
-    for registro in representantes:
-
-        representante_id = registro[0]
-        codigo_rep = registro[1]
-        nome_rep = registro[2]
-
-        mapa_representantes[
-            f"{codigo_rep} - {nome_rep}"
-        ] = representante_id
-
-    if mapa_representantes:
+        # ====================================================
+        # QUALIFICAÇÃO
+        # ====================================================
 
         st.markdown(
-            "### ✏️ Alterar Representante"
+            "### 📋 Qualificação"
         )
 
-        representante_selecionado = st.selectbox(
-            "Representante",
-            list(
-                mapa_representantes.keys()
-            ),
+        tipo_representante = st.selectbox(
+            "Tipo / Qualificação *",
+            tipos_representante,
             key=(
-                f"sisget_representante_alterar_"
-                f"{fornecedor_id}"
+                f"rep_qualificacao_"
+                f"{fornecedor_id}_"
+                f"{reset}"
             )
         )
 
+        # ====================================================
+        # REGISTRO
+        # ====================================================
+
+        st.markdown(
+            "### 🏛️ Registro"
+        )
+
+        col8, col9 = st.columns(2)
+
+        tipo_registro = col8.selectbox(
+            "Tipo do Registro *",
+            tipos_registro,
+            key=(
+                f"rep_tipo_registro_"
+                f"{fornecedor_id}_"
+                f"{reset}"
+            )
+        )
+
+        numero_registro = col9.text_input(
+            "Número do Registro *",
+            key=(
+                f"rep_numero_registro_"
+                f"{fornecedor_id}_"
+                f"{reset}"
+            )
+        )
+
+        # ====================================================
+        # CONTATO
+        # ====================================================
+
+        st.markdown(
+            "### ☎️ Contato"
+        )
+
+        col10, col11 = st.columns(2)
+
+        telefone = col10.text_input(
+            "Telefone",
+            value=(
+                dados_pf.get(
+                    "telefone",
+                    ""
+                )
+            ),
+            key=(
+                f"rep_telefone_"
+                f"{fornecedor_id}_"
+                f"{reset}"
+            )
+        )
+
+        whatsapp = col11.text_input(
+            "WhatsApp",
+            value=(
+                dados_pf.get(
+                    "whatsapp",
+                    ""
+                )
+            ),
+            key=(
+                f"rep_whatsapp_"
+                f"{fornecedor_id}_"
+                f"{reset}"
+            )
+        )
+
+        email = st.text_input(
+            "E-mail",
+            value=(
+                dados_pf.get(
+                    "email",
+                    ""
+                )
+            ),
+            key=(
+                f"rep_email_"
+                f"{fornecedor_id}_"
+                f"{reset}"
+            )
+        )
+
+        # ====================================================
+        # RESPONSABILIDADE
+        # ====================================================
+
+        st.markdown(
+            "### ⚙️ Responsabilidade"
+        )
+
+        col12, col13 = st.columns(2)
+
+        responsavel = col12.checkbox(
+            "⭐ Responsável Principal",
+            key=(
+                f"rep_responsavel_"
+                f"{fornecedor_id}_"
+                f"{reset}"
+            ),
+            help=(
+                "Somente uma pessoa pode ser "
+                "responsável principal por fornecedor."
+            )
+        )
+
+        autorizado_assinar = col13.checkbox(
+            "✍️ Autorizado a Assinar Documentos",
+            key=(
+                f"rep_assinar_"
+                f"{fornecedor_id}_"
+                f"{reset}"
+            )
+        )
+
+        observacao = st.text_area(
+            "Observações",
+            height=100,
+            key=(
+                f"rep_observacao_"
+                f"{fornecedor_id}_"
+                f"{reset}"
+            )
+        )
+
+        # ====================================================
+        # SALVAR
+        # ====================================================
+
+        if st.button(
+            "💾 Salvar Pessoa",
+            type="primary",
+            use_container_width=True,
+            key=(
+                f"rep_salvar_"
+                f"{fornecedor_id}_"
+                f"{reset}"
+            )
+        ):
+
+            nome = nome.strip()
+
+            cpf_limpo = re.sub(
+                r"\D",
+                "",
+                cpf
+            )
+
+            numero_registro = (
+                numero_registro.strip()
+            )
+
+            if not nome:
+
+                st.warning(
+                    "⚠️ Informe o nome."
+                )
+
+                return
+
+            if len(cpf_limpo) != 11:
+
+                st.warning(
+                    "⚠️ Informe um CPF com 11 números."
+                )
+
+                return
+
+            if not numero_registro:
+
+                st.warning(
+                    "⚠️ Informe o número do registro."
+                )
+
+                return
+
+            # ================================================
+            # DUPLICIDADE
+            # ================================================
+
+            existe = _sisget_fetchone(
+                """
+                SELECT
+                    id
+                FROM fornecedores_representantes
+                WHERE fornecedor_id = ?
+                  AND REGEXP_REPLACE(
+                        COALESCE(
+                            cpf,
+                            ''
+                        ),
+                        '[^0-9]',
+                        '',
+                        'g'
+                      ) = ?
+                """,
+                (
+                    fornecedor_id,
+                    cpf_limpo
+                )
+            )
+
+            if existe:
+
+                st.warning(
+                    "⚠️ Esta pessoa já está vinculada "
+                    "a este fornecedor."
+                )
+
+                return
+
+            # ================================================
+            # RESPONSÁVEL ÚNICO
+            # ================================================
+
+            if responsavel:
+
+                _sisget_salvar(
+                    """
+                    UPDATE fornecedores_representantes
+                    SET principal = FALSE
+                    WHERE fornecedor_id = ?
+                    """,
+                    (
+                        fornecedor_id,
+                    )
+                )
+
+            # ================================================
+            # INSERT
+            # ================================================
+
+            sucesso = _sisget_salvar(
+                """
+                INSERT INTO fornecedores_representantes
+                (
+                    fornecedor_id,
+                    codigo,
+                    nome,
+                    cpf,
+                    cargo,
+                    tipo_representante,
+                    tipo_registro,
+                    numero_registro,
+                    telefone,
+                    whatsapp,
+                    email,
+                    principal,
+                    autorizado_assinar,
+                    observacao,
+                    ativo,
+                    criado_em
+                )
+                VALUES
+                (
+                    ?, ?,
+                    ?, ?, ?,
+                    ?,
+                    ?, ?,
+                    ?, ?, ?,
+                    ?, ?,
+                    ?,
+                    TRUE,
+                    CURRENT_TIMESTAMP
+                )
+                """,
+                (
+                    fornecedor_id,
+                    codigo,
+                    nome,
+                    cpf_limpo,
+
+                    cargo.strip()
+                    or None,
+
+                    tipo_representante,
+
+                    tipo_registro,
+                    numero_registro,
+
+                    telefone.strip()
+                    or None,
+
+                    whatsapp.strip()
+                    or None,
+
+                    email.strip()
+                    or None,
+
+                    responsavel,
+                    autorizado_assinar,
+
+                    observacao.strip()
+                    or None
+                )
+            )
+
+            if sucesso:
+
+                st.session_state[
+                    chave_pf
+                ] = {}
+
+                st.session_state[
+                    chave_pesquisa
+                ] = False
+
+                st.session_state[
+                    chave_reset
+                ] += 1
+
+                st.session_state[
+                    chave_tela
+                ] = "lista"
+
+                st.rerun()
+
+    # ========================================================
+    # TELA - ALTERAR
+    # ========================================================
+
+    elif tela == "alterar":
+
         representante_id = (
-            mapa_representantes[
-                representante_selecionado
-            ]
+            st.session_state.get(
+                chave_id
+            )
+        )
+
+        if not representante_id:
+
+            st.session_state[
+                chave_tela
+            ] = "lista"
+
+            st.rerun()
+
+        sisget_cabecalho_tela(
+            "✏️ Alterar Pessoa",
+            voltar=lambda: (
+                st.session_state.__setitem__(
+                    chave_tela,
+                    "lista"
+                ),
+                st.rerun()
+            ),
+            chave=(
+                f"representante_alterar_"
+                f"{fornecedor_id}"
+            )
         )
 
         fornecedor_representante_alterar(
