@@ -26424,7 +26424,7 @@ def fornecedor_incluir():
                 "sisget_fornecedor_reset"
             ] += 1
 
-            st.rerun()1
+            st.rerun()
 def fornecedor_localizar():
 
     df = _sisget_dataframe(
