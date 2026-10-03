@@ -18306,15 +18306,16 @@ def ficha_receita_incluir():
             )
         )
 
-    col_ex2.text_input(
-        "Número da Ficha",
+    numero_ficha_digitado = col_ex2.number_input(
+        "Número da Ficha *",
+        min_value=1,
         value=(
-            str(numero_ficha)
+            int(numero_ficha)
             if numero_ficha is not None
-            else ""
+            else 1
         ),
-        disabled=True,
-        key="receita_numero_visual"
+        step=1,
+        key="receita_numero_ficha"
     )
 
     fontes = sisget_mapa_fontes_fichas()
@@ -19284,15 +19285,16 @@ def ficha_extraorcamentaria_incluir():
             )
         )
 
-    col_ex2.text_input(
-        "Número da Ficha",
+    numero_ficha_digitado = col_ex2.number_input(
+        "Número da Ficha *",
+        min_value=1,
         value=(
-            str(numero_ficha)
+            int(numero_ficha)
             if numero_ficha is not None
-            else ""
+            else 1
         ),
-        disabled=True,
-        key="extra_numero_visual"
+        step=1,
+        key="extra_numero_ficha"
     )
 
     with st.form(
