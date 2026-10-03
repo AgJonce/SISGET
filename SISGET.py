@@ -25005,26 +25005,272 @@ def modulo_solicitacoes():
 
 def cadastro_fornecedores():
 
-    sisget_tela_principal(
-        titulo="Fornecedores",
-        chave="fornecedores",
-        func_incluir=fornecedor_incluir,
-        func_localizar=fornecedor_localizar,
-        func_alterar=fornecedor_alterar,
-        func_excluir=fornecedor_excluir,
-        func_imprimir=fornecedor_imprimir,
-        icone="🏢"
+    st.title(
+        "🏢 Fornecedores"
     )
 
+    st.divider()
 
-# ============================================================
-# FORNECEDOR - INCLUIR
-# ============================================================
+    # ========================================================
+    # CONTROLE DE TELA
+    # ========================================================
 
+    if "sisget_fornecedores_acao" not in st.session_state:
+
+        st.session_state[
+            "sisget_fornecedores_acao"
+        ] = "incluir"
+
+    acao = st.session_state[
+        "sisget_fornecedores_acao"
+    ]
+
+    # ========================================================
+    # BOTÕES PRINCIPAIS
+    # ========================================================
+
+    col1, col2, col3 = st.columns(3)
+
+    if col1.button(
+        "➕ Incluir",
+        use_container_width=True,
+        type=(
+            "primary"
+            if acao == "incluir"
+            else "secondary"
+        ),
+        key="fornecedor_btn_incluir"
+    ):
+
+        st.session_state[
+            "sisget_fornecedores_acao"
+        ] = "incluir"
+
+        st.rerun()
+
+    if col2.button(
+        "🔎 Localizar",
+        use_container_width=True,
+        type=(
+            "primary"
+            if acao == "localizar"
+            else "secondary"
+        ),
+        key="fornecedor_btn_localizar"
+    ):
+
+        st.session_state[
+            "sisget_fornecedores_acao"
+        ] = "localizar"
+
+        st.rerun()
+
+    if col3.button(
+        "👥 Representantes",
+        use_container_width=True,
+        type=(
+            "primary"
+            if acao == "representantes"
+            else "secondary"
+        ),
+        key="fornecedor_btn_representantes"
+    ):
+
+        st.session_state[
+            "sisget_fornecedores_acao"
+        ] = "representantes"
+
+        st.rerun()
+
+    col4, col5, col6 = st.columns(3)
+
+    if col4.button(
+        "📑 Regularidades / Documentos",
+        use_container_width=True,
+        type=(
+            "primary"
+            if acao == "documentos"
+            else "secondary"
+        ),
+        key="fornecedor_btn_documentos"
+    ):
+
+        st.session_state[
+            "sisget_fornecedores_acao"
+        ] = "documentos"
+
+        st.rerun()
+
+    if col5.button(
+        "🗑 Excluir",
+        use_container_width=True,
+        type=(
+            "primary"
+            if acao == "excluir"
+            else "secondary"
+        ),
+        key="fornecedor_btn_excluir"
+    ):
+
+        st.session_state[
+            "sisget_fornecedores_acao"
+        ] = "excluir"
+
+        st.rerun()
+
+    if col6.button(
+        "🖨 Imprimir",
+        use_container_width=True,
+        type=(
+            "primary"
+            if acao == "imprimir"
+            else "secondary"
+        ),
+        key="fornecedor_btn_imprimir"
+    ):
+
+        st.session_state[
+            "sisget_fornecedores_acao"
+        ] = "imprimir"
+
+        st.rerun()
+
+    st.divider()
+
+    # ========================================================
+    # TELAS
+    # ========================================================
+
+    if acao == "incluir":
+
+        fornecedor_incluir()
+
+    elif acao == "localizar":
+
+        fornecedor_localizar_principal()
+
+    elif acao == "representantes":
+
+        fornecedor_representantes_principal()
+
+    elif acao == "documentos":
+
+        fornecedor_documentos_principal()
+
+    elif acao == "excluir":
+
+        fornecedor_excluir()
+
+    elif acao == "imprimir":
+
+        fornecedor_imprimir()
+
+def fornecedor_representantes_principal():
+
+    st.subheader(
+        "👥 Representantes dos Fornecedores"
+    )
+
+    fornecedores = _sisget_fetch(
+        """
+        SELECT
+            id,
+            codigo,
+            razao_social
+        FROM fornecedores
+        WHERE ativo = TRUE
+        ORDER BY
+            razao_social,
+            codigo
+        """
+    )
+
+    if not fornecedores:
+
+        st.info(
+            "Nenhum fornecedor ativo cadastrado."
+        )
+
+        return
+
+    mapa = {
+        f"{codigo} - {razao_social}": id_
+        for id_, codigo, razao_social
+        in fornecedores
+    }
+
+    fornecedor_nome = st.selectbox(
+        "Fornecedor *",
+        list(
+            mapa.keys()
+        ),
+        key="sisget_rep_fornecedor_principal"
+    )
+
+    fornecedor_id = mapa[
+        fornecedor_nome
+    ]
+
+    st.divider()
+
+    fornecedor_representantes(
+        fornecedor_id
+    )
+def fornecedor_documentos_principal():
+
+    st.subheader(
+        "📑 Regularidades e Documentos"
+    )
+
+    fornecedores = _sisget_fetch(
+        """
+        SELECT
+            id,
+            codigo,
+            razao_social
+        FROM fornecedores
+        WHERE ativo = TRUE
+        ORDER BY
+            razao_social,
+            codigo
+        """
+    )
+
+    if not fornecedores:
+
+        st.info(
+            "Nenhum fornecedor ativo cadastrado."
+        )
+
+        return
+
+    mapa = {
+        f"{codigo} - {razao_social}": id_
+        for id_, codigo, razao_social
+        in fornecedores
+    }
+
+    fornecedor_nome = st.selectbox(
+        "Fornecedor *",
+        list(
+            mapa.keys()
+        ),
+        key="sisget_doc_fornecedor_principal"
+    )
+
+    fornecedor_id = mapa[
+        fornecedor_nome
+    ]
+
+    st.divider()
+
+    fornecedor_regularidades_documentos(
+        fornecedor_id
+    )
 def fornecedor_incluir():
 
     # ========================================================
-    # CONTROLE DE RESET
+    # RESET
     # ========================================================
 
     if "sisget_fornecedor_reset" not in st.session_state:
@@ -25038,7 +25284,7 @@ def fornecedor_incluir():
     ]
 
     # ========================================================
-    # MENSAGEM APÓS RERUN
+    # MENSAGEM
     # ========================================================
 
     if "sisget_mensagem_fornecedor" in st.session_state:
@@ -25050,16 +25296,12 @@ def fornecedor_incluir():
         )
 
     # ========================================================
-    # PRÓXIMO CÓDIGO
+    # CÓDIGO
     # ========================================================
 
     codigo = sisget_proximo_codigo(
         "fornecedores",
         tamanho=6
-    )
-
-    st.subheader(
-        "🏢 Cadastro de Fornecedor"
     )
 
     # ========================================================
@@ -25099,42 +25341,34 @@ def fornecedor_incluir():
         col3, col4 = st.columns(2)
 
         cpf_cnpj = col3.text_input(
-            "CPF / CNPJ *",
-            max_chars=20
+            "CPF / CNPJ *"
         )
 
         razao_social = col4.text_input(
-            "Razão Social / Nome *",
-            max_chars=200
+            "Razão Social / Nome *"
         )
 
         col5, col6 = st.columns(2)
 
         nome_fantasia = col5.text_input(
-            "Nome Fantasia",
-            max_chars=200
+            "Nome Fantasia"
         )
 
         natureza_juridica = col6.text_input(
-            "Natureza Jurídica",
-            max_chars=150
+            "Natureza Jurídica"
         )
 
         col7, col8 = st.columns(2)
 
         inscricao_estadual = col7.text_input(
-            "Inscrição Estadual",
-            max_chars=50
+            "Inscrição Estadual"
         )
 
         inscricao_municipal = col8.text_input(
-            "Inscrição Municipal",
-            max_chars=50
+            "Inscrição Municipal"
         )
 
-        col9, col10, col11 = st.columns(
-            [2, 2, 2]
-        )
+        col9, col10, col11 = st.columns(3)
 
         porte_empresa = col9.selectbox(
             "Porte",
@@ -25148,7 +25382,7 @@ def fornecedor_incluir():
         )
 
         optante_simples = col10.selectbox(
-            "Optante pelo Simples Nacional",
+            "Simples Nacional",
             [
                 "Não informado",
                 "Sim",
@@ -25157,14 +25391,13 @@ def fornecedor_incluir():
         )
 
         cnae = col11.text_input(
-            "CNAE Principal",
-            max_chars=30
+            "CNAE Principal"
         )
 
         categoria_fornecedor = st.text_input(
             "Categoria / Ramo de Atividade",
             placeholder=(
-                "Ex.: Material de expediente, medicamentos, "
+                "Ex.: Medicamentos, material de expediente, "
                 "serviços de engenharia..."
             )
         )
@@ -25306,53 +25539,6 @@ def fornecedor_incluir():
         )
 
         # ====================================================
-        # REGULARIDADE
-        # ====================================================
-
-        st.markdown(
-            "### 📑 Regularidade / Documentos"
-        )
-
-        situacao_cadastral = st.selectbox(
-            "Situação Cadastral no SISGET",
-            [
-                "Ativo",
-                "Pendente",
-                "Suspenso",
-                "Inativo"
-            ]
-        )
-
-        col31, col32 = st.columns(2)
-
-        validade_federal = col31.date_input(
-            "Validade Certidão Federal",
-            value=None
-        )
-
-        validade_estadual = col32.date_input(
-            "Validade Certidão Estadual",
-            value=None
-        )
-
-        col33, col34 = st.columns(2)
-
-        validade_municipal = col33.date_input(
-            "Validade Certidão Municipal",
-            value=None
-        )
-
-        validade_fgts = col34.date_input(
-            "Validade FGTS",
-            value=None
-        )
-
-        validade_trabalhista = st.date_input(
-            "Validade Certidão Trabalhista",
-            value=None
-        )
-
-        # ====================================================
         # OBSERVAÇÕES
         # ====================================================
 
@@ -25380,6 +25566,10 @@ def fornecedor_incluir():
         cpf_cnpj = cpf_cnpj.strip()
         razao_social = razao_social.strip()
 
+        # ====================================================
+        # VALIDAÇÕES
+        # ====================================================
+
         if not cpf_cnpj:
 
             st.warning(
@@ -25397,7 +25587,7 @@ def fornecedor_incluir():
             return
 
         # ====================================================
-        # VERIFICAR DUPLICIDADE
+        # DUPLICIDADE
         # ====================================================
 
         existe = _sisget_fetchone(
@@ -25414,10 +25604,15 @@ def fornecedor_incluir():
         if existe:
 
             st.warning(
-                "⚠️ Já existe fornecedor com este CPF/CNPJ."
+                "⚠️ Já existe fornecedor cadastrado "
+                "com este CPF/CNPJ."
             )
 
             return
+
+        # ====================================================
+        # GERAR CÓDIGO NOVAMENTE
+        # ====================================================
 
         codigo = sisget_proximo_codigo(
             "fornecedores",
@@ -25425,7 +25620,7 @@ def fornecedor_incluir():
         )
 
         # ====================================================
-        # INSERT
+        # SALVAR
         # ====================================================
 
         sucesso = _sisget_salvar(
@@ -25444,10 +25639,12 @@ def fornecedor_incluir():
                 optante_simples,
                 cnae,
                 categoria_fornecedor,
+
                 telefone,
                 whatsapp,
                 email,
                 site,
+
                 cep,
                 logradouro,
                 numero_endereco,
@@ -25456,6 +25653,7 @@ def fornecedor_incluir():
                 cidade,
                 uf,
                 pais,
+
                 banco,
                 codigo_banco,
                 agencia,
@@ -25463,21 +25661,17 @@ def fornecedor_incluir():
                 tipo_conta,
                 tipo_chave_pix,
                 chave_pix,
-                situacao_cadastral,
-                validade_certidao_federal,
-                validade_certidao_estadual,
-                validade_certidao_municipal,
-                validade_fgts,
-                validade_trabalhista,
+
                 observacoes,
+
                 ativo,
                 criado_em
             )
             VALUES
             (
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?, ?, ?,
                 ?, ?, ?, ?, ?, ?, ?, ?,
                 TRUE,
                 CURRENT_TIMESTAMP
@@ -25492,18 +25686,23 @@ def fornecedor_incluir():
                 natureza_juridica.strip() or None,
                 inscricao_estadual.strip() or None,
                 inscricao_municipal.strip() or None,
+
                 None
                 if porte_empresa == "Não informado"
                 else porte_empresa,
+
                 None
                 if optante_simples == "Não informado"
                 else optante_simples,
+
                 cnae.strip() or None,
                 categoria_fornecedor.strip() or None,
+
                 telefone.strip() or None,
                 whatsapp.strip() or None,
                 email.strip() or None,
                 site.strip() or None,
+
                 cep.strip() or None,
                 logradouro.strip() or None,
                 numero_endereco.strip() or None,
@@ -25512,26 +25711,29 @@ def fornecedor_incluir():
                 cidade.strip() or None,
                 uf.strip().upper() or None,
                 pais.strip() or None,
+
                 banco.strip() or None,
                 codigo_banco.strip() or None,
                 agencia.strip() or None,
                 conta.strip() or None,
+
                 None
                 if tipo_conta == "Não informado"
                 else tipo_conta,
+
                 None
                 if tipo_chave_pix == "Não informado"
                 else tipo_chave_pix,
+
                 chave_pix.strip() or None,
-                situacao_cadastral,
-                validade_federal,
-                validade_estadual,
-                validade_municipal,
-                validade_fgts,
-                validade_trabalhista,
+
                 observacoes.strip() or None
             )
         )
+
+        # ====================================================
+        # SUCESSO
+        # ====================================================
 
         if sucesso:
 
@@ -25548,7 +25750,6 @@ def fornecedor_incluir():
 
             st.rerun()
 
-
 # ============================================================
 # FORNECEDOR - LOCALIZAR
 # ============================================================
@@ -25559,19 +25760,34 @@ def fornecedor_localizar():
         """
         SELECT
             id,
+
             codigo AS "Código",
+
             cpf_cnpj AS "CPF / CNPJ",
+
             razao_social AS "Razão Social / Nome",
+
             nome_fantasia AS "Nome Fantasia",
+
             categoria_fornecedor AS "Categoria",
+
+            telefone AS "Telefone",
+
+            whatsapp AS "WhatsApp",
+
+            email AS "E-mail",
+
             cidade AS "Cidade",
+
             uf AS "UF",
-            situacao_cadastral AS "Cadastro",
+
             CASE
                 WHEN ativo THEN 'Ativo'
                 ELSE 'Inativo'
             END AS "Situação"
+
         FROM fornecedores
+
         ORDER BY
             razao_social,
             codigo
@@ -25586,13 +25802,22 @@ def fornecedor_localizar():
 
         return None
 
-    return sisget_grid_localizar(
+    st.caption(
+        "Dê duplo clique no fornecedor "
+        "para alterar."
+    )
+
+    registro_id = sisget_grid_localizar(
         df=df,
-        chave="fornecedores",
+        chave="fornecedores_localizar",
         coluna_id="id",
         altura=500
     )
 
+    return registro_id
+# ============================================================
+# FORNECEDOR - ALTERAR
+# ============================================================
 
 # ============================================================
 # FORNECEDOR - ALTERAR
@@ -25601,51 +25826,6 @@ def fornecedor_localizar():
 def fornecedor_alterar(
     registro_id
 ):
-
-    # ========================================================
-    # TELA INTERNA
-    # ========================================================
-
-    chave_tela = (
-        f"sisget_fornecedor_tela_"
-        f"{registro_id}"
-    )
-
-    if chave_tela not in st.session_state:
-
-        st.session_state[
-            chave_tela
-        ] = "dados"
-
-    # ========================================================
-    # REPRESENTANTES
-    # ========================================================
-
-    if st.session_state[
-        chave_tela
-    ] == "representantes":
-
-        st.subheader(
-            "👥 Representantes"
-        )
-
-        if st.button(
-            "⬅️ Voltar para os Dados do Fornecedor",
-            use_container_width=True,
-            key=f"voltar_dados_fornecedor_{registro_id}"
-        ):
-
-            st.session_state[
-                chave_tela
-            ] = "dados"
-
-            st.rerun()
-
-        fornecedor_representantes(
-            registro_id
-        )
-
-        return
 
     # ========================================================
     # BUSCAR FORNECEDOR
@@ -25666,10 +25846,12 @@ def fornecedor_alterar(
             optante_simples,
             cnae,
             categoria_fornecedor,
+
             telefone,
             whatsapp,
             email,
             site,
+
             cep,
             logradouro,
             numero_endereco,
@@ -25678,6 +25860,7 @@ def fornecedor_alterar(
             cidade,
             uf,
             pais,
+
             banco,
             codigo_banco,
             agencia,
@@ -25685,15 +25868,13 @@ def fornecedor_alterar(
             tipo_conta,
             tipo_chave_pix,
             chave_pix,
-            situacao_cadastral,
-            validade_certidao_federal,
-            validade_certidao_estadual,
-            validade_certidao_municipal,
-            validade_fgts,
-            validade_trabalhista,
+
             observacoes,
+
             ativo
+
         FROM fornecedores
+
         WHERE id = ?
         """,
         (
@@ -25704,7 +25885,7 @@ def fornecedor_alterar(
     if not registro:
 
         st.warning(
-            "Fornecedor não encontrado."
+            "⚠️ Fornecedor não encontrado."
         )
 
         return
@@ -25712,20 +25893,22 @@ def fornecedor_alterar(
     (
         codigo,
         tipo_atual,
-        documento_atual,
-        razao_atual,
-        fantasia_atual,
-        natureza_atual,
-        ie_atual,
-        im_atual,
+        cpf_cnpj_atual,
+        razao_social_atual,
+        nome_fantasia_atual,
+        natureza_juridica_atual,
+        inscricao_estadual_atual,
+        inscricao_municipal_atual,
         porte_atual,
         simples_atual,
         cnae_atual,
         categoria_atual,
+
         telefone_atual,
         whatsapp_atual,
         email_atual,
         site_atual,
+
         cep_atual,
         logradouro_atual,
         numero_atual,
@@ -25734,24 +25917,25 @@ def fornecedor_alterar(
         cidade_atual,
         uf_atual,
         pais_atual,
+
         banco_atual,
         codigo_banco_atual,
         agencia_atual,
         conta_atual,
         tipo_conta_atual,
         tipo_pix_atual,
-        pix_atual,
-        situacao_cadastral_atual,
-        federal_atual,
-        estadual_atual,
-        municipal_atual,
-        fgts_atual,
-        trabalhista_atual,
+        chave_pix_atual,
+
         observacoes_atual,
+
         ativo
     ) = registro
 
-    tipos = [
+    # ========================================================
+    # LISTAS
+    # ========================================================
+
+    tipos_pessoa = [
         "Jurídica",
         "Física"
     ]
@@ -25786,20 +25970,14 @@ def fornecedor_alterar(
         "Aleatória"
     ]
 
-    situacoes = [
-        "Ativo",
-        "Pendente",
-        "Suspenso",
-        "Inativo"
-    ]
-
     # ========================================================
-    # RESUMO
+    # CABEÇALHO
     # ========================================================
 
     st.info(
-        f"Fornecedor: {codigo} - "
-        f"{razao_atual or ''}"
+        f"🏢 Fornecedor: "
+        f"{codigo} - "
+        f"{razao_social_atual or ''}"
     )
 
     # ========================================================
@@ -25809,6 +25987,10 @@ def fornecedor_alterar(
     with st.form(
         f"form_fornecedor_alterar_{registro_id}"
     ):
+
+        # ====================================================
+        # DADOS GERAIS
+        # ====================================================
 
         st.markdown(
             "### 🏢 Dados Gerais"
@@ -25826,10 +26008,13 @@ def fornecedor_alterar(
 
         tipo_pessoa = col2.selectbox(
             "Tipo de Pessoa *",
-            tipos,
+            tipos_pessoa,
             index=(
-                tipos.index(tipo_atual)
-                if tipo_atual in tipos
+                tipos_pessoa.index(
+                    tipo_atual
+                )
+                if tipo_atual
+                in tipos_pessoa
                 else 0
             )
         )
@@ -25838,36 +26023,36 @@ def fornecedor_alterar(
 
         cpf_cnpj = col3.text_input(
             "CPF / CNPJ *",
-            value=documento_atual or ""
+            value=cpf_cnpj_atual or ""
         )
 
         razao_social = col4.text_input(
             "Razão Social / Nome *",
-            value=razao_atual or ""
+            value=razao_social_atual or ""
         )
 
         col5, col6 = st.columns(2)
 
         nome_fantasia = col5.text_input(
             "Nome Fantasia",
-            value=fantasia_atual or ""
+            value=nome_fantasia_atual or ""
         )
 
         natureza_juridica = col6.text_input(
             "Natureza Jurídica",
-            value=natureza_atual or ""
+            value=natureza_juridica_atual or ""
         )
 
         col7, col8 = st.columns(2)
 
         inscricao_estadual = col7.text_input(
             "Inscrição Estadual",
-            value=ie_atual or ""
+            value=inscricao_estadual_atual or ""
         )
 
         inscricao_municipal = col8.text_input(
             "Inscrição Municipal",
-            value=im_atual or ""
+            value=inscricao_municipal_atual or ""
         )
 
         col9, col10, col11 = st.columns(3)
@@ -25876,8 +26061,11 @@ def fornecedor_alterar(
             "Porte",
             portes,
             index=(
-                portes.index(porte_atual)
-                if porte_atual in portes
+                portes.index(
+                    porte_atual
+                )
+                if porte_atual
+                in portes
                 else 0
             )
         )
@@ -25886,8 +26074,11 @@ def fornecedor_alterar(
             "Simples Nacional",
             simples_opcoes,
             index=(
-                simples_opcoes.index(simples_atual)
-                if simples_atual in simples_opcoes
+                simples_opcoes.index(
+                    simples_atual
+                )
+                if simples_atual
+                in simples_opcoes
                 else 0
             )
         )
@@ -25901,6 +26092,10 @@ def fornecedor_alterar(
             "Categoria / Ramo de Atividade",
             value=categoria_atual or ""
         )
+
+        # ====================================================
+        # CONTATO
+        # ====================================================
 
         st.markdown(
             "### ☎️ Contato"
@@ -25930,6 +26125,10 @@ def fornecedor_alterar(
             value=site_atual or ""
         )
 
+        # ====================================================
+        # ENDEREÇO
+        # ====================================================
+
         st.markdown(
             "### 📍 Endereço"
         )
@@ -25948,7 +26147,7 @@ def fornecedor_alterar(
             value=logradouro_atual or ""
         )
 
-        numero = col18.text_input(
+        numero_endereco = col18.text_input(
             "Número",
             value=numero_atual or ""
         )
@@ -25985,6 +26184,10 @@ def fornecedor_alterar(
             value=pais_atual or "Brasil"
         )
 
+        # ====================================================
+        # DADOS BANCÁRIOS
+        # ====================================================
+
         st.markdown(
             "### 🏦 Dados Bancários"
         )
@@ -26017,8 +26220,11 @@ def fornecedor_alterar(
             "Tipo da Conta",
             tipos_conta,
             index=(
-                tipos_conta.index(tipo_conta_atual)
-                if tipo_conta_atual in tipos_conta
+                tipos_conta.index(
+                    tipo_conta_atual
+                )
+                if tipo_conta_atual
+                in tipos_conta
                 else 0
             )
         )
@@ -26029,62 +26235,23 @@ def fornecedor_alterar(
             "Tipo da Chave Pix",
             tipos_pix,
             index=(
-                tipos_pix.index(tipo_pix_atual)
-                if tipo_pix_atual in tipos_pix
+                tipos_pix.index(
+                    tipo_pix_atual
+                )
+                if tipo_pix_atual
+                in tipos_pix
                 else 0
             )
         )
 
         chave_pix = col30.text_input(
             "Chave Pix",
-            value=pix_atual or ""
+            value=chave_pix_atual or ""
         )
 
-        st.markdown(
-            "### 📑 Regularidade / Documentos"
-        )
-
-        situacao_cadastral = st.selectbox(
-            "Situação Cadastral",
-            situacoes,
-            index=(
-                situacoes.index(
-                    situacao_cadastral_atual
-                )
-                if situacao_cadastral_atual
-                in situacoes
-                else 0
-            )
-        )
-
-        col31, col32 = st.columns(2)
-
-        validade_federal = col31.date_input(
-            "Validade Certidão Federal",
-            value=federal_atual
-        )
-
-        validade_estadual = col32.date_input(
-            "Validade Certidão Estadual",
-            value=estadual_atual
-        )
-
-        col33, col34 = st.columns(2)
-
-        validade_municipal = col33.date_input(
-            "Validade Certidão Municipal",
-            value=municipal_atual
-        )
-
-        validade_fgts = col34.date_input(
-            "Validade FGTS",
-            value=fgts_atual
-        )
-
-        validade_trabalhista = st.date_input(
-            "Validade Certidão Trabalhista",
-            value=trabalhista_atual
-        )
+        # ====================================================
+        # OBSERVAÇÕES
+        # ====================================================
 
         st.markdown(
             "### 📝 Observações"
@@ -26096,15 +26263,19 @@ def fornecedor_alterar(
             height=120
         )
 
-        col35, col36 = st.columns(2)
+        # ====================================================
+        # BOTÕES
+        # ====================================================
 
-        salvar = col35.form_submit_button(
+        col31, col32 = st.columns(2)
+
+        salvar = col31.form_submit_button(
             "💾 Salvar Alterações",
             type="primary",
             use_container_width=True
         )
 
-        mudar_status = col36.form_submit_button(
+        mudar_status = col32.form_submit_button(
             "🚫 Inativar"
             if ativo
             else "✅ Ativar",
@@ -26112,26 +26283,7 @@ def fornecedor_alterar(
         )
 
     # ========================================================
-    # BOTÃO REPRESENTANTES
-    # FORA DO FORMULÁRIO
-    # ========================================================
-
-    st.markdown("---")
-
-    if st.button(
-        "👥 Representantes",
-        use_container_width=True,
-        key=f"botao_representantes_{registro_id}"
-    ):
-
-        st.session_state[
-            chave_tela
-        ] = "representantes"
-
-        st.rerun()
-
-    # ========================================================
-    # ALTERAR STATUS
+    # ATIVAR / INATIVAR
     # ========================================================
 
     if mudar_status:
@@ -26139,7 +26291,9 @@ def fornecedor_alterar(
         if _sisget_salvar(
             """
             UPDATE fornecedores
-            SET ativo = ?
+            SET
+                ativo = ?,
+                atualizado_em = CURRENT_TIMESTAMP
             WHERE id = ?
             """,
             (
@@ -26147,6 +26301,17 @@ def fornecedor_alterar(
                 registro_id
             )
         ):
+
+            st.session_state[
+                "sisget_mensagem_fornecedor"
+            ] = (
+                "✅ Situação do fornecedor "
+                "alterada com sucesso."
+            )
+
+            st.session_state[
+                "sisget_tela_fornecedores"
+            ] = "localizar"
 
             st.rerun()
 
@@ -26156,7 +26321,10 @@ def fornecedor_alterar(
 
     if salvar:
 
-        if not cpf_cnpj.strip():
+        cpf_cnpj = cpf_cnpj.strip()
+        razao_social = razao_social.strip()
+
+        if not cpf_cnpj:
 
             st.warning(
                 "⚠️ Informe CPF/CNPJ."
@@ -26164,13 +26332,17 @@ def fornecedor_alterar(
 
             return
 
-        if not razao_social.strip():
+        if not razao_social:
 
             st.warning(
                 "⚠️ Informe Razão Social/Nome."
             )
 
             return
+
+        # ====================================================
+        # DUPLICIDADE
+        # ====================================================
 
         duplicado = _sisget_fetchone(
             """
@@ -26180,7 +26352,7 @@ def fornecedor_alterar(
               AND id <> ?
             """,
             (
-                cpf_cnpj.strip(),
+                cpf_cnpj,
                 registro_id
             )
         )
@@ -26194,9 +26366,14 @@ def fornecedor_alterar(
 
             return
 
-        if _sisget_salvar(
+        # ====================================================
+        # UPDATE
+        # ====================================================
+
+        sucesso = _sisget_salvar(
             """
             UPDATE fornecedores
+
             SET
                 tipo_pessoa = ?,
                 cpf_cnpj = ?,
@@ -26209,10 +26386,12 @@ def fornecedor_alterar(
                 optante_simples = ?,
                 cnae = ?,
                 categoria_fornecedor = ?,
+
                 telefone = ?,
                 whatsapp = ?,
                 email = ?,
                 site = ?,
+
                 cep = ?,
                 logradouro = ?,
                 numero_endereco = ?,
@@ -26221,6 +26400,7 @@ def fornecedor_alterar(
                 cidade = ?,
                 uf = ?,
                 pais = ?,
+
                 banco = ?,
                 codigo_banco = ?,
                 agencia = ?,
@@ -26228,72 +26408,103 @@ def fornecedor_alterar(
                 tipo_conta = ?,
                 tipo_chave_pix = ?,
                 chave_pix = ?,
-                situacao_cadastral = ?,
-                validade_certidao_federal = ?,
-                validade_certidao_estadual = ?,
-                validade_certidao_municipal = ?,
-                validade_fgts = ?,
-                validade_trabalhista = ?,
+
                 observacoes = ?,
+
                 atualizado_em = CURRENT_TIMESTAMP
+
             WHERE id = ?
             """,
             (
                 tipo_pessoa,
-                cpf_cnpj.strip(),
-                razao_social.strip(),
+                cpf_cnpj,
+                razao_social,
+
                 nome_fantasia.strip() or None,
+
                 natureza_juridica.strip() or None,
+
                 inscricao_estadual.strip() or None,
+
                 inscricao_municipal.strip() or None,
+
                 None
                 if porte_empresa == "Não informado"
                 else porte_empresa,
+
                 None
                 if optante_simples == "Não informado"
                 else optante_simples,
+
                 cnae.strip() or None,
+
                 categoria_fornecedor.strip() or None,
+
                 telefone.strip() or None,
+
                 whatsapp.strip() or None,
+
                 email.strip() or None,
+
                 site.strip() or None,
+
                 cep.strip() or None,
+
                 logradouro.strip() or None,
-                numero.strip() or None,
+
+                numero_endereco.strip() or None,
+
                 complemento.strip() or None,
+
                 bairro.strip() or None,
+
                 cidade.strip() or None,
+
                 uf.strip().upper() or None,
+
                 pais.strip() or None,
+
                 banco.strip() or None,
+
                 codigo_banco.strip() or None,
+
                 agencia.strip() or None,
+
                 conta.strip() or None,
+
                 None
                 if tipo_conta == "Não informado"
                 else tipo_conta,
+
                 None
                 if tipo_chave_pix == "Não informado"
                 else tipo_chave_pix,
+
                 chave_pix.strip() or None,
-                situacao_cadastral,
-                validade_federal,
-                validade_estadual,
-                validade_municipal,
-                validade_fgts,
-                validade_trabalhista,
+
                 observacoes.strip() or None,
+
                 registro_id
             )
-        ):
+        )
 
-            st.success(
+        if sucesso:
+
+            st.session_state[
+                "sisget_mensagem_fornecedor"
+            ] = (
                 "✅ Fornecedor alterado com sucesso."
             )
 
-            st.rerun()
+            st.session_state[
+                "sisget_tela_fornecedores"
+            ] = "localizar"
 
+            st.session_state[
+                "sisget_fornecedor_id"
+            ] = None
+
+            st.rerun()
 
 # ============================================================
 # FORNECEDOR - EXCLUIR
