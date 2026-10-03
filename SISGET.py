@@ -20190,34 +20190,7 @@ def ficha_extraorcamentaria_imprimir():
         key="baixar_pdf_fichas_extra"
     )
 
-def planejamento_fichas_receita():
 
-    st.title("💰 Fichas de Receita")
-
-    st.caption(
-        "Cadastro e manutenção das fichas de receita."
-    )
-
-    st.divider()
-
-    st.info(
-        "Módulo de Fichas de Receita preparado para desenvolvimento."
-    )
-
-
-def planejamento_fichas_extraorcamentarias():
-
-    st.title("🔄 Fichas Extraorçamentárias")
-
-    st.caption(
-        "Cadastro e manutenção das fichas extraorçamentárias."
-    )
-
-    st.divider()
-
-    st.info(
-        "Módulo de Fichas Extraorçamentárias preparado para desenvolvimento."
-    )
 def planejamento_classificacoes():
 
     st.subheader("🧾 Classificações Orçamentárias")
