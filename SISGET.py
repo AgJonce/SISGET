@@ -28707,15 +28707,11 @@ def cadastro_grupos_produtos():
 def grupo_produto_incluir():
 
     # ========================================================
-    # DEBUG / ENTIDADE
+    # ENTIDADE
     # ========================================================
 
     entidade_id = st.session_state.get(
         "entidade_id"
-    )
-
-    st.caption(
-        f"Entidade atual: {entidade_id}"
     )
 
     if entidade_id is None:
@@ -28730,14 +28726,14 @@ def grupo_produto_incluir():
     # RESET
     # ========================================================
 
-    if "sisget_grupo_reset_v2" not in st.session_state:
+    if "sisget_grupo_reset" not in st.session_state:
 
         st.session_state[
-            "sisget_grupo_reset_v2"
+            "sisget_grupo_reset"
         ] = 0
 
     reset = st.session_state[
-        "sisget_grupo_reset_v2"
+        "sisget_grupo_reset"
     ]
 
     # ========================================================
@@ -28758,7 +28754,7 @@ def grupo_produto_incluir():
     # ========================================================
 
     with st.form(
-        f"form_grupo_incluir_v2_{reset}"
+        f"form_grupo_incluir_{reset}"
     ):
 
         col1, col2 = st.columns(
@@ -28805,9 +28801,7 @@ def grupo_produto_incluir():
             """
             SELECT
                 id
-
             FROM grupos_produtos
-
             WHERE entidade_id = ?
               AND UPPER(descricao) = UPPER(?)
             """,
@@ -28867,10 +28861,14 @@ def grupo_produto_incluir():
             )
         )
 
+        # ====================================================
+        # SUCESSO
+        # ====================================================
+
         if sucesso:
 
             st.session_state[
-                "sisget_grupo_reset_v2"
+                "sisget_grupo_reset"
             ] += 1
 
             st.success(
