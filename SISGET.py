@@ -36916,7 +36916,7 @@ def login():
 
             st.session_state["usuario_id"] = 1
 
-            st.session_state["entidade_id"] = 1
+            st.session_state["entidade_id"] = 16
 
             st.session_state["funcao_usuario"] = "Administrador"
 
