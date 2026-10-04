@@ -28704,7 +28704,7 @@ def cadastro_grupos_produtos():
     )
 
 
-def grupo_produto_incluir_v2():
+def grupo_produto_incluir():
 
     # ========================================================
     # DEBUG / ENTIDADE
