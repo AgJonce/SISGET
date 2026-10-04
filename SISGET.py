@@ -30100,109 +30100,269 @@ def cadastro_produtos():
 
 def produto_incluir():
 
+    # ========================================================
+    # ENTIDADE
+    # ========================================================
+
+    entidade_id = st.session_state.get(
+        "entidade_id"
+    )
+
+    if entidade_id is None:
+
+        st.error(
+            "❌ Entidade não identificada no usuário logado."
+        )
+
+        return
+
+    # ========================================================
+    # RESET
+    # ========================================================
+
     if "sisget_produto_reset" not in st.session_state:
-        st.session_state["sisget_produto_reset"] = 0
+
+        st.session_state[
+            "sisget_produto_reset"
+        ] = 0
 
     reset = st.session_state[
         "sisget_produto_reset"
     ]
 
+    # ========================================================
+    # GRUPOS DA ENTIDADE
+    # ========================================================
+
     grupos = _sisget_fetch(
         """
-        SELECT id, codigo, descricao
+        SELECT
+            id,
+            codigo,
+            descricao
+
         FROM grupos_produtos
+
         WHERE ativo = TRUE
-        ORDER BY codigo
-        """
+          AND entidade_id = ?
+
+        ORDER BY
+            codigo
+        """,
+        (
+            entidade_id,
+        )
     )
 
     if not grupos:
-        st.warning("⚠️ Cadastre um Grupo primeiro.")
+
+        st.warning(
+            "⚠️ Cadastre um Grupo primeiro."
+        )
+
         return
 
     mapa_grupos = {
+
         f"{codigo} - {descricao}": id_
-        for id_, codigo, descricao in grupos
+
+        for (
+            id_,
+            codigo,
+            descricao
+        ) in grupos
     }
+
+    # ========================================================
+    # GRUPO
+    # ========================================================
 
     grupo_nome = st.selectbox(
         "Grupo *",
-        list(mapa_grupos.keys()),
-        key=f"produto_grupo_{reset}"
+        list(
+            mapa_grupos.keys()
+        ),
+        key=(
+            f"produto_grupo_{reset}"
+        )
     )
 
     grupo_id = mapa_grupos[
         grupo_nome
     ]
 
+    # ========================================================
+    # SUBGRUPOS
+    # ========================================================
+
     subgrupos = _sisget_fetch(
         """
-        SELECT id, codigo, descricao
+        SELECT
+            id,
+            codigo,
+            descricao
+
         FROM subgrupos_produtos
+
         WHERE grupo_id = ?
           AND ativo = TRUE
-        ORDER BY codigo
+
+        ORDER BY
+            codigo
         """,
-        (grupo_id,)
+        (
+            grupo_id,
+        )
     )
 
     if not subgrupos:
+
         st.warning(
-            "⚠️ Cadastre um Subgrupo para o Grupo."
+            "⚠️ Cadastre um Subgrupo para o Grupo selecionado."
         )
+
         return
 
     mapa_subgrupos = {
+
         f"{codigo} - {descricao}": id_
-        for id_, codigo, descricao in subgrupos
+
+        for (
+            id_,
+            codigo,
+            descricao
+        ) in subgrupos
     }
+
+    # ========================================================
+    # UNIDADES DE COMPRA
+    # ========================================================
 
     compras = _sisget_fetch(
         """
-        SELECT id, codigo, descricao
+        SELECT
+            id,
+            codigo,
+            descricao
+
         FROM unidades_compra
+
         WHERE ativo = TRUE
-        ORDER BY codigo
+
+        ORDER BY
+            codigo
         """
     )
+
+    # ========================================================
+    # UNIDADES DE MOVIMENTAÇÃO
+    # ========================================================
 
     movimentos = _sisget_fetch(
         """
-        SELECT id, codigo, descricao, fator_conversao
+        SELECT
+            id,
+            codigo,
+            descricao,
+            fator_conversao
+
         FROM unidades_movimentacao
+
         WHERE ativo = TRUE
-        ORDER BY codigo
+
+        ORDER BY
+            codigo
         """
     )
 
-    if not compras or not movimentos:
+    if not compras:
+
         st.warning(
-            "⚠️ Cadastre as Unidades primeiro."
+            "⚠️ Cadastre uma Unidade de Compra primeiro."
         )
+
+        return
+
+    if not movimentos:
+
+        st.warning(
+            "⚠️ Cadastre uma Unidade de Movimentação primeiro."
+        )
+
         return
 
     mapa_compras = {
+
         f"{codigo} - {descricao}": id_
-        for id_, codigo, descricao in compras
+
+        for (
+            id_,
+            codigo,
+            descricao
+        ) in compras
     }
 
-    mapa_movimentos = {
-        (
-            f"{codigo} - {descricao}"
-            f" | fator {float(fator):g}"
-        ): id_
-        for id_, codigo, descricao, fator in movimentos
-    }
+    mapa_movimentos = {}
+
+    for (
+        id_,
+        codigo_mov,
+        descricao_mov,
+        fator
+    ) in movimentos:
+
+        try:
+
+            fator_texto = (
+                f"{float(fator):g}"
+            )
+
+        except Exception:
+
+            fator_texto = str(
+                fator or 1
+            )
+
+        descricao_mapa = (
+            f"{codigo_mov} - "
+            f"{descricao_mov} | "
+            f"fator {fator_texto}"
+        )
+
+        mapa_movimentos[
+            descricao_mapa
+        ] = id_
+
+    # ========================================================
+    # CÓDIGO
+    # ========================================================
 
     codigo = sisget_proximo_codigo(
         "produtos",
         tamanho=6
     )
 
+    # ========================================================
+    # FORMULÁRIO
+    # ========================================================
+
     with st.form(
-        f"form_produto_{reset}_{grupo_id}"
+        f"form_produto_"
+        f"{reset}_"
+        f"{grupo_id}"
     ):
-        col1, col2 = st.columns([1, 4])
+
+        # ====================================================
+        # IDENTIFICAÇÃO
+        # ====================================================
+
+        st.markdown(
+            "### 📦 Dados do Item"
+        )
+
+        col1, col2 = st.columns(
+            [1, 4]
+        )
 
         col1.text_input(
             "Código",
@@ -30214,9 +30374,27 @@ def produto_incluir():
             "Descrição *"
         )
 
-        subgrupo_nome = st.selectbox(
+        # ====================================================
+        # CLASSIFICAÇÃO
+        # ====================================================
+
+        st.markdown(
+            "### 📁 Classificação"
+        )
+
+        col3, col4 = st.columns(2)
+
+        col3.text_input(
+            "Grupo",
+            value=grupo_nome,
+            disabled=True
+        )
+
+        subgrupo_nome = col4.selectbox(
             "Subgrupo *",
-            list(mapa_subgrupos.keys())
+            list(
+                mapa_subgrupos.keys()
+            )
         )
 
         tipo_item = st.selectbox(
@@ -30228,20 +30406,36 @@ def produto_incluir():
             ]
         )
 
-        col3, col4 = st.columns(2)
+        # ====================================================
+        # UNIDADES
+        # ====================================================
 
-        unidade_compra_nome = col3.selectbox(
+        st.markdown(
+            "### 📏 Unidades"
+        )
+
+        col5, col6 = st.columns(2)
+
+        unidade_compra_nome = col5.selectbox(
             "Unidade de Compra *",
-            list(mapa_compras.keys())
+            list(
+                mapa_compras.keys()
+            )
         )
 
-        unidade_mov_nome = col4.selectbox(
+        unidade_mov_nome = col6.selectbox(
             "Unidade de Movimentação *",
-            list(mapa_movimentos.keys())
+            list(
+                mapa_movimentos.keys()
+            )
         )
 
-        item_patrimonial = st.checkbox(
-            "Item Patrimonial"
+        # ====================================================
+        # ESTOQUE
+        # ====================================================
+
+        st.markdown(
+            "### 📊 Controle de Estoque"
         )
 
         controla_estoque = st.checkbox(
@@ -30256,6 +30450,14 @@ def produto_incluir():
             format="%.6f"
         )
 
+        # ====================================================
+        # CONTABILIDADE
+        # ====================================================
+
+        st.markdown(
+            "### 💰 Classificação Orçamentária"
+        )
+
         conta_orcamentaria = st.text_input(
             "Conta / Natureza Orçamentária Padrão"
         )
@@ -30264,8 +30466,17 @@ def produto_incluir():
             "Classificação Tribunal de Contas"
         )
 
+        # ====================================================
+        # ESPECIFICAÇÃO
+        # ====================================================
+
+        st.markdown(
+            "### 📝 Especificação"
+        )
+
         especificacao = st.text_area(
-            "Especificação Técnica"
+            "Especificação Técnica",
+            height=120
         )
 
         salvar = st.form_submit_button(
@@ -30274,66 +30485,184 @@ def produto_incluir():
             use_container_width=True
         )
 
+    # ========================================================
+    # SALVAR
+    # ========================================================
+
     if salvar:
 
-        if not descricao.strip():
-            st.warning("⚠️ Informe a descrição.")
+        descricao = descricao.strip()
+
+        if not descricao:
+
+            st.warning(
+                "⚠️ Informe a descrição."
+            )
+
             return
 
-        if tipo_item == "Patrimonial":
-            item_patrimonial = True
+        # ====================================================
+        # PATRIMONIAL AUTOMÁTICO
+        # ====================================================
+
+        item_patrimonial = (
+            tipo_item == "Patrimonial"
+        )
+
+        # ====================================================
+        # SERVIÇO NÃO DEVE CONTROLAR ESTOQUE
+        # ====================================================
+
+        if tipo_item == "Serviço":
+
+            controla_estoque_salvar = False
+            estoque_minimo_salvar = 0.0
+
+        else:
+
+            controla_estoque_salvar = (
+                controla_estoque
+            )
+
+            estoque_minimo_salvar = float(
+                estoque_minimo
+            )
+
+        # ====================================================
+        # DUPLICIDADE
+        # ====================================================
+
+        existe = _sisget_fetchone(
+            """
+            SELECT
+                id
+
+            FROM produtos
+
+            WHERE UPPER(descricao) = UPPER(?)
+              AND grupo_id = ?
+              AND subgrupo_id = ?
+            """,
+            (
+                descricao,
+                grupo_id,
+                mapa_subgrupos[
+                    subgrupo_nome
+                ]
+            )
+        )
+
+        if existe:
+
+            st.warning(
+                "⚠️ Já existe um item com esta descrição "
+                "neste Grupo/Subgrupo."
+            )
+
+            return
+
+        # ====================================================
+        # NOVO CÓDIGO
+        # ====================================================
 
         codigo = sisget_proximo_codigo(
             "produtos",
             tamanho=6
         )
 
-        if _sisget_salvar(
+        # ====================================================
+        # INSERT
+        # ====================================================
+
+        sucesso = _sisget_salvar(
             """
             INSERT INTO produtos
             (
                 codigo,
                 descricao,
+
                 grupo_id,
                 subgrupo_id,
+
                 tipo_item,
                 item_patrimonial,
+
                 unidade_compra_id,
                 unidade_movimentacao_id,
+
                 controla_estoque,
                 estoque_minimo,
+
                 conta_orcamentaria_padrao,
                 codigo_tribunal,
+
                 especificacao,
+
                 ativo
             )
             VALUES
             (
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE
+                ?, ?,
+                ?, ?,
+                ?, ?,
+                ?, ?,
+                ?, ?,
+                ?, ?,
+                ?,
+                TRUE
             )
             """,
             (
                 codigo,
-                descricao.strip(),
+                descricao,
+
                 grupo_id,
-                mapa_subgrupos[subgrupo_nome],
+
+                mapa_subgrupos[
+                    subgrupo_nome
+                ],
+
                 tipo_item,
                 item_patrimonial,
-                mapa_compras[unidade_compra_nome],
-                mapa_movimentos[unidade_mov_nome],
-                controla_estoque,
-                float(estoque_minimo),
-                conta_orcamentaria.strip() or None,
-                codigo_tribunal.strip() or None,
-                especificacao.strip() or None
+
+                mapa_compras[
+                    unidade_compra_nome
+                ],
+
+                mapa_movimentos[
+                    unidade_mov_nome
+                ],
+
+                controla_estoque_salvar,
+                estoque_minimo_salvar,
+
+                conta_orcamentaria.strip()
+                or None,
+
+                codigo_tribunal.strip()
+                or None,
+
+                especificacao.strip()
+                or None
             )
-        ):
+        )
+
+        # ====================================================
+        # SUCESSO
+        # ====================================================
+
+        if sucesso:
+
             st.session_state[
                 "sisget_produto_reset"
             ] += 1
 
-            st.rerun()
+            st.success(
+                f"✅ Item cadastrado com sucesso. "
+                f"Código: {codigo}"
+            )
 
+            st.rerun()
 
 def produto_localizar():
 
