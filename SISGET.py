@@ -28704,17 +28704,21 @@ def cadastro_grupos_produtos():
     )
 
 
-def grupo_produto_incluir():
+def grupo_produto_incluir_v2():
 
     # ========================================================
-    # ENTIDADE
+    # DEBUG / ENTIDADE
     # ========================================================
 
     entidade_id = st.session_state.get(
         "entidade_id"
     )
 
-    if not entidade_id:
+    st.caption(
+        f"Entidade atual: {entidade_id}"
+    )
+
+    if entidade_id is None:
 
         st.error(
             "❌ Entidade não identificada no usuário logado."
@@ -28726,19 +28730,18 @@ def grupo_produto_incluir():
     # RESET
     # ========================================================
 
-    if "sisget_grupo_reset" not in st.session_state:
+    if "sisget_grupo_reset_v2" not in st.session_state:
 
         st.session_state[
-            "sisget_grupo_reset"
+            "sisget_grupo_reset_v2"
         ] = 0
 
     reset = st.session_state[
-        "sisget_grupo_reset"
+        "sisget_grupo_reset_v2"
     ]
 
     # ========================================================
     # CÓDIGO
-    # AGORA POR ENTIDADE
     # ========================================================
 
     codigo = sisget_proximo_codigo(
@@ -28755,7 +28758,7 @@ def grupo_produto_incluir():
     # ========================================================
 
     with st.form(
-        f"form_grupo_incluir_{reset}"
+        f"form_grupo_incluir_v2_{reset}"
     ):
 
         col1, col2 = st.columns(
@@ -28795,7 +28798,7 @@ def grupo_produto_incluir():
             return
 
         # ====================================================
-        # VERIFICAR DUPLICIDADE
+        # DUPLICIDADE
         # ====================================================
 
         existe = _sisget_fetchone(
@@ -28817,13 +28820,14 @@ def grupo_produto_incluir():
         if existe:
 
             st.warning(
-                "⚠️ Já existe um grupo com esta descrição."
+                "⚠️ Já existe um grupo "
+                "com esta descrição."
             )
 
             return
 
         # ====================================================
-        # CÓDIGO NOVAMENTE
+        # NOVO CÓDIGO
         # ====================================================
 
         codigo = sisget_proximo_codigo(
@@ -28863,14 +28867,10 @@ def grupo_produto_incluir():
             )
         )
 
-        # ====================================================
-        # SUCESSO
-        # ====================================================
-
         if sucesso:
 
             st.session_state[
-                "sisget_grupo_reset"
+                "sisget_grupo_reset_v2"
             ] += 1
 
             st.success(
