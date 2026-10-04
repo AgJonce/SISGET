@@ -36907,30 +36907,18 @@ def login():
 
     if entrar:
 
-        # ====================================================
-        # LOGIN ADMINISTRADOR
-        # ====================================================
-
         if (
             usuario == "admin"
             and senha == "123"
         ):
 
-            st.session_state[
-                "usuario_logado"
-            ] = "admin"
+            st.session_state["usuario_logado"] = "admin"
 
-            st.session_state[
-                "usuario_id"
-            ] = 1
+            st.session_state["usuario_id"] = 1
 
-            st.session_state[
-                "entidade_id"
-            ] = 1
+            st.session_state["entidade_id"] = 1
 
-            st.session_state[
-                "funcao_usuario"
-            ] = "Administrador"
+            st.session_state["funcao_usuario"] = "Administrador"
 
             st.success(
                 "✅ Login realizado com sucesso!"
@@ -36943,7 +36931,6 @@ def login():
             st.error(
                 "🚫 Usuário ou senha inválidos."
             )
-
 
 # ============================================================
 # LOGOUT
