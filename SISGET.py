@@ -36956,32 +36956,21 @@ def logout():
         ]
 
     st.rerun()
-def logout():
 
-    chaves = list(
-        st.session_state.keys()
-    )
-
-
-    for chave in chaves:
-
-        del st.session_state[
-            chave
-        ]
-
-
-    st.rerun()
-
-
-# ============================================================
-# MAIN
-# ============================================================
 
 def main():
 
     # ========================================================
-    # LOGIN
+    # CORRIGIR ENTIDADE DA SESSÃO
     # ========================================================
+
+    if st.session_state.get(
+        "usuario_logado"
+    ) == "admin":
+
+        st.session_state[
+            "entidade_id"
+        ] = 16
 
     if "usuario_logado" not in (
         st.session_state
@@ -36990,11 +36979,6 @@ def main():
         login()
 
         return
-
-
-    # ========================================================
-    # USUÁRIO
-    # ========================================================
 
     usuario = (
         st.session_state.get(
