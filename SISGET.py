@@ -30533,6 +30533,8 @@ def produto_incluir():
             (
                 entidade_id,
                 codigo,
+
+                produto,
                 descricao,
 
                 grupo_id,
