@@ -36890,7 +36890,9 @@ def login():
 
     with st.form("form_login"):
 
-        usuario = st.text_input("👤 Usuário")
+        usuario = st.text_input(
+            "👤 Usuário"
+        )
 
         senha = st.text_input(
             "🔑 Senha",
@@ -36905,11 +36907,30 @@ def login():
 
     if entrar:
 
-        if usuario == "admin" and senha == "123":
+        # ====================================================
+        # LOGIN ADMINISTRADOR
+        # ====================================================
 
-            st.session_state["usuario_logado"] = "admin"
-            st.session_state["usuario_id"] = 1
-            st.session_state["funcao_usuario"] = "Administrador"
+        if (
+            usuario == "admin"
+            and senha == "123"
+        ):
+
+            st.session_state[
+                "usuario_logado"
+            ] = "admin"
+
+            st.session_state[
+                "usuario_id"
+            ] = 1
+
+            st.session_state[
+                "entidade_id"
+            ] = 1
+
+            st.session_state[
+                "funcao_usuario"
+            ] = "Administrador"
 
             st.success(
                 "✅ Login realizado com sucesso!"
@@ -36927,7 +36948,6 @@ def login():
 # ============================================================
 # LOGOUT
 # ============================================================
-
 def logout():
 
     chaves = list(
