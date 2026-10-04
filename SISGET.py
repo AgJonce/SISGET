@@ -30140,14 +30140,10 @@ def produto_incluir():
             id,
             codigo,
             descricao
-
         FROM grupos_produtos
-
         WHERE ativo = TRUE
           AND entidade_id = ?
-
-        ORDER BY
-            codigo
+        ORDER BY codigo
         """,
         (
             entidade_id,
@@ -30163,28 +30159,16 @@ def produto_incluir():
         return
 
     mapa_grupos = {
-
         f"{codigo} - {descricao}": id_
-
-        for (
-            id_,
-            codigo,
-            descricao
-        ) in grupos
+        for id_, codigo, descricao in grupos
     }
-
-    # ========================================================
-    # GRUPO
-    # ========================================================
 
     grupo_nome = st.selectbox(
         "Grupo *",
         list(
             mapa_grupos.keys()
         ),
-        key=(
-            f"produto_grupo_{reset}"
-        )
+        key=f"produto_grupo_{reset}"
     )
 
     grupo_id = mapa_grupos[
@@ -30201,14 +30185,10 @@ def produto_incluir():
             id,
             codigo,
             descricao
-
         FROM subgrupos_produtos
-
         WHERE grupo_id = ?
           AND ativo = TRUE
-
-        ORDER BY
-            codigo
+        ORDER BY codigo
         """,
         (
             grupo_id,
@@ -30224,18 +30204,12 @@ def produto_incluir():
         return
 
     mapa_subgrupos = {
-
         f"{codigo} - {descricao}": id_
-
-        for (
-            id_,
-            codigo,
-            descricao
-        ) in subgrupos
+        for id_, codigo, descricao in subgrupos
     }
 
     # ========================================================
-    # UNIDADES DE COMPRA
+    # UNIDADES
     # ========================================================
 
     compras = _sisget_fetch(
@@ -30244,19 +30218,11 @@ def produto_incluir():
             id,
             codigo,
             descricao
-
         FROM unidades_compra
-
         WHERE ativo = TRUE
-
-        ORDER BY
-            codigo
+        ORDER BY codigo
         """
     )
-
-    # ========================================================
-    # UNIDADES DE MOVIMENTAÇÃO
-    # ========================================================
 
     movimentos = _sisget_fetch(
         """
@@ -30265,13 +30231,9 @@ def produto_incluir():
             codigo,
             descricao,
             fator_conversao
-
         FROM unidades_movimentacao
-
         WHERE ativo = TRUE
-
-        ORDER BY
-            codigo
+        ORDER BY codigo
         """
     )
 
@@ -30292,14 +30254,8 @@ def produto_incluir():
         return
 
     mapa_compras = {
-
         f"{codigo} - {descricao}": id_
-
-        for (
-            id_,
-            codigo,
-            descricao
-        ) in compras
+        for id_, codigo, descricao in compras
     }
 
     mapa_movimentos = {}
@@ -30313,9 +30269,7 @@ def produto_incluir():
 
         try:
 
-            fator_texto = (
-                f"{float(fator):g}"
-            )
+            fator_texto = f"{float(fator):g}"
 
         except Exception:
 
@@ -30335,11 +30289,16 @@ def produto_incluir():
 
     # ========================================================
     # CÓDIGO
+    # AGORA POR ENTIDADE
     # ========================================================
 
     codigo = sisget_proximo_codigo(
         "produtos",
-        tamanho=6
+        tamanho=6,
+        filtro_sql="AND entidade_id = ?",
+        parametros=(
+            entidade_id,
+        )
     )
 
     # ========================================================
@@ -30347,14 +30306,8 @@ def produto_incluir():
     # ========================================================
 
     with st.form(
-        f"form_produto_"
-        f"{reset}_"
-        f"{grupo_id}"
+        f"form_produto_{reset}_{grupo_id}"
     ):
-
-        # ====================================================
-        # IDENTIFICAÇÃO
-        # ====================================================
 
         st.markdown(
             "### 📦 Dados do Item"
@@ -30451,7 +30404,7 @@ def produto_incluir():
         )
 
         # ====================================================
-        # CONTABILIDADE
+        # ORÇAMENTO / TRIBUNAL
         # ====================================================
 
         st.markdown(
@@ -30502,16 +30455,12 @@ def produto_incluir():
             return
 
         # ====================================================
-        # PATRIMONIAL AUTOMÁTICO
+        # REGRAS
         # ====================================================
 
         item_patrimonial = (
             tipo_item == "Patrimonial"
         )
-
-        # ====================================================
-        # SERVIÇO NÃO DEVE CONTROLAR ESTOQUE
-        # ====================================================
 
         if tipo_item == "Serviço":
 
@@ -30536,14 +30485,14 @@ def produto_incluir():
             """
             SELECT
                 id
-
             FROM produtos
-
-            WHERE UPPER(descricao) = UPPER(?)
+            WHERE entidade_id = ?
+              AND UPPER(descricao) = UPPER(?)
               AND grupo_id = ?
               AND subgrupo_id = ?
             """,
             (
+                entidade_id,
                 descricao,
                 grupo_id,
                 mapa_subgrupos[
@@ -30562,12 +30511,16 @@ def produto_incluir():
             return
 
         # ====================================================
-        # NOVO CÓDIGO
+        # CÓDIGO NOVAMENTE
         # ====================================================
 
         codigo = sisget_proximo_codigo(
             "produtos",
-            tamanho=6
+            tamanho=6,
+            filtro_sql="AND entidade_id = ?",
+            parametros=(
+                entidade_id,
+            )
         )
 
         # ====================================================
@@ -30578,6 +30531,7 @@ def produto_incluir():
             """
             INSERT INTO produtos
             (
+                entidade_id,
                 codigo,
                 descricao,
 
@@ -30598,26 +30552,30 @@ def produto_incluir():
 
                 especificacao,
 
-                ativo
+                ativo,
+                criado_em,
+                atualizado_em
             )
             VALUES
             (
-                ?, ?,
+                ?, ?, ?,
                 ?, ?,
                 ?, ?,
                 ?, ?,
                 ?, ?,
                 ?, ?,
                 ?,
-                TRUE
+                TRUE,
+                CURRENT_TIMESTAMP,
+                CURRENT_TIMESTAMP
             )
             """,
             (
+                entidade_id,
                 codigo,
                 descricao,
 
                 grupo_id,
-
                 mapa_subgrupos[
                     subgrupo_nome
                 ],
