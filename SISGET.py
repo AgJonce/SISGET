@@ -30554,27 +30554,34 @@ def produto_incluir():
 
                 especificacao,
 
-                ativo,
-                criado_em,
-                atualizado_em
+                ativo
             )
             VALUES
             (
-                ?, ?, ?,
                 ?, ?,
+
                 ?, ?,
+
                 ?, ?,
+
                 ?, ?,
+
                 ?, ?,
+
+                ?, ?,
+
+                ?, ?,
+
                 ?,
-                TRUE,
-                CURRENT_TIMESTAMP,
-                CURRENT_TIMESTAMP
+
+                TRUE
             )
             """,
             (
                 entidade_id,
                 codigo,
+
+                descricao,
                 descricao,
 
                 grupo_id,
@@ -30623,7 +30630,6 @@ def produto_incluir():
             )
 
             st.rerun()
-
 def produto_localizar():
 
     df = _sisget_dataframe(
