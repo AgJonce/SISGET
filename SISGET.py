@@ -28706,22 +28706,61 @@ def cadastro_grupos_produtos():
 
 def grupo_produto_incluir():
 
+    # ========================================================
+    # ENTIDADE
+    # ========================================================
+
+    entidade_id = st.session_state.get(
+        "entidade_id"
+    )
+
+    if not entidade_id:
+
+        st.error(
+            "❌ Entidade não identificada no usuário logado."
+        )
+
+        return
+
+    # ========================================================
+    # RESET
+    # ========================================================
+
     if "sisget_grupo_reset" not in st.session_state:
-        st.session_state["sisget_grupo_reset"] = 0
+
+        st.session_state[
+            "sisget_grupo_reset"
+        ] = 0
 
     reset = st.session_state[
         "sisget_grupo_reset"
     ]
 
+    # ========================================================
+    # CÓDIGO
+    # AGORA POR ENTIDADE
+    # ========================================================
+
     codigo = sisget_proximo_codigo(
         "grupos_produtos",
-        tamanho=3
+        tamanho=3,
+        filtro_sql="AND entidade_id = ?",
+        parametros=(
+            entidade_id,
+        )
     )
+
+    # ========================================================
+    # FORMULÁRIO
+    # ========================================================
 
     with st.form(
         f"form_grupo_incluir_{reset}"
     ):
-        col1, col2 = st.columns([1, 4])
+
+        col1, col2 = st.columns(
+            [1, 4]
+        )
 
         col1.text_input(
             "Código",
@@ -28739,32 +28778,106 @@ def grupo_produto_incluir():
             use_container_width=True
         )
 
+    # ========================================================
+    # SALVAR
+    # ========================================================
+
     if salvar:
 
-        if not descricao.strip():
-            st.warning("⚠️ Informe a descrição.")
+        descricao = descricao.strip()
+
+        if not descricao:
+
+            st.warning(
+                "⚠️ Informe a descrição."
+            )
+
             return
+
+        # ====================================================
+        # VERIFICAR DUPLICIDADE
+        # ====================================================
+
+        existe = _sisget_fetchone(
+            """
+            SELECT
+                id
+
+            FROM grupos_produtos
+
+            WHERE entidade_id = ?
+              AND UPPER(descricao) = UPPER(?)
+            """,
+            (
+                entidade_id,
+                descricao
+            )
+        )
+
+        if existe:
+
+            st.warning(
+                "⚠️ Já existe um grupo com esta descrição."
+            )
+
+            return
+
+        # ====================================================
+        # CÓDIGO NOVAMENTE
+        # ====================================================
 
         codigo = sisget_proximo_codigo(
             "grupos_produtos",
-            tamanho=3
+            tamanho=3,
+            filtro_sql="AND entidade_id = ?",
+            parametros=(
+                entidade_id,
+            )
         )
 
-        if _sisget_salvar(
+        # ====================================================
+        # INSERT
+        # ====================================================
+
+        sucesso = _sisget_salvar(
             """
             INSERT INTO grupos_produtos
-            (codigo, descricao, ativo)
-            VALUES (?, ?, TRUE)
+            (
+                entidade_id,
+                codigo,
+                descricao,
+                ativo,
+                criado_em
+            )
+            VALUES
+            (
+                ?, ?, ?,
+                TRUE,
+                CURRENT_TIMESTAMP
+            )
             """,
             (
+                entidade_id,
                 codigo,
-                descricao.strip()
+                descricao
             )
-        ):
-            st.session_state["sisget_grupo_reset"] += 1
+        )
+
+        # ====================================================
+        # SUCESSO
+        # ====================================================
+
+        if sucesso:
+
+            st.session_state[
+                "sisget_grupo_reset"
+            ] += 1
+
+            st.success(
+                "✅ Grupo cadastrado com sucesso."
+            )
+
             st.rerun()
-
-
 def grupo_produto_localizar():
 
     df = _sisget_dataframe(
