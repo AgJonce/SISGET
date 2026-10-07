@@ -12241,40 +12241,55 @@ def modulo_solicitacoes():
 # PRÓXIMO NÚMERO DA SOLICITAÇÃO
 # ============================================================
 
-def sisget_proximo_numero_solicitacao():
+def sisget_proximo_numero_solicitacao(
+    tipo_solicitacao=None,
+    exercicio=None
+):
 
     # ========================================================
-    # BUSCAR MAIOR NÚMERO
+    # NUMERAÇÃO COMPATÍVEL COM SOLICITAÇÕES GERAIS E POR TIPO
     # ========================================================
 
-    resultado = _sisget_fetchone(
-        """
+    sql = """
         SELECT
             COALESCE(
-                MAX(
-                    CAST(numero AS INTEGER)
-                ),
+                MAX(TRIM(numero::TEXT)::BIGINT),
                 0
             )
-
         FROM solicitacoes
-
         WHERE numero IS NOT NULL
-          AND TRIM(numero) ~ '^[0-9]+$'
-        """
+          AND TRIM(numero::TEXT) ~ '^[0-9]{1,18}$'
+    """
+
+    parametros = []
+
+    if tipo_solicitacao is not None:
+
+        sql += " AND tipo_solicitacao = ?"
+
+        parametros.append(tipo_solicitacao)
+
+    if exercicio is not None:
+
+        sql += " AND exercicio::TEXT = ?"
+
+        parametros.append(str(exercicio))
+
+    registro = _sisget_fetchone(
+        sql,
+        tuple(parametros)
     )
 
-    # ========================================================
-    # PRÓXIMO NÚMERO
-    # ========================================================
+    if registro is None:
 
-    if not resultado:
+        st.error(
+            "❌ Falha na consulta da numeração. "
+            "A solicitação não será salva até corrigir o banco."
+        )
 
-        return 1
+        return None
 
-    return int(
-        resultado[0] or 0
-    ) + 1
+    return int(registro[0] or 0) + 1
 
 # ============================================================
 # SOLICITAÇÃO - INCLUIR
@@ -12297,6 +12312,11 @@ def solicitacao_incluir():
     st.session_state.setdefault(chave_itens, [])
 
     numero = sisget_proximo_numero_solicitacao()
+
+    if numero is None:
+
+        return
+
     st.info(f"🔢 Solicitação nº {str(numero).zfill(6)}")
 
     # ========================================================
@@ -12601,6 +12621,10 @@ def solicitacao_incluir():
             return
 
         numero = sisget_proximo_numero_solicitacao()
+
+        if numero is None:
+
+            return
 
         try:
             cursor.execute(
@@ -31342,6 +31366,8 @@ def sisget_solicitacao_incluir_base(
     etapa_inicial
 ):
 
+    from datetime import datetime
+
     if chave_reset not in st.session_state:
         st.session_state[chave_reset] = 0
 
@@ -31353,6 +31379,10 @@ def sisget_solicitacao_incluir_base(
         tipo_solicitacao,
         exercicio
     )
+
+    if numero is None:
+
+        return
 
     prefixos = {
         "INTERNA": "INT",
@@ -31429,6 +31459,14 @@ def sisget_solicitacao_incluir_base(
             use_container_width=True
         )
 
+    if f"sisget_mensagem_{chave_reset}" in st.session_state:
+
+        st.success(
+            st.session_state.pop(
+                f"sisget_mensagem_{chave_reset}"
+            )
+        )
+
     if salvar:
 
         if not objeto.strip() or not justificativa.strip():
@@ -31441,6 +31479,10 @@ def sisget_solicitacao_incluir_base(
             tipo_solicitacao,
             exercicio
         )
+
+        if numero is None:
+
+            return
 
         codigo = (
             f"{prefixos[tipo_solicitacao]}"
@@ -31493,8 +31535,17 @@ def sisget_solicitacao_incluir_base(
         )
 
         if solicitacao_id:
+
+            st.session_state[
+                f"sisget_mensagem_{chave_reset}"
+            ] = (
+                f"✅ Solicitação {codigo} salva com sucesso!"
+            )
+
             st.session_state[chave_reset] += 1
+
             st.rerun()
+
 
 
 def solicitacao_interna_incluir():
