@@ -28704,11 +28704,8 @@ def cadastro_grupos_produtos():
     )
 
 
-def grupo_produto_incluir():
 
-    # ========================================================
-    # ENTIDADE
-    # ========================================================
+def grupo_produto_incluir():
 
     entidade_id = st.session_state.get(
         "entidade_id"
@@ -28722,10 +28719,6 @@ def grupo_produto_incluir():
 
         return
 
-    # ========================================================
-    # RESET
-    # ========================================================
-
     if "sisget_grupo_reset" not in st.session_state:
 
         st.session_state[
@@ -28736,10 +28729,6 @@ def grupo_produto_incluir():
         "sisget_grupo_reset"
     ]
 
-    # ========================================================
-    # CÓDIGO
-    # ========================================================
-
     codigo = sisget_proximo_codigo(
         "grupos_produtos",
         tamanho=3,
@@ -28748,10 +28737,6 @@ def grupo_produto_incluir():
             entidade_id,
         )
     )
-
-    # ========================================================
-    # FORMULÁRIO
-    # ========================================================
 
     with st.form(
         f"form_grupo_incluir_{reset}"
@@ -28777,9 +28762,13 @@ def grupo_produto_incluir():
             use_container_width=True
         )
 
-    # ========================================================
-    # SALVAR
-    # ========================================================
+    if "sisget_mensagem_grupo" in st.session_state:
+
+        st.success(
+            st.session_state.pop(
+                "sisget_mensagem_grupo"
+            )
+        )
 
     if salvar:
 
@@ -28792,10 +28781,6 @@ def grupo_produto_incluir():
             )
 
             return
-
-        # ====================================================
-        # DUPLICIDADE
-        # ====================================================
 
         existe = _sisget_fetchone(
             """
@@ -28814,15 +28799,10 @@ def grupo_produto_incluir():
         if existe:
 
             st.warning(
-                "⚠️ Já existe um grupo "
-                "com esta descrição."
+                "⚠️ Já existe um grupo com esta descrição."
             )
 
             return
-
-        # ====================================================
-        # NOVO CÓDIGO
-        # ====================================================
 
         codigo = sisget_proximo_codigo(
             "grupos_produtos",
@@ -28833,10 +28813,6 @@ def grupo_produto_incluir():
             )
         )
 
-        # ====================================================
-        # INSERT
-        # ====================================================
-
         sucesso = _sisget_salvar(
             """
             INSERT INTO grupos_produtos
@@ -28844,14 +28820,11 @@ def grupo_produto_incluir():
                 entidade_id,
                 codigo,
                 descricao,
-                ativo,
-                criado_em
+                ativo
             )
             VALUES
             (
-                ?, ?, ?,
-                TRUE,
-                CURRENT_TIMESTAMP
+                ?, ?, ?, TRUE
             )
             """,
             (
@@ -28861,21 +28834,21 @@ def grupo_produto_incluir():
             )
         )
 
-        # ====================================================
-        # SUCESSO
-        # ====================================================
-
         if sucesso:
+
+            st.session_state[
+                "sisget_mensagem_grupo"
+            ] = (
+                f"✅ Grupo salvo com sucesso. Código: {codigo}"
+            )
 
             st.session_state[
                 "sisget_grupo_reset"
             ] += 1
 
-            st.success(
-                "✅ Grupo cadastrado com sucesso."
-            )
-
             st.rerun()
+
+
 def grupo_produto_localizar():
 
     df = _sisget_dataframe(
@@ -29045,8 +29018,23 @@ def cadastro_subgrupos_produtos():
 
 def subgrupo_produto_incluir():
 
+    entidade_id = st.session_state.get(
+        "entidade_id"
+    )
+
+    if entidade_id is None:
+
+        st.error(
+            "❌ Entidade não identificada no usuário logado."
+        )
+
+        return
+
     if "sisget_subgrupo_reset" not in st.session_state:
-        st.session_state["sisget_subgrupo_reset"] = 0
+
+        st.session_state[
+            "sisget_subgrupo_reset"
+        ] = 0
 
     reset = st.session_state[
         "sisget_subgrupo_reset"
@@ -29054,29 +29042,42 @@ def subgrupo_produto_incluir():
 
     grupos = _sisget_fetch(
         """
-        SELECT id, codigo, descricao
+        SELECT
+            id,
+            codigo,
+            descricao
         FROM grupos_produtos
         WHERE ativo = TRUE
+          AND entidade_id = ?
         ORDER BY codigo
-        """
+        """,
+        (
+            entidade_id,
+        )
     )
 
     if not grupos:
-        st.warning("⚠️ Cadastre um Grupo primeiro.")
+
+        st.warning(
+            "⚠️ Cadastre um Grupo primeiro."
+        )
+
         return
 
-    mapa = {
+    mapa_grupos = {
         f"{codigo} - {descricao}": id_
         for id_, codigo, descricao in grupos
     }
 
     grupo_nome = st.selectbox(
         "Grupo *",
-        list(mapa.keys()),
+        list(
+            mapa_grupos.keys()
+        ),
         key=f"subgrupo_grupo_{reset}"
     )
 
-    grupo_id = mapa[
+    grupo_id = mapa_grupos[
         grupo_nome
     ]
 
@@ -29084,13 +29085,18 @@ def subgrupo_produto_incluir():
         "subgrupos_produtos",
         tamanho=3,
         filtro_sql="AND grupo_id = ?",
-        parametros=(grupo_id,)
+        parametros=(
+            grupo_id,
+        )
     )
 
     with st.form(
         f"form_subgrupo_incluir_{reset}_{grupo_id}"
     ):
-        col1, col2 = st.columns([1, 4])
+
+        col1, col2 = st.columns(
+            [1, 4]
+        )
 
         col1.text_input(
             "Código",
@@ -29108,32 +29114,90 @@ def subgrupo_produto_incluir():
             use_container_width=True
         )
 
+    if "sisget_mensagem_subgrupo" in st.session_state:
+
+        st.success(
+            st.session_state.pop(
+                "sisget_mensagem_subgrupo"
+            )
+        )
+
     if salvar:
 
-        if not descricao.strip():
-            st.warning("⚠️ Informe a descrição.")
+        descricao = descricao.strip()
+
+        if not descricao:
+
+            st.warning(
+                "⚠️ Informe a descrição."
+            )
+
+            return
+
+        existe = _sisget_fetchone(
+            """
+            SELECT
+                id
+            FROM subgrupos_produtos
+            WHERE grupo_id = ?
+              AND UPPER(descricao) = UPPER(?)
+            """,
+            (
+                grupo_id,
+                descricao
+            )
+        )
+
+        if existe:
+
+            st.warning(
+                "⚠️ Já existe um subgrupo com esta descrição neste Grupo."
+            )
+
             return
 
         codigo = sisget_proximo_codigo(
             "subgrupos_produtos",
             tamanho=3,
             filtro_sql="AND grupo_id = ?",
-            parametros=(grupo_id,)
+            parametros=(
+                grupo_id,
+            )
         )
 
-        if _sisget_salvar(
+        sucesso = _sisget_salvar(
             """
             INSERT INTO subgrupos_produtos
-            (grupo_id, codigo, descricao, ativo)
-            VALUES (?, ?, ?, TRUE)
+            (
+                grupo_id,
+                codigo,
+                descricao,
+                ativo
+            )
+            VALUES
+            (
+                ?, ?, ?, TRUE
+            )
             """,
             (
                 grupo_id,
                 codigo,
-                descricao.strip()
+                descricao
             )
-        ):
-            st.session_state["sisget_subgrupo_reset"] += 1
+        )
+
+        if sucesso:
+
+            st.session_state[
+                "sisget_mensagem_subgrupo"
+            ] = (
+                f"✅ Subgrupo salvo com sucesso. Código: {codigo}"
+            )
+
+            st.session_state[
+                "sisget_subgrupo_reset"
+            ] += 1
+
             st.rerun()
 
 
@@ -29344,7 +29408,10 @@ def cadastro_unidades_medida():
 def unidade_medida_incluir():
 
     if "sisget_unidade_medida_reset" not in st.session_state:
-        st.session_state["sisget_unidade_medida_reset"] = 0
+
+        st.session_state[
+            "sisget_unidade_medida_reset"
+        ] = 0
 
     reset = st.session_state[
         "sisget_unidade_medida_reset"
@@ -29356,9 +29423,12 @@ def unidade_medida_incluir():
     )
 
     with st.form(
-        f"form_unidade_medida_{reset}"
+        f"form_unidade_medida_incluir_{reset}"
     ):
-        col1, col2, col3 = st.columns([1, 3, 1])
+
+        col1, col2, col3 = st.columns(
+            [1, 3, 1]
+        )
 
         col1.text_input(
             "Código",
@@ -29367,25 +29437,70 @@ def unidade_medida_incluir():
         )
 
         descricao = col2.text_input(
-            "Descrição *"
+            "Descrição *",
+            placeholder="Ex.: Unidade"
         )
 
         sigla = col3.text_input(
-            "Sigla *"
+            "Sigla *",
+            placeholder="UN"
         )
 
         salvar = st.form_submit_button(
-            "💾 Salvar Unidade",
+            "💾 Salvar Unidade de Medida",
             type="primary",
             use_container_width=True
         )
 
+    if "sisget_mensagem_unidade_medida" in st.session_state:
+
+        st.success(
+            st.session_state.pop(
+                "sisget_mensagem_unidade_medida"
+            )
+        )
+
     if salvar:
 
-        if not descricao.strip() or not sigla.strip():
+        descricao = descricao.strip()
+        sigla = sigla.strip().upper()
+
+        if not descricao:
+
             st.warning(
-                "⚠️ Informe descrição e sigla."
+                "⚠️ Informe a descrição."
             )
+
+            return
+
+        if not sigla:
+
+            st.warning(
+                "⚠️ Informe a sigla."
+            )
+
+            return
+
+        existe = _sisget_fetchone(
+            """
+            SELECT
+                id
+            FROM unidades_medida
+            WHERE UPPER(sigla) = UPPER(?)
+               OR UPPER(descricao) = UPPER(?)
+            """,
+            (
+                sigla,
+                descricao
+            )
+        )
+
+        if existe:
+
+            st.warning(
+                "⚠️ Já existe Unidade de Medida com esta descrição ou sigla."
+            )
+
             return
 
         codigo = sisget_proximo_codigo(
@@ -29393,24 +29508,201 @@ def unidade_medida_incluir():
             tamanho=3
         )
 
-        if _sisget_salvar(
+        sucesso = _sisget_salvar(
             """
             INSERT INTO unidades_medida
-            (codigo, descricao, sigla, ativo)
-            VALUES (?, ?, ?, TRUE)
+            (
+                codigo,
+                descricao,
+                sigla,
+                ativo
+            )
+            VALUES
+            (
+                ?, ?, ?, TRUE
+            )
             """,
             (
                 codigo,
-                descricao.strip(),
-                sigla.strip().upper()
+                descricao,
+                sigla
             )
-        ):
+        )
+
+        if sucesso:
+
+            st.session_state[
+                "sisget_mensagem_unidade_medida"
+            ] = (
+                f"✅ Unidade de Medida salva com sucesso. Código: {codigo}"
+            )
+
             st.session_state[
                 "sisget_unidade_medida_reset"
             ] += 1
 
             st.rerun()
 
+
+# ============================================================
+# UNIDADE DE COMPRA
+# ============================================================
+
+def unidade_compra_incluir():
+
+    if "sisget_unidade_compra_reset" not in st.session_state:
+
+        st.session_state[
+            "sisget_unidade_compra_reset"
+        ] = 0
+
+    reset = st.session_state[
+        "sisget_unidade_compra_reset"
+    ]
+
+    medidas = _sisget_fetch(
+        """
+        SELECT
+            id,
+            sigla,
+            descricao
+        FROM unidades_medida
+        WHERE ativo = TRUE
+        ORDER BY descricao
+        """
+    )
+
+    if not medidas:
+
+        st.warning(
+            "⚠️ Cadastre uma Unidade de Medida primeiro."
+        )
+
+        return
+
+    mapa_medidas = {
+        f"{sigla} - {descricao}": id_
+        for id_, sigla, descricao in medidas
+    }
+
+    codigo = sisget_proximo_codigo(
+        "unidades_compra",
+        tamanho=3
+    )
+
+    with st.form(
+        f"form_unidade_compra_{reset}"
+    ):
+
+        col1, col2 = st.columns(
+            [1, 4]
+        )
+
+        col1.text_input(
+            "Código",
+            value=codigo,
+            disabled=True
+        )
+
+        descricao = col2.text_input(
+            "Descrição *",
+            placeholder="Ex.: Caixa"
+        )
+
+        medida_nome = st.selectbox(
+            "Unidade de Medida *",
+            list(
+                mapa_medidas.keys()
+            )
+        )
+
+        salvar = st.form_submit_button(
+            "💾 Salvar Unidade de Compra",
+            type="primary",
+            use_container_width=True
+        )
+
+    if "sisget_mensagem_unidade_compra" in st.session_state:
+
+        st.success(
+            st.session_state.pop(
+                "sisget_mensagem_unidade_compra"
+            )
+        )
+
+    if salvar:
+
+        descricao = descricao.strip()
+
+        if not descricao:
+
+            st.warning(
+                "⚠️ Informe a descrição."
+            )
+
+            return
+
+        existe = _sisget_fetchone(
+            """
+            SELECT
+                id
+            FROM unidades_compra
+            WHERE UPPER(descricao) = UPPER(?)
+            """,
+            (
+                descricao,
+            )
+        )
+
+        if existe:
+
+            st.warning(
+                "⚠️ Já existe uma Unidade de Compra com esta descrição."
+            )
+
+            return
+
+        codigo = sisget_proximo_codigo(
+            "unidades_compra",
+            tamanho=3
+        )
+
+        sucesso = _sisget_salvar(
+            """
+            INSERT INTO unidades_compra
+            (
+                codigo,
+                descricao,
+                unidade_medida_id,
+                ativo
+            )
+            VALUES
+            (
+                ?, ?, ?, TRUE
+            )
+            """,
+            (
+                codigo,
+                descricao,
+                mapa_medidas[
+                    medida_nome
+                ]
+            )
+        )
+
+        if sucesso:
+
+            st.session_state[
+                "sisget_mensagem_unidade_compra"
+            ] = (
+                f"✅ Unidade de Compra salva com sucesso. Código: {codigo}"
+            )
+
+            st.session_state[
+                "sisget_unidade_compra_reset"
+            ] += 1
+
+            st.rerun()
 
 def unidade_medida_localizar():
 
@@ -29801,7 +30093,10 @@ def cadastro_unidades_movimentacao():
 def unidade_movimentacao_incluir():
 
     if "sisget_unidade_mov_reset" not in st.session_state:
-        st.session_state["sisget_unidade_mov_reset"] = 0
+
+        st.session_state[
+            "sisget_unidade_mov_reset"
+        ] = 0
 
     reset = st.session_state[
         "sisget_unidade_mov_reset"
@@ -29809,7 +30104,10 @@ def unidade_movimentacao_incluir():
 
     compras = _sisget_fetch(
         """
-        SELECT id, codigo, descricao
+        SELECT
+            id,
+            codigo,
+            descricao
         FROM unidades_compra
         WHERE ativo = TRUE
         ORDER BY codigo
@@ -29818,7 +30116,10 @@ def unidade_movimentacao_incluir():
 
     medidas = _sisget_fetch(
         """
-        SELECT id, sigla, descricao
+        SELECT
+            id,
+            sigla,
+            descricao
         FROM unidades_medida
         WHERE ativo = TRUE
         ORDER BY descricao
@@ -29826,9 +30127,11 @@ def unidade_movimentacao_incluir():
     )
 
     if not compras or not medidas:
+
         st.warning(
-            "⚠️ Cadastre Unidade de Compra e Unidade de Medida."
+            "⚠️ Cadastre Unidade de Compra e Unidade de Medida primeiro."
         )
+
         return
 
     mapa_compras = {
@@ -29849,7 +30152,10 @@ def unidade_movimentacao_incluir():
     with st.form(
         f"form_unidade_movimentacao_{reset}"
     ):
-        col1, col2 = st.columns([1, 4])
+
+        col1, col2 = st.columns(
+            [1, 4]
+        )
 
         col1.text_input(
             "Código",
@@ -29862,14 +30168,20 @@ def unidade_movimentacao_incluir():
             placeholder="Ex.: Comprimido"
         )
 
-        compra_nome = st.selectbox(
+        col3, col4 = st.columns(2)
+
+        compra_nome = col3.selectbox(
             "Unidade de Compra *",
-            list(mapa_compras.keys())
+            list(
+                mapa_compras.keys()
+            )
         )
 
-        medida_nome = st.selectbox(
+        medida_nome = col4.selectbox(
             "Unidade de Movimentação *",
-            list(mapa_medidas.keys())
+            list(
+                mapa_medidas.keys()
+            )
         )
 
         fator = st.number_input(
@@ -29877,7 +30189,7 @@ def unidade_movimentacao_incluir():
             min_value=0.000001,
             value=1.0,
             format="%.6f",
-            help="Ex.: 1 caixa = 30 comprimidos -> fator 30."
+            help="Ex.: 1 caixa = 30 unidades → fator 30."
         )
 
         salvar = st.form_submit_button(
@@ -29886,14 +30198,32 @@ def unidade_movimentacao_incluir():
             use_container_width=True
         )
 
+    if "sisget_mensagem_unidade_mov" in st.session_state:
+
+        st.success(
+            st.session_state.pop(
+                "sisget_mensagem_unidade_mov"
+            )
+        )
+
     if salvar:
+
+        descricao = descricao.strip()
+
+        if not descricao:
+
+            st.warning(
+                "⚠️ Informe a descrição."
+            )
+
+            return
 
         codigo = sisget_proximo_codigo(
             "unidades_movimentacao",
             tamanho=3
         )
 
-        if _sisget_salvar(
+        sucesso = _sisget_salvar(
             """
             INSERT INTO unidades_movimentacao
             (
@@ -29904,16 +30234,34 @@ def unidade_movimentacao_incluir():
                 fator_conversao,
                 ativo
             )
-            VALUES (?, ?, ?, ?, ?, TRUE)
+            VALUES
+            (
+                ?, ?, ?, ?, ?, TRUE
+            )
             """,
             (
                 codigo,
-                descricao.strip(),
-                mapa_compras[compra_nome],
-                mapa_medidas[medida_nome],
-                float(fator)
+                descricao,
+                mapa_compras[
+                    compra_nome
+                ],
+                mapa_medidas[
+                    medida_nome
+                ],
+                float(
+                    fator
+                )
             )
-        ):
+        )
+
+        if sucesso:
+
+            st.session_state[
+                "sisget_mensagem_unidade_mov"
+            ] = (
+                f"✅ Unidade de Movimentação salva com sucesso. Código: {codigo}"
+            )
+
             st.session_state[
                 "sisget_unidade_mov_reset"
             ] += 1
@@ -30100,10 +30448,6 @@ def cadastro_produtos():
 
 def produto_incluir():
 
-    # ========================================================
-    # ENTIDADE
-    # ========================================================
-
     entidade_id = st.session_state.get(
         "entidade_id"
     )
@@ -30116,10 +30460,6 @@ def produto_incluir():
 
         return
 
-    # ========================================================
-    # RESET
-    # ========================================================
-
     if "sisget_produto_reset" not in st.session_state:
 
         st.session_state[
@@ -30129,10 +30469,6 @@ def produto_incluir():
     reset = st.session_state[
         "sisget_produto_reset"
     ]
-
-    # ========================================================
-    # GRUPOS DA ENTIDADE
-    # ========================================================
 
     grupos = _sisget_fetch(
         """
@@ -30175,10 +30511,6 @@ def produto_incluir():
         grupo_nome
     ]
 
-    # ========================================================
-    # SUBGRUPOS
-    # ========================================================
-
     subgrupos = _sisget_fetch(
         """
         SELECT
@@ -30207,10 +30539,6 @@ def produto_incluir():
         f"{codigo} - {descricao}": id_
         for id_, codigo, descricao in subgrupos
     }
-
-    # ========================================================
-    # UNIDADES
-    # ========================================================
 
     compras = _sisget_fetch(
         """
@@ -30269,7 +30597,9 @@ def produto_incluir():
 
         try:
 
-            fator_texto = f"{float(fator):g}"
+            fator_texto = (
+                f"{float(fator):g}"
+            )
 
         except Exception:
 
@@ -30287,11 +30617,6 @@ def produto_incluir():
             descricao_mapa
         ] = id_
 
-    # ========================================================
-    # CÓDIGO
-    # AGORA POR ENTIDADE
-    # ========================================================
-
     codigo = sisget_proximo_codigo(
         "produtos",
         tamanho=6,
@@ -30301,16 +30626,12 @@ def produto_incluir():
         )
     )
 
-    # ========================================================
-    # FORMULÁRIO
-    # ========================================================
-
     with st.form(
         f"form_produto_{reset}_{grupo_id}"
     ):
 
         st.markdown(
-            "### 📦 Dados do Item"
+            "### 📦 Identificação"
         )
 
         col1, col2 = st.columns(
@@ -30324,12 +30645,18 @@ def produto_incluir():
         )
 
         descricao = col2.text_input(
-            "Descrição *"
+            "Descrição do Produto *",
+            placeholder="Ex.: Papel A4 branco 75 g/m²"
         )
 
-        # ====================================================
-        # CLASSIFICAÇÃO
-        # ====================================================
+        descricao_complementar = st.text_area(
+            "Descrição Complementar",
+            height=100,
+            placeholder=(
+                "Informações adicionais que complementam "
+                "a descrição principal do item."
+            )
+        )
 
         st.markdown(
             "### 📁 Classificação"
@@ -30359,10 +30686,6 @@ def produto_incluir():
             ]
         )
 
-        # ====================================================
-        # UNIDADES
-        # ====================================================
-
         st.markdown(
             "### 📏 Unidades"
         )
@@ -30383,53 +30706,53 @@ def produto_incluir():
             )
         )
 
-        # ====================================================
-        # ESTOQUE
-        # ====================================================
-
         st.markdown(
             "### 📊 Controle de Estoque"
         )
 
-        controla_estoque = st.checkbox(
+        col7, col8 = st.columns(2)
+
+        controla_estoque = col7.checkbox(
             "Controla Estoque",
             value=True
         )
 
-        estoque_minimo = st.number_input(
+        estoque_minimo = col8.number_input(
             "Estoque Mínimo",
             min_value=0.0,
             value=0.0,
             format="%.6f"
         )
 
-        # ====================================================
-        # ORÇAMENTO / TRIBUNAL
-        # ====================================================
-
         st.markdown(
-            "### 💰 Classificação Orçamentária"
+            "### 💰 Contas / Naturezas Orçamentárias"
         )
 
-        conta_orcamentaria = st.text_input(
-            "Conta / Natureza Orçamentária Padrão"
+        col9, col10 = st.columns(2)
+
+        conta_orcamentaria_entrada = col9.text_input(
+            "Conta / Natureza Orçamentária Padrão - Entrada"
+        )
+
+        conta_orcamentaria_saida = col10.text_input(
+            "Conta / Natureza Orçamentária Padrão - Saída"
         )
 
         codigo_tribunal = st.text_input(
             "Classificação Tribunal de Contas"
         )
 
-        # ====================================================
-        # ESPECIFICAÇÃO
-        # ====================================================
-
         st.markdown(
-            "### 📝 Especificação"
+            "### 📝 Especificação Técnica"
         )
 
         especificacao = st.text_area(
             "Especificação Técnica",
-            height=120
+            height=160,
+            placeholder=(
+                "Características técnicas, material, medidas, "
+                "qualidade, padrão e demais requisitos."
+            )
         )
 
         salvar = st.form_submit_button(
@@ -30438,9 +30761,13 @@ def produto_incluir():
             use_container_width=True
         )
 
-    # ========================================================
-    # SALVAR
-    # ========================================================
+    if "sisget_mensagem_produto" in st.session_state:
+
+        st.success(
+            st.session_state.pop(
+                "sisget_mensagem_produto"
+            )
+        )
 
     if salvar:
 
@@ -30449,14 +30776,10 @@ def produto_incluir():
         if not descricao:
 
             st.warning(
-                "⚠️ Informe a descrição."
+                "⚠️ Informe a descrição do produto."
             )
 
             return
-
-        # ====================================================
-        # REGRAS
-        # ====================================================
 
         item_patrimonial = (
             tipo_item == "Patrimonial"
@@ -30477,9 +30800,9 @@ def produto_incluir():
                 estoque_minimo
             )
 
-        # ====================================================
-        # DUPLICIDADE
-        # ====================================================
+        subgrupo_id = mapa_subgrupos[
+            subgrupo_nome
+        ]
 
         existe = _sisget_fetchone(
             """
@@ -30487,7 +30810,7 @@ def produto_incluir():
                 id
             FROM produtos
             WHERE entidade_id = ?
-              AND UPPER(descricao) = UPPER(?)
+              AND UPPER(COALESCE(produto, descricao)) = UPPER(?)
               AND grupo_id = ?
               AND subgrupo_id = ?
             """,
@@ -30495,24 +30818,17 @@ def produto_incluir():
                 entidade_id,
                 descricao,
                 grupo_id,
-                mapa_subgrupos[
-                    subgrupo_nome
-                ]
+                subgrupo_id
             )
         )
 
         if existe:
 
             st.warning(
-                "⚠️ Já existe um item com esta descrição "
-                "neste Grupo/Subgrupo."
+                "⚠️ Já existe um produto com esta descrição neste Grupo/Subgrupo."
             )
 
             return
-
-        # ====================================================
-        # CÓDIGO NOVAMENTE
-        # ====================================================
 
         codigo = sisget_proximo_codigo(
             "produtos",
@@ -30523,10 +30839,6 @@ def produto_incluir():
             )
         )
 
-        # ====================================================
-        # INSERT
-        # ====================================================
-
         sucesso = _sisget_salvar(
             """
             INSERT INTO produtos
@@ -30536,13 +30848,13 @@ def produto_incluir():
 
                 produto,
                 descricao,
+                descricao_complementar,
 
                 grupo_id,
                 subgrupo_id,
 
                 tipo_produto,
                 tipo_item,
-
                 item_patrimonial,
 
                 unidade_compra_id,
@@ -30552,8 +30864,10 @@ def produto_incluir():
                 estoque_minimo,
 
                 conta_orcamentaria_padrao,
-                codigo_tribunal,
+                conta_orcamentaria_entrada,
+                conta_orcamentaria_saida,
 
+                codigo_tribunal,
                 especificacao,
 
                 ativo
@@ -30562,21 +30876,19 @@ def produto_incluir():
             (
                 ?, ?,
 
+                ?, ?, ?,
+
+                ?, ?,
+
+                ?, ?, ?,
+
                 ?, ?,
 
                 ?, ?,
 
-                ?, ?,
-
-                ?,
+                ?, ?, ?,
 
                 ?, ?,
-
-                ?, ?,
-
-                ?, ?,
-
-                ?,
 
                 TRUE
             )
@@ -30587,15 +30899,14 @@ def produto_incluir():
 
                 descricao,
                 descricao,
+                descricao_complementar.strip()
+                or None,
 
                 grupo_id,
-                mapa_subgrupos[
-                    subgrupo_nome
-                ],
+                subgrupo_id,
 
                 tipo_item,
                 tipo_item,
-
                 item_patrimonial,
 
                 mapa_compras[
@@ -30609,7 +30920,13 @@ def produto_incluir():
                 controla_estoque_salvar,
                 estoque_minimo_salvar,
 
-                conta_orcamentaria.strip()
+                conta_orcamentaria_entrada.strip()
+                or None,
+
+                conta_orcamentaria_entrada.strip()
+                or None,
+
+                conta_orcamentaria_saida.strip()
                 or None,
 
                 codigo_tribunal.strip()
@@ -30620,20 +30937,17 @@ def produto_incluir():
             )
         )
 
-        # ====================================================
-        # SUCESSO
-        # ====================================================
-
         if sucesso:
+
+            st.session_state[
+                "sisget_mensagem_produto"
+            ] = (
+                f"✅ Produto salvo com sucesso. Código: {codigo}"
+            )
 
             st.session_state[
                 "sisget_produto_reset"
             ] += 1
-
-            st.success(
-                f"✅ Item cadastrado com sucesso. "
-                f"Código: {codigo}"
-            )
 
             st.rerun()
 def produto_localizar():
