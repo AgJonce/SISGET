@@ -12243,24 +12243,38 @@ def modulo_solicitacoes():
 
 def sisget_proximo_numero_solicitacao():
 
+    # ========================================================
+    # BUSCAR MAIOR NÚMERO
+    # ========================================================
+
     resultado = _sisget_fetchone(
         """
-        SELECT COALESCE(
-            MAX(numero),
-            0
-        )
+        SELECT
+            COALESCE(
+                MAX(
+                    CAST(numero AS INTEGER)
+                ),
+                0
+            )
+
         FROM solicitacoes
+
+        WHERE numero IS NOT NULL
+          AND TRIM(numero) ~ '^[0-9]+$'
         """
     )
+
+    # ========================================================
+    # PRÓXIMO NÚMERO
+    # ========================================================
 
     if not resultado:
 
         return 1
 
     return int(
-        resultado[0]
+        resultado[0] or 0
     ) + 1
-
 
 # ============================================================
 # SOLICITAÇÃO - INCLUIR
