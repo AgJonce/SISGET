@@ -25048,28 +25048,114 @@ def sisget_proximo_codigo(
 # ============================================================
 
 def sisget_proximo_numero_solicitacao(
-    tipo_solicitacao,
-    exercicio
+    tipo_solicitacao=None,
+    exercicio=None
 ):
-    registro = _sisget_fetchone(
-        """
-        SELECT COALESCE(MAX(numero), 0)
+
+    # ========================================================
+    # EXERCÍCIO
+    # ========================================================
+
+    if exercicio is None:
+
+        exercicio = datetime.now().year
+
+    # ========================================================
+    # SQL
+    # ========================================================
+
+    sql = """
+        SELECT
+            MAX(
+                CASE
+
+                    WHEN TRIM(
+                        numero::TEXT
+                    ) ~ '^[0-9]+$'
+
+                    THEN TRIM(
+                        numero::TEXT
+                    )::BIGINT
+
+                    ELSE NULL
+
+                END
+            )
+
         FROM solicitacoes
-        WHERE tipo_solicitacao = ?
-          AND exercicio = ?
-        """,
-        (
-            tipo_solicitacao,
+
+        WHERE 1 = 1
+    """
+
+    parametros = []
+
+    # ========================================================
+    # TIPO
+    # ========================================================
+
+    if tipo_solicitacao is not None:
+
+        sql += """
+            AND tipo_solicitacao = ?
+        """
+
+        parametros.append(
+            tipo_solicitacao
+        )
+
+    # ========================================================
+    # EXERCÍCIO
+    # ========================================================
+
+    if exercicio is not None:
+
+        sql += """
+            AND exercicio = ?
+        """
+
+        parametros.append(
             int(exercicio)
+        )
+
+    # ========================================================
+    # CONSULTA
+    # ========================================================
+
+    registro = _sisget_fetchone(
+        sql,
+        tuple(
+            parametros
         )
     )
 
-    return int(registro[0] or 0) + 1
+    # ========================================================
+    # ERRO DE CONSULTA
+    # ========================================================
 
+    if registro is None:
 
-# ============================================================
-# MÓDULO PRINCIPAL
-# ============================================================
+        st.error(
+            "❌ Não foi possível gerar "
+            "o número da solicitação."
+        )
+
+        return None
+
+    # ========================================================
+    # PRIMEIRA SOLICITAÇÃO
+    # ========================================================
+
+    if registro[0] is None:
+
+        return 1
+
+    # ========================================================
+    # PRÓXIMO NÚMERO
+    # ========================================================
+
+    return int(
+        registro[0]
+    ) + 1
 
 def modulo_solicitacoes():
 
