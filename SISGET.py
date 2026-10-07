@@ -12247,53 +12247,83 @@ def sisget_proximo_numero_solicitacao(
 ):
 
     # ========================================================
-    # NUMERAÇÃO COMPATÍVEL COM SOLICITAÇÕES GERAIS E POR TIPO
+    # EXERCÍCIO
+    # ========================================================
+
+    if exercicio is None:
+
+        exercicio = datetime.now().year
+
+    # ========================================================
+    # CONSULTA
     # ========================================================
 
     sql = """
         SELECT
             COALESCE(
-                MAX(TRIM(numero::TEXT)::BIGINT),
+                MAX(
+                    CAST(numero AS BIGINT)
+                ),
                 0
             )
         FROM solicitacoes
         WHERE numero IS NOT NULL
-          AND TRIM(numero::TEXT) ~ '^[0-9]{1,18}$'
+          AND TRIM(numero::TEXT) ~ '^[0-9]+$'
     """
 
     parametros = []
 
+    # ========================================================
+    # FILTRO POR TIPO
+    # ========================================================
+
     if tipo_solicitacao is not None:
 
-        sql += " AND tipo_solicitacao = ?"
+        sql += """
+            AND tipo_solicitacao = ?
+        """
 
-        parametros.append(tipo_solicitacao)
+        parametros.append(
+            tipo_solicitacao
+        )
 
-    if exercicio is not None:
+        sql += """
+            AND exercicio = ?
+        """
 
-        sql += " AND exercicio::TEXT = ?"
+        parametros.append(
+            exercicio
+        )
 
-        parametros.append(str(exercicio))
+    # ========================================================
+    # EXECUTAR CONSULTA
+    # ========================================================
 
     registro = _sisget_fetchone(
         sql,
         tuple(parametros)
     )
 
+    # ========================================================
+    # VALIDAR RESULTADO
+    # ========================================================
+
     if registro is None:
 
         st.error(
-            "❌ Falha na consulta da numeração. "
-            "A solicitação não será salva até corrigir o banco."
+            "❌ Não foi possível consultar "
+            "o próximo número da solicitação."
         )
 
         return None
 
-    return int(registro[0] or 0) + 1
+    # ========================================================
+    # RETORNAR PRÓXIMO NÚMERO
+    # ========================================================
 
-# ============================================================
-# SOLICITAÇÃO - INCLUIR
-# ============================================================
+    return int(
+        registro[0] or 0
+    ) + 1
 
 def solicitacao_incluir():
 
