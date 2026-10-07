@@ -31482,14 +31482,29 @@ def sisget_solicitacao_incluir_base(
     etapa_inicial
 ):
 
-    from datetime import datetime
+    # ========================================================
+    # RESET
+    # ========================================================
 
     if chave_reset not in st.session_state:
-        st.session_state[chave_reset] = 0
 
-    reset = st.session_state[chave_reset]
+        st.session_state[
+            chave_reset
+        ] = 0
+
+    reset = st.session_state[
+        chave_reset
+    ]
+
+    # ========================================================
+    # EXERCÍCIO
+    # ========================================================
 
     exercicio = datetime.now().year
+
+    # ========================================================
+    # NÚMERO
+    # ========================================================
 
     numero = sisget_proximo_numero_solicitacao(
         tipo_solicitacao,
@@ -31499,6 +31514,10 @@ def sisget_solicitacao_incluir_base(
     if numero is None:
 
         return
+
+    # ========================================================
+    # PREFIXOS
+    # ========================================================
 
     prefixos = {
         "INTERNA": "INT",
@@ -31512,88 +31531,650 @@ def sisget_solicitacao_incluir_base(
         f"{str(numero).zfill(6)}"
     )
 
-    st.subheader(titulo)
+    # ========================================================
+    # TÍTULO
+    # ========================================================
+
+    st.subheader(
+        titulo
+    )
+
+    st.info(
+        f"🔢 Código: {codigo}"
+    )
+
+    # ========================================================
+    # MENSAGEM DE SUCESSO
+    # ========================================================
+
+    chave_mensagem = (
+        f"sisget_mensagem_"
+        f"{tipo_solicitacao.lower()}"
+    )
+
+    if chave_mensagem in st.session_state:
+
+        st.success(
+            st.session_state.pop(
+                chave_mensagem
+            )
+        )
+
+    # ========================================================
+    # UNIDADES ADMINISTRATIVAS
+    #
+    # TRAZEMOS TAMBÉM ENTIDADE E UNIDADE ORÇAMENTÁRIA
+    # PARA LOCALIZAR AS DOTAÇÕES.
+    # ========================================================
 
     unidades = _sisget_fetch(
         """
-        SELECT id, codigo, nome
-        FROM unidades_administrativas
-        WHERE ativo = TRUE
-        ORDER BY codigo, nome
+        SELECT
+            a.id,
+            a.codigo,
+            a.nome,
+
+            a.entidade_id,
+            a.unidade_orcamentaria_id,
+
+            u.codigo,
+            u.nome
+
+        FROM unidades_administrativas a
+
+        INNER JOIN unidades_orcamentarias u
+            ON u.id = a.unidade_orcamentaria_id
+
+        WHERE a.ativo = TRUE
+          AND u.ativo = TRUE
+
+        ORDER BY
+            a.codigo,
+            a.nome
         """
     )
 
     if not unidades:
+
         st.warning(
             "⚠️ Nenhuma Unidade Administrativa ativa."
         )
+
         return
 
-    mapa_unidades = {
-        f"{codigo_u} - {nome_u}": id_u
-        for id_u, codigo_u, nome_u in unidades
+    mapa_unidades = {}
+
+    for (
+        unidade_id,
+        codigo_unidade,
+        nome_unidade,
+
+        entidade_id,
+        unidade_orcamentaria_id,
+
+        codigo_uo,
+        nome_uo
+    ) in unidades:
+
+        rotulo = (
+            f"{codigo_unidade} - "
+            f"{nome_unidade}"
+            f" | UO: "
+            f"{codigo_uo} - {nome_uo}"
+        )
+
+        mapa_unidades[
+            rotulo
+        ] = {
+            "unidade_id": unidade_id,
+            "entidade_id": entidade_id,
+            "uo_id": unidade_orcamentaria_id
+        }
+
+    # ========================================================
+    # UNIDADE
+    # ========================================================
+
+    unidade_nome = st.selectbox(
+        "Unidade Administrativa / Solicitante *",
+        list(
+            mapa_unidades.keys()
+        ),
+        key=(
+            f"sisget_sol_unidade_"
+            f"{tipo_solicitacao}_{reset}"
+        )
+    )
+
+    dados_unidade = mapa_unidades[
+        unidade_nome
+    ]
+
+    unidade_administrativa_id = (
+        dados_unidade[
+            "unidade_id"
+        ]
+    )
+
+    entidade_id = (
+        dados_unidade[
+            "entidade_id"
+        ]
+    )
+
+    unidade_orcamentaria_id = (
+        dados_unidade[
+            "uo_id"
+        ]
+    )
+
+    # ========================================================
+    # SETORES
+    # ========================================================
+
+    setores = _sisget_fetch(
+        """
+        SELECT
+            id,
+            codigo,
+            nome
+
+        FROM setores
+
+        WHERE unidade_administrativa_id = ?
+          AND ativo = TRUE
+
+        ORDER BY
+            codigo,
+            nome
+        """,
+        (
+            unidade_administrativa_id,
+        )
+    )
+
+    mapa_setores = {
+        "Sem setor específico": None
     }
 
-    with st.form(
-        f"form_solicitacao_{tipo_solicitacao}_{reset}"
-    ):
-        st.text_input(
-            "Código",
-            value=codigo,
-            disabled=True
+    for (
+        setor_id,
+        codigo_setor,
+        nome_setor
+    ) in setores:
+
+        mapa_setores[
+            f"{codigo_setor} - {nome_setor}"
+        ] = setor_id
+
+    setor_nome = st.selectbox(
+        "Setor Solicitante",
+        list(
+            mapa_setores.keys()
+        ),
+        key=(
+            f"sisget_sol_setor_"
+            f"{tipo_solicitacao}_{reset}_"
+            f"{unidade_administrativa_id}"
+        )
+    )
+
+    setor_id = mapa_setores[
+        setor_nome
+    ]
+
+    # ========================================================
+    # DOTAÇÕES
+    # SOMENTE PARA LICITAÇÃO
+    # ========================================================
+
+    fichas_escolhidas = []
+    mapa_fichas = {}
+
+    if tipo_solicitacao == "LICITACAO":
+
+        st.markdown("---")
+
+        st.markdown(
+            "### 💰 Dotações Orçamentárias"
         )
 
-        unidade_nome = st.selectbox(
-            "Unidade / Setor Solicitante *",
-            list(mapa_unidades.keys())
-        )
+        fichas = _sisget_fetch(
+            """
+            SELECT
+                id,
+                numero_ficha,
+                descricao,
+                natureza_despesa,
+                valor_atual,
+                valor_reservado
 
-        prioridade = st.selectbox(
-            "Prioridade *",
-            ["Normal", "Alta", "Urgente"]
-        )
+            FROM fichas_orcamentarias
 
-        objeto = st.text_area(
-            "Objeto / Resumo *"
-        )
+            WHERE entidade_id = ?
+              AND unidade_orcamentaria_id = ?
+              AND exercicio = ?
+              AND ativo = TRUE
 
-        justificativa = st.text_area(
-            "Justificativa *"
-        )
-
-        data_necessidade = st.date_input(
-            "Data da Necessidade"
-        )
-
-        observacao = st.text_area(
-            "Observações"
-        )
-
-        salvar = st.form_submit_button(
-            "💾 Salvar Solicitação",
-            type="primary",
-            use_container_width=True
-        )
-
-    if f"sisget_mensagem_{chave_reset}" in st.session_state:
-
-        st.success(
-            st.session_state.pop(
-                f"sisget_mensagem_{chave_reset}"
+            ORDER BY
+                numero_ficha
+            """,
+            (
+                entidade_id,
+                unidade_orcamentaria_id,
+                exercicio
             )
         )
+
+        for (
+            ficha_id,
+            numero_ficha,
+            descricao_ficha,
+            natureza,
+            valor_atual,
+            valor_reservado
+        ) in fichas:
+
+            valor_disponivel = (
+                float(
+                    valor_atual or 0
+                )
+                -
+                float(
+                    valor_reservado or 0
+                )
+            )
+
+            rotulo = (
+                f"Dotação {numero_ficha}"
+                f" | "
+                f"{descricao_ficha or 'Sem descrição'}"
+                f" | Natureza: "
+                f"{natureza or '-'}"
+                f" | Disponível: "
+                f"R$ {valor_disponivel:,.2f}"
+            )
+
+            mapa_fichas[
+                rotulo
+            ] = ficha_id
+
+        if mapa_fichas:
+
+            fichas_escolhidas = st.multiselect(
+                "Dotações / Fichas Orçamentárias *",
+                options=list(
+                    mapa_fichas.keys()
+                ),
+                key=(
+                    f"sisget_sol_fichas_"
+                    f"{reset}_"
+                    f"{unidade_orcamentaria_id}"
+                )
+            )
+
+        else:
+
+            st.warning(
+                "⚠️ Não existem dotações/fichas "
+                "orçamentárias ativas para esta "
+                "Unidade Orçamentária."
+            )
+
+    # ========================================================
+    # DADOS DA SOLICITAÇÃO
+    # ========================================================
+
+    st.markdown("---")
+
+    st.markdown(
+        "### 📝 Dados da Solicitação"
+    )
+
+    st.text_input(
+        "Código",
+        value=codigo,
+        disabled=True
+    )
+
+    prioridade = st.selectbox(
+        "Prioridade *",
+        [
+            "Normal",
+            "Alta",
+            "Urgente"
+        ],
+        key=(
+            f"sisget_sol_prioridade_"
+            f"{tipo_solicitacao}_{reset}"
+        )
+    )
+
+    objeto = st.text_area(
+        "Objeto / Resumo *",
+        height=120,
+        key=(
+            f"sisget_sol_objeto_"
+            f"{tipo_solicitacao}_{reset}"
+        )
+    )
+
+    justificativa = st.text_area(
+        "Justificativa *",
+        height=120,
+        key=(
+            f"sisget_sol_justificativa_"
+            f"{tipo_solicitacao}_{reset}"
+        )
+    )
+
+    data_necessidade = st.date_input(
+        "Data da Necessidade",
+        key=(
+            f"sisget_sol_data_"
+            f"{tipo_solicitacao}_{reset}"
+        )
+    )
+
+    observacao = st.text_area(
+        "Observações",
+        key=(
+            f"sisget_sol_observacao_"
+            f"{tipo_solicitacao}_{reset}"
+        )
+    )
+
+    # ========================================================
+    # ITENS
+    # ========================================================
+
+    st.markdown("---")
+
+    st.markdown(
+        "### 📦 Itens da Solicitação"
+    )
+
+    chave_itens = (
+        f"sisget_itens_nova_"
+        f"{tipo_solicitacao}_"
+        f"{reset}"
+    )
+
+    if chave_itens not in st.session_state:
+
+        st.session_state[
+            chave_itens
+        ] = []
+
+    produtos = _sisget_fetch(
+        """
+        SELECT
+            id,
+            codigo,
+            COALESCE(
+                NULLIF(produto, ''),
+                descricao
+            )
+
+        FROM produtos
+
+        WHERE entidade_id = ?
+          AND ativo = TRUE
+
+        ORDER BY
+            codigo
+        """,
+        (
+            entidade_id,
+        )
+    )
+
+    mapa_produtos = {
+        f"{codigo_produto} - {nome_produto}": produto_id
+        for (
+            produto_id,
+            codigo_produto,
+            nome_produto
+        ) in produtos
+    }
+
+    if not mapa_produtos:
+
+        st.warning(
+            "⚠️ Nenhum produto ativo cadastrado "
+            "para esta entidade."
+        )
+
+    else:
+
+        with st.form(
+            f"form_adicionar_item_"
+            f"{tipo_solicitacao}_"
+            f"{reset}",
+            clear_on_submit=True
+        ):
+
+            produto_nome = st.selectbox(
+                "Produto *",
+                list(
+                    mapa_produtos.keys()
+                )
+            )
+
+            col1, col2 = st.columns(2)
+
+            quantidade = col1.number_input(
+                "Quantidade *",
+                min_value=0.000001,
+                value=1.0,
+                format="%.6f"
+            )
+
+            valor_unitario = col2.number_input(
+                "Valor Estimado Unitário",
+                min_value=0.0,
+                value=0.0,
+                format="%.2f"
+            )
+
+            observacao_item = st.text_input(
+                "Observação do Item"
+            )
+
+            adicionar = st.form_submit_button(
+                "➕ Adicionar Item",
+                type="primary",
+                use_container_width=True
+            )
+
+        # ====================================================
+        # ADICIONAR ITEM
+        # ====================================================
+
+        if adicionar:
+
+            st.session_state[
+                chave_itens
+            ].append(
+                {
+                    "produto_id": (
+                        mapa_produtos[
+                            produto_nome
+                        ]
+                    ),
+                    "produto": produto_nome,
+                    "quantidade": float(
+                        quantidade
+                    ),
+                    "valor_unitario": float(
+                        valor_unitario
+                    ),
+                    "observacao": (
+                        observacao_item.strip()
+                        or None
+                    )
+                }
+            )
+
+            st.rerun()
+
+    # ========================================================
+    # LISTAR ITENS
+    # ========================================================
+
+    itens = st.session_state[
+        chave_itens
+    ]
+
+    if itens:
+
+        st.markdown(
+            "#### Itens adicionados"
+        )
+
+        for indice, item in enumerate(
+            itens
+        ):
+
+            col1, col2, col3 = st.columns(
+                [6, 2, 1]
+            )
+
+            col1.write(
+                item[
+                    "produto"
+                ]
+            )
+
+            valor_total_item = (
+                item[
+                    "quantidade"
+                ]
+                *
+                item[
+                    "valor_unitario"
+                ]
+            )
+
+            col2.write(
+                f"{item['quantidade']:,.2f} "
+                f"× R$ "
+                f"{item['valor_unitario']:,.2f}"
+                f" = R$ "
+                f"{valor_total_item:,.2f}"
+            )
+
+            if col3.button(
+                "🗑️",
+                key=(
+                    f"remover_item_"
+                    f"{tipo_solicitacao}_"
+                    f"{reset}_{indice}"
+                )
+            ):
+
+                itens.pop(
+                    indice
+                )
+
+                st.rerun()
+
+        # ====================================================
+        # TOTAL
+        # ====================================================
+
+        valor_total = sum(
+            item[
+                "quantidade"
+            ]
+            *
+            item[
+                "valor_unitario"
+            ]
+            for item in itens
+        )
+
+        st.metric(
+            "💰 Valor Estimado Total",
+            f"R$ {valor_total:,.2f}"
+        )
+
+    else:
+
+        st.info(
+            "Nenhum item adicionado."
+        )
+
+    # ========================================================
+    # SALVAR
+    # ========================================================
+
+    st.markdown("---")
+
+    salvar = st.button(
+        "💾 Salvar Solicitação",
+        type="primary",
+        use_container_width=True,
+        key=(
+            f"salvar_solicitacao_"
+            f"{tipo_solicitacao}_"
+            f"{reset}"
+        )
+    )
+
+    # ========================================================
+    # VALIDAÇÕES
+    # ========================================================
 
     if salvar:
 
-        if not objeto.strip() or not justificativa.strip():
+        if not objeto.strip():
+
             st.warning(
-                "⚠️ Informe objeto e justificativa."
+                "⚠️ Informe o objeto da solicitação."
             )
+
             return
 
-        numero = sisget_proximo_numero_solicitacao(
-            tipo_solicitacao,
-            exercicio
+        if not justificativa.strip():
+
+            st.warning(
+                "⚠️ Informe a justificativa."
+            )
+
+            return
+
+        if not itens:
+
+            st.warning(
+                "⚠️ Adicione pelo menos um item "
+                "à solicitação."
+            )
+
+            return
+
+        if (
+            tipo_solicitacao == "LICITACAO"
+            and
+            not fichas_escolhidas
+        ):
+
+            st.warning(
+                "⚠️ Selecione pelo menos uma "
+                "dotação orçamentária."
+            )
+
+            return
+
+        # ====================================================
+        # RECALCULAR NÚMERO
+        # ====================================================
+
+        numero = (
+            sisget_proximo_numero_solicitacao(
+                tipo_solicitacao,
+                exercicio
+            )
         )
 
         if numero is None:
@@ -31606,61 +32187,238 @@ def sisget_solicitacao_incluir_base(
             f"{str(numero).zfill(6)}"
         )
 
-        solicitacao_id = _sisget_salvar_retorno(
-            """
-            INSERT INTO solicitacoes
-            (
-                codigo,
-                exercicio,
-                numero,
-                tipo_solicitacao,
-                unidade_administrativa_id,
-                solicitante_usuario_id,
-                prioridade,
-                objeto,
-                justificativa,
-                data_necessidade,
-                observacao,
-                status,
-                etapa_atual,
-                ativo
+        # ====================================================
+        # GRAVAÇÃO
+        # ====================================================
+
+        try:
+
+            # =================================================
+            # SOLICITAÇÃO
+            # =================================================
+
+            cursor.execute(
+                """
+                INSERT INTO solicitacoes
+                (
+                    codigo,
+                    exercicio,
+                    numero,
+
+                    tipo_solicitacao,
+
+                    unidade_administrativa_id,
+                    setor_id,
+
+                    solicitante_usuario_id,
+
+                    prioridade,
+                    objeto,
+                    justificativa,
+
+                    data_necessidade,
+                    observacao,
+
+                    status,
+                    etapa_atual,
+
+                    ativo
+                )
+                VALUES
+                (
+                    ?, ?, ?,
+                    ?,
+                    ?, ?,
+                    ?,
+                    ?, ?, ?,
+                    ?, ?,
+                    'RASCUNHO',
+                    ?,
+                    TRUE
+                )
+                RETURNING id
+                """,
+                (
+                    codigo,
+                    exercicio,
+                    str(
+                        numero
+                    ),
+
+                    tipo_solicitacao,
+
+                    unidade_administrativa_id,
+                    setor_id,
+
+                    st.session_state.get(
+                        "usuario_id"
+                    ),
+
+                    prioridade,
+                    objeto.strip(),
+                    justificativa.strip(),
+
+                    data_necessidade,
+                    observacao.strip()
+                    or None,
+
+                    etapa_inicial
+                )
             )
-            VALUES
-            (
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                'RASCUNHO',
-                ?,
-                TRUE
+
+            retorno = cursor.fetchone()
+
+            if not retorno:
+
+                raise Exception(
+                    "Não foi possível obter "
+                    "o ID da solicitação."
+                )
+
+            solicitacao_id = retorno[
+                0
+            ]
+
+            # =================================================
+            # DOTAÇÕES
+            # SOMENTE LICITAÇÃO
+            # =================================================
+
+            if tipo_solicitacao == "LICITACAO":
+
+                for ficha_nome in fichas_escolhidas:
+
+                    ficha_id = mapa_fichas[
+                        ficha_nome
+                    ]
+
+                    cursor.execute(
+                        """
+                        INSERT INTO
+                            solicitacoes_fichas_orcamentarias
+                        (
+                            solicitacao_id,
+                            ficha_orcamentaria_id
+                        )
+                        VALUES
+                        (
+                            ?, ?
+                        )
+                        """,
+                        (
+                            solicitacao_id,
+                            ficha_id
+                        )
+                    )
+
+            # =================================================
+            # ITENS
+            # =================================================
+
+            for item in itens:
+
+                valor_total_item = (
+                    item[
+                        "quantidade"
+                    ]
+                    *
+                    item[
+                        "valor_unitario"
+                    ]
+                )
+
+                cursor.execute(
+                    """
+                    INSERT INTO solicitacoes_itens
+                    (
+                        solicitacao_id,
+                        produto_id,
+
+                        quantidade_solicitada,
+
+                        valor_estimado_unitario,
+                        valor_estimado_total,
+
+                        observacao,
+
+                        ativo
+                    )
+                    VALUES
+                    (
+                        ?, ?,
+                        ?,
+                        ?, ?,
+                        ?,
+                        TRUE
+                    )
+                    """,
+                    (
+                        solicitacao_id,
+
+                        item[
+                            "produto_id"
+                        ],
+
+                        item[
+                            "quantidade"
+                        ],
+
+                        item[
+                            "valor_unitario"
+                        ],
+
+                        valor_total_item,
+
+                        item[
+                            "observacao"
+                        ]
+                    )
+                )
+
+            # =================================================
+            # COMMIT
+            # =================================================
+
+            conn.commit()
+
+        except Exception as erro:
+
+            try:
+
+                conn.rollback()
+
+            except Exception:
+
+                pass
+
+            st.error(
+                f"❌ Não foi possível salvar "
+                f"a solicitação: {erro}"
             )
-            RETURNING id
-            """,
-            (
-                codigo,
-                exercicio,
-                numero,
-                tipo_solicitacao,
-                mapa_unidades[unidade_nome],
-                st.session_state.get("usuario_id"),
-                prioridade,
-                objeto.strip(),
-                justificativa.strip(),
-                data_necessidade,
-                observacao.strip() or None,
-                etapa_inicial
-            )
+
+            return
+
+        # ====================================================
+        # SUCESSO
+        # ====================================================
+
+        st.session_state[
+            chave_mensagem
+        ] = (
+            f"✅ Solicitação {codigo} "
+            f"cadastrada com sucesso!"
         )
 
-        if solicitacao_id:
+        st.session_state.pop(
+            chave_itens,
+            None
+        )
 
-            st.session_state[
-                f"sisget_mensagem_{chave_reset}"
-            ] = (
-                f"✅ Solicitação {codigo} salva com sucesso!"
-            )
+        st.session_state[
+            chave_reset
+        ] += 1
 
-            st.session_state[chave_reset] += 1
-
-            st.rerun()
+        st.rerun()
 
 
 
