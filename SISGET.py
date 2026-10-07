@@ -12339,57 +12339,54 @@ def solicitacao_incluir():
     )
     orgao_id, entidade_id, uo_id, ua_id = mapa_unidades[unidade_nome]
 
-    # Se a unidade muda, os itens da nova solicitação continuam,
-    # mas os combos de setor, centro e ficha são atualizados.
+    # Ao mudar a unidade, o combo de setores e as fichas são atualizados.
+
+    # ========================================================
+    # SETORES DO PLANEJAMENTO / CADASTRO BÁSICO
+    # ========================================================
 
     setores = _sisget_fetch(
         """
-        SELECT id, codigo, nome
+        SELECT
+            id,
+            codigo,
+            nome
         FROM setores
-        WHERE unidade_administrativa_id = ?
+        WHERE entidade_id = ?
+          AND unidade_administrativa_id = ?
           AND ativo = TRUE
         ORDER BY codigo, nome
         """,
-        (ua_id,)
+        (
+            entidade_id,
+            ua_id
+        )
     )
 
-    mapa_setores = {"Sem setor específico": None}
-    mapa_setores.update({f"{cod} - {nome}": sid for sid, cod, nome in setores})
+    if not setores:
+
+        st.warning(
+            "⚠️ Cadastre um Setor ativo vinculado à "
+            "Unidade Administrativa selecionada antes "
+            "de registrar a solicitação."
+        )
+
+        return
+
+    mapa_setores = {
+        f"{codigo} - {nome}": setor_id
+        for setor_id, codigo, nome in setores
+    }
 
     setor_nome = st.selectbox(
-        "Setor solicitante",
-        list(mapa_setores),
+        "Setor solicitante *",
+        list(mapa_setores.keys()),
         key=f"sisget_sol_setor_{reset}_{ua_id}"
     )
-    setor_id = mapa_setores[setor_nome]
 
-    # ========================================================
-    # CENTRO DE CUSTO (CADASTRO DO PLANEJAMENTO)
-    # ========================================================
-
-    centros = _sisget_fetch(
-        """
-        SELECT id, codigo, descricao
-        FROM centros_custo
-        WHERE entidade_id = ?
-          AND ativo = TRUE
-        ORDER BY codigo, descricao
-        """,
-        (entidade_id,)
-    )
-
-    mapa_centros = {"Sem centro de custo": None}
-    mapa_centros.update({
-        f"{codigo} - {descricao}": cid
-        for cid, codigo, descricao in centros
-    })
-
-    centro_nome = st.selectbox(
-        "Centro de Custo",
-        list(mapa_centros),
-        key=f"sisget_sol_centro_{reset}_{entidade_id}"
-    )
-    centro_custo_id = mapa_centros[centro_nome]
+    setor_id = mapa_setores[
+        setor_nome
+    ]
 
     # ========================================================
     # DOTAÇÕES = FICHAS ORÇAMENTÁRIAS DO PLANEJAMENTO
@@ -12596,33 +12593,43 @@ def solicitacao_incluir():
                 """
                 INSERT INTO solicitacoes
                 (
-                    numero, orgao_id, entidade_id,
+                    numero,
+                    orgao_id,
+                    entidade_id,
                     unidade_orcamentaria_id,
                     unidade_administrativa_id,
-                    setor_id, centro_custo_id,
-                    tipo, prioridade, titulo, descricao,
-                    justificativa, solicitante, status,
+                    setor_id,
+                    tipo,
+                    prioridade,
+                    titulo,
+                    descricao,
+                    justificativa,
+                    solicitante,
+                    status,
                     data_solicitacao
                 )
                 VALUES
                 (
-                    ?, ?, ?,
-                    ?, ?,
-                    ?, ?,
-                    ?, ?, ?, ?,
-                    ?, ?, ?, ?
+                    ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?, ?
                 )
                 RETURNING id
                 """,
                 (
-                    numero, orgao_id, entidade_id,
-                    uo_id, ua_id,
-                    setor_id, centro_custo_id,
-                    tipo, prioridade, titulo.strip(),
+                    numero,
+                    orgao_id,
+                    entidade_id,
+                    uo_id,
+                    ua_id,
+                    setor_id,
+                    tipo,
+                    prioridade,
+                    titulo.strip(),
                     descricao.strip() or None,
                     justificativa.strip(),
                     solicitante.strip() or None,
-                    "Aberta", data_solicitacao
+                    "Aberta",
+                    data_solicitacao
                 )
             )
 
@@ -12686,9 +12693,13 @@ def solicitacao_incluir():
         st.session_state.pop(chave_itens, None)
         st.session_state["sisget_solicitacao_reset"] += 1
         st.rerun()
-# ============================================================
-# SOLICITAÇÃO - LOCALIZAR
-# ============================================================
+
+    # ========================================================
+    # MENSAGEM ABAIXO DO FORMULÁRIO, APÓS RERUN
+    # ========================================================
+
+    if "sisget_mensagem_solicitacao" in st.session_state:
+        st.success(st.session_state.pop("sisget_mensagem_solicitacao"))
 
 def solicitacao_localizar():
 
