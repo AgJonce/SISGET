@@ -31544,7 +31544,7 @@ def sisget_solicitacao_incluir_base(
     )
 
     # ========================================================
-    # MENSAGEM DE SUCESSO
+    # MENSAGEM
     # ========================================================
 
     chave_mensagem = (
@@ -31561,22 +31561,6 @@ def sisget_solicitacao_incluir_base(
         )
 
     # ========================================================
-    # ENTIDADE DA SESSÃO
-    # ========================================================
-
-    entidade_sessao = st.session_state.get(
-        "entidade_id"
-    )
-
-    if entidade_sessao is None:
-
-        st.error(
-            "❌ Entidade do usuário não identificada."
-        )
-
-        return
-
-    # ========================================================
     # UNIDADES ADMINISTRATIVAS
     # ========================================================
 
@@ -31588,36 +31572,53 @@ def sisget_solicitacao_incluir_base(
             a.nome,
 
             a.entidade_id,
+            a.orgao_id,
             a.unidade_orcamentaria_id,
+
+            e.codigo,
+            e.nome,
+
+            o.codigo,
+            o.nome,
 
             u.codigo,
             u.nome
 
         FROM unidades_administrativas a
 
+        INNER JOIN entidades e
+            ON e.id = a.entidade_id
+
+        INNER JOIN orgaos o
+            ON o.id = a.orgao_id
+
         INNER JOIN unidades_orcamentarias u
             ON u.id = a.unidade_orcamentaria_id
 
         WHERE a.ativo = TRUE
+          AND e.ativo = TRUE
+          AND o.ativo = TRUE
           AND u.ativo = TRUE
-          AND a.entidade_id = ?
 
         ORDER BY
-            a.codigo,
-            a.nome
-        """,
-        (
-            entidade_sessao,
-        )
+            o.codigo,
+            e.codigo,
+            u.codigo,
+            a.codigo
+        """
     )
 
     if not unidades:
 
         st.warning(
-            "⚠️ Nenhuma Unidade Administrativa ativa."
+            "⚠️ Nenhuma Unidade Administrativa ativa cadastrada."
         )
 
         return
+
+    # ========================================================
+    # MAPA UNIDADES
+    # ========================================================
 
     mapa_unidades = {}
 
@@ -31627,17 +31628,27 @@ def sisget_solicitacao_incluir_base(
         nome_unidade,
 
         entidade_id,
+        orgao_id,
         unidade_orcamentaria_id,
+
+        codigo_entidade,
+        nome_entidade,
+
+        codigo_orgao,
+        nome_orgao,
 
         codigo_uo,
         nome_uo
     ) in unidades:
 
         rotulo = (
-            f"{codigo_unidade} - "
-            f"{nome_unidade}"
-            f" | UO: "
+            f"{codigo_orgao} - {nome_orgao}"
+            f" → "
+            f"{codigo_entidade} - {nome_entidade}"
+            f" → "
             f"{codigo_uo} - {nome_uo}"
+            f" → "
+            f"{codigo_unidade} - {nome_unidade}"
         )
 
         mapa_unidades[
@@ -31645,8 +31656,13 @@ def sisget_solicitacao_incluir_base(
         ] = {
             "unidade_id": unidade_id,
             "entidade_id": entidade_id,
+            "orgao_id": orgao_id,
             "uo_id": unidade_orcamentaria_id
         }
+
+    # ========================================================
+    # UNIDADE SELECIONADA
+    # ========================================================
 
     unidade_nome = st.selectbox(
         "Unidade Administrativa *",
@@ -31655,7 +31671,8 @@ def sisget_solicitacao_incluir_base(
         ),
         key=(
             f"sisget_sol_unidade_"
-            f"{tipo_solicitacao}_{reset}"
+            f"{tipo_solicitacao}_"
+            f"{reset}"
         )
     )
 
@@ -31672,6 +31689,12 @@ def sisget_solicitacao_incluir_base(
     entidade_id = (
         dados_unidade[
             "entidade_id"
+        ]
+    )
+
+    orgao_id = (
+        dados_unidade[
+            "orgao_id"
         ]
     )
 
@@ -31861,7 +31884,8 @@ def sisget_solicitacao_incluir_base(
         ],
         key=(
             f"sisget_sol_prioridade_"
-            f"{tipo_solicitacao}_{reset}"
+            f"{tipo_solicitacao}_"
+            f"{reset}"
         )
     )
 
@@ -31870,7 +31894,8 @@ def sisget_solicitacao_incluir_base(
         height=120,
         key=(
             f"sisget_sol_objeto_"
-            f"{tipo_solicitacao}_{reset}"
+            f"{tipo_solicitacao}_"
+            f"{reset}"
         )
     )
 
@@ -31879,7 +31904,8 @@ def sisget_solicitacao_incluir_base(
         height=120,
         key=(
             f"sisget_sol_justificativa_"
-            f"{tipo_solicitacao}_{reset}"
+            f"{tipo_solicitacao}_"
+            f"{reset}"
         )
     )
 
@@ -31888,7 +31914,8 @@ def sisget_solicitacao_incluir_base(
         value=datetime.now().date(),
         key=(
             f"sisget_sol_data_"
-            f"{tipo_solicitacao}_{reset}"
+            f"{tipo_solicitacao}_"
+            f"{reset}"
         )
     )
 
@@ -31896,7 +31923,8 @@ def sisget_solicitacao_incluir_base(
         "Observações",
         key=(
             f"sisget_sol_observacao_"
-            f"{tipo_solicitacao}_{reset}"
+            f"{tipo_solicitacao}_"
+            f"{reset}"
         )
     )
 
@@ -31923,7 +31951,7 @@ def sisget_solicitacao_incluir_base(
         ] = []
 
     # ========================================================
-    # PRODUTOS DO CADASTRO DE PRODUTOS
+    # PRODUTOS DA MESMA ENTIDADE
     # ========================================================
 
     produtos = _sisget_fetch(
@@ -31980,9 +32008,13 @@ def sisget_solicitacao_incluir_base(
             p.codigo
         """,
         (
-            entidade_sessao,
+            entidade_id,
         )
     )
+
+    # ========================================================
+    # MAPA PRODUTOS
+    # ========================================================
 
     mapa_produtos = {}
 
@@ -32028,40 +32060,45 @@ def sisget_solicitacao_incluir_base(
             "id": produto_id,
             "codigo": codigo_produto,
             "produto": nome_produto,
+
             "descricao_complementar": (
                 descricao_complementar
                 or ""
             ),
+
             "tipo_item": (
                 tipo_item
                 or ""
             ),
+
             "grupo": grupo_texto,
+
             "subgrupo": subgrupo_texto,
+
             "unidade_compra": (
                 unidade_compra
                 or ""
             ),
+
             "unidade_movimentacao": (
                 unidade_movimentacao
                 or ""
             ),
-            "fator_conversao": (
-                float(
-                    fator_conversao or 1
-                )
+
+            "fator_conversao": float(
+                fator_conversao or 1
             )
         }
 
     # ========================================================
-    # FORMULÁRIO PARA ADICIONAR ITEM
+    # ADICIONAR ITEM
     # ========================================================
 
     if not mapa_produtos:
 
         st.warning(
             "⚠️ Nenhum produto ativo cadastrado "
-            "no Cadastro de Produtos."
+            "para esta entidade."
         )
 
     else:
@@ -32083,6 +32120,10 @@ def sisget_solicitacao_incluir_base(
             dados_produto = mapa_produtos[
                 produto_nome
             ]
+
+            # =================================================
+            # PRODUTO
+            # =================================================
 
             col_prod1, col_prod2 = st.columns(
                 2
@@ -32137,6 +32178,10 @@ def sisget_solicitacao_incluir_base(
                     height=80
                 )
 
+            # =================================================
+            # QUANTIDADE / VALOR
+            # =================================================
+
             col_item1, col_item2 = st.columns(
                 2
             )
@@ -32166,7 +32211,7 @@ def sisget_solicitacao_incluir_base(
             )
 
         # ====================================================
-        # ADICIONAR ITEM
+        # ADICIONAR NO CARRINHO
         # ====================================================
 
         if adicionar:
@@ -32595,7 +32640,7 @@ def sisget_solicitacao_incluir_base(
                 )
 
             # =================================================
-            # CONFIRMAR
+            # COMMIT
             # =================================================
 
             conn.commit()
