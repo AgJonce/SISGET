@@ -33380,17 +33380,51 @@ def sisget_solicitacao_incluir_base(
             return
 
         # ====================================================
+        # EXERCÍCIO DA ENTIDADE
+        # ====================================================
+
+        registro_exercicio = _sisget_fetchone(
+            """
+            SELECT
+                id,
+                ano
+            FROM exercicios
+            WHERE entidade_id = ?
+              AND ano = ?
+              AND ativo = TRUE
+              AND encerrado = FALSE
+            LIMIT 1
+            """,
+            (
+                entidade_id_salvar,
+                exercicio
+            )
+        )
+
+        if not registro_exercicio:
+
+            st.error(
+                f"❌ A entidade selecionada não possui "
+                f"o exercício {exercicio} ativo e aberto."
+            )
+
+            return
+
+        exercicio_id = registro_exercicio[
+            0
+        ]
+
+        exercicio = int(
+            registro_exercicio[
+                1
+            ]
+        )
+
+        # ====================================================
         # GRAVAÇÃO ATÔMICA
         # ====================================================
 
         try:
-
-            # =================================================
-            # SOLICITAÇÃO
-            #
-            # GRAVA CAMPOS DA ESTRUTURA ANTIGA
-            # E DA ESTRUTURA NOVA.
-            # =================================================
 
             cursor.execute(
                 """
