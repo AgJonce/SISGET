@@ -33396,53 +33396,48 @@ def sisget_solicitacao_incluir_base(
                 """
                 INSERT INTO solicitacoes
                 (
-                    orgao_id,
                     entidade_id,
+                    exercicio_id,
+                    orgao_id,
+
                     unidade_orcamentaria_id,
                     unidade_administrativa_id,
                     setor_id,
 
                     numero,
-
                     data_solicitacao,
 
-                    solicitante,
-
-                    titulo,
-                    descricao,
-                    prioridade,
+                    tipo,
+                    objeto,
                     justificativa,
+                    prioridade,
+                    situacao,
+
+                    observacao,
 
                     codigo,
                     exercicio,
                     tipo_solicitacao,
 
-                    tipo,
-
                     solicitante_usuario_id,
-
-                    objeto,
 
                     data_necessidade,
 
-                    observacao,
-
                     status,
                     etapa_atual,
-
                     ativo
                 )
                 VALUES
                 (
+                    ?, ?, ?,
+
+                    ?, ?, ?,
+
+                    ?, ?,
+
                     ?, ?, ?, ?, ?,
 
                     ?,
-
-                    ?,
-
-                    ?,
-
-                    ?, ?, ?, ?,
 
                     ?, ?, ?,
 
@@ -33451,61 +33446,44 @@ def sisget_solicitacao_incluir_base(
                     ?,
 
                     ?,
-
                     ?,
-
-                    ?,
-
-                    'RASCUNHO',
-                    ?,
-
                     TRUE
                 )
 
                 RETURNING id
                 """,
                 (
-                    orgao_id_salvar,
                     entidade_id_salvar,
+                    exercicio_id,
+                    orgao_id_salvar,
+
                     uo_id_salvar,
                     ua_id,
                     setor_id,
 
-                    numero,
-
+                    str(numero),
                     data_solicitacao,
 
-                    solicitante.strip()
-                    or None,
-
+                    tipo_objeto,
                     titulo.strip(),
-
-                    descricao.strip()
-                    or None,
-
-                    prioridade,
-
                     justificativa.strip(),
+                    prioridade,
+                    "Em elaboracao",
+
+                    observacao.strip()
+                    or None,
 
                     codigo,
-
                     exercicio,
-
                     tipo_solicitacao,
-
-                    tipo_objeto,
 
                     st.session_state.get(
                         "usuario_id"
                     ),
 
-                    titulo.strip(),
-
                     data_necessidade,
 
-                    observacao.strip()
-                    or None,
-
+                    "RASCUNHO",
                     etapa_inicial
                 )
             )
