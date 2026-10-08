@@ -32176,7 +32176,7 @@ def modulo_solicitacao_licitacao():
 
 def sisget_solicitacao_incluir_base(
     tipo_solicitacao,
-    titulo,
+    titulo_tela,
     chave_reset,
     etapa_inicial
 ):
@@ -32224,8 +32224,13 @@ def sisget_solicitacao_incluir_base(
         "LICITACAO": "LIC"
     }
 
+    prefixo = prefixos.get(
+        tipo_solicitacao,
+        "SOL"
+    )
+
     codigo = (
-        f"{prefixos[tipo_solicitacao]}"
+        f"{prefixo}"
         f"-{exercicio}-"
         f"{str(numero).zfill(6)}"
     )
@@ -32235,7 +32240,7 @@ def sisget_solicitacao_incluir_base(
     # ========================================================
 
     st.subheader(
-        titulo
+        titulo_tela
     )
 
     st.info(
@@ -32260,14 +32265,6 @@ def sisget_solicitacao_incluir_base(
         )
 
     # ========================================================
-    # ENTIDADE DA SESSÃO
-    # ========================================================
-
-    entidade_sessao = st.session_state.get(
-        "entidade_id"
-    )
-
-    # ========================================================
     # UNIDADES ADMINISTRATIVAS
     # ========================================================
 
@@ -32278,33 +32275,33 @@ def sisget_solicitacao_incluir_base(
             a.codigo,
             a.nome,
 
-            a.entidade_id,
             a.orgao_id,
+            a.entidade_id,
             a.unidade_orcamentaria_id,
-
-            e.codigo,
-            e.nome,
 
             o.codigo,
             o.nome,
+
+            e.codigo,
+            e.nome,
 
             u.codigo,
             u.nome
 
         FROM unidades_administrativas a
 
-        INNER JOIN entidades e
-            ON e.id = a.entidade_id
-
         INNER JOIN orgaos o
             ON o.id = a.orgao_id
+
+        INNER JOIN entidades e
+            ON e.id = a.entidade_id
 
         INNER JOIN unidades_orcamentarias u
             ON u.id = a.unidade_orcamentaria_id
 
         WHERE a.ativo = TRUE
-          AND e.ativo = TRUE
           AND o.ativo = TRUE
+          AND e.ativo = TRUE
           AND u.ativo = TRUE
 
         ORDER BY
@@ -32318,7 +32315,7 @@ def sisget_solicitacao_incluir_base(
     if not unidades:
 
         st.warning(
-            "⚠️ Nenhuma Unidade Administrativa ativa cadastrada."
+            "⚠️ Nenhuma Unidade Administrativa ativa."
         )
 
         return
@@ -32330,46 +32327,50 @@ def sisget_solicitacao_incluir_base(
     mapa_unidades = {}
 
     for (
-        unidade_id,
-        codigo_unidade,
-        nome_unidade,
+        ua_id_banco,
+        ua_codigo,
+        ua_nome,
 
-        entidade_id_unidade,
-        orgao_id,
-        unidade_orcamentaria_id,
+        orgao_id_banco,
+        entidade_id_banco,
+        uo_id_banco,
 
-        codigo_entidade,
-        nome_entidade,
+        orgao_codigo,
+        orgao_nome,
 
-        codigo_orgao,
-        nome_orgao,
+        entidade_codigo,
+        entidade_nome,
 
-        codigo_uo,
-        nome_uo
+        uo_codigo,
+        uo_nome
     ) in unidades:
 
         rotulo = (
-            f"{codigo_orgao} - {nome_orgao}"
+            f"{orgao_codigo} - {orgao_nome}"
             f" → "
-            f"{codigo_entidade} - {nome_entidade}"
+            f"{entidade_codigo} - {entidade_nome}"
             f" → "
-            f"{codigo_uo} - {nome_uo}"
+            f"{uo_codigo} - {uo_nome}"
             f" → "
-            f"{codigo_unidade} - {nome_unidade}"
+            f"{ua_codigo} - {ua_nome}"
         )
 
         mapa_unidades[
             rotulo
         ] = {
-            "unidade_id": unidade_id,
-            "entidade_id": entidade_id_unidade,
-            "orgao_id": orgao_id,
-            "uo_id": unidade_orcamentaria_id
+            "ua_id": ua_id_banco,
+            "orgao_id": orgao_id_banco,
+            "entidade_id": entidade_id_banco,
+            "uo_id": uo_id_banco
         }
 
     # ========================================================
-    # UNIDADE SELECIONADA
+    # ESTRUTURA ADMINISTRATIVA
     # ========================================================
+
+    st.markdown(
+        "### 🏛️ Estrutura Administrativa"
+    )
 
     unidade_nome = st.selectbox(
         "Unidade Administrativa *",
@@ -32387,29 +32388,21 @@ def sisget_solicitacao_incluir_base(
         unidade_nome
     ]
 
-    unidade_administrativa_id = (
-        dados_unidade[
-            "unidade_id"
-        ]
-    )
+    ua_id = dados_unidade[
+        "ua_id"
+    ]
 
-    entidade_id = (
-        dados_unidade[
-            "entidade_id"
-        ]
-    )
+    orgao_id = dados_unidade[
+        "orgao_id"
+    ]
 
-    orgao_id = (
-        dados_unidade[
-            "orgao_id"
-        ]
-    )
+    entidade_id = dados_unidade[
+        "entidade_id"
+    ]
 
-    unidade_orcamentaria_id = (
-        dados_unidade[
-            "uo_id"
-        ]
-    )
+    uo_id = dados_unidade[
+        "uo_id"
+    ]
 
     # ========================================================
     # SETORES
@@ -32432,7 +32425,7 @@ def sisget_solicitacao_incluir_base(
             nome
         """,
         (
-            unidade_administrativa_id,
+            ua_id,
         )
     )
 
@@ -32442,12 +32435,12 @@ def sisget_solicitacao_incluir_base(
 
     for (
         setor_id_banco,
-        codigo_setor,
-        nome_setor
+        setor_codigo,
+        setor_nome_banco
     ) in setores:
 
         mapa_setores[
-            f"{codigo_setor} - {nome_setor}"
+            f"{setor_codigo} - {setor_nome_banco}"
         ] = setor_id_banco
 
     setor_nome = st.selectbox(
@@ -32459,7 +32452,7 @@ def sisget_solicitacao_incluir_base(
             f"sisget_sol_setor_"
             f"{tipo_solicitacao}_"
             f"{reset}_"
-            f"{unidade_administrativa_id}"
+            f"{ua_id}"
         )
     )
 
@@ -32469,11 +32462,12 @@ def sisget_solicitacao_incluir_base(
 
     # ========================================================
     # DOTAÇÕES
-    # SOMENTE PARA LICITAÇÃO
+    # SOMENTE LICITAÇÃO
     # ========================================================
 
-    fichas_escolhidas = []
     mapa_fichas = {}
+
+    fichas_escolhidas = []
 
     if tipo_solicitacao == "LICITACAO":
 
@@ -32505,7 +32499,7 @@ def sisget_solicitacao_incluir_base(
             """,
             (
                 entidade_id,
-                unidade_orcamentaria_id,
+                uo_id,
                 exercicio
             )
         )
@@ -32519,7 +32513,7 @@ def sisget_solicitacao_incluir_base(
             valor_reservado
         ) in fichas:
 
-            valor_disponivel = (
+            disponivel = (
                 float(
                     valor_atual or 0
                 )
@@ -32536,7 +32530,7 @@ def sisget_solicitacao_incluir_base(
                 f" | Natureza: "
                 f"{natureza_despesa or '-'}"
                 f" | Disponível: "
-                f"R$ {valor_disponivel:,.2f}"
+                f"R$ {disponivel:,.2f}"
             )
 
             mapa_fichas[
@@ -32554,16 +32548,15 @@ def sisget_solicitacao_incluir_base(
                     f"sisget_sol_fichas_"
                     f"{tipo_solicitacao}_"
                     f"{reset}_"
-                    f"{unidade_orcamentaria_id}"
+                    f"{uo_id}"
                 )
             )
 
         else:
 
             st.warning(
-                "⚠️ Não existem dotações/fichas "
-                "orçamentárias ativas para esta "
-                "Unidade Orçamentária."
+                "⚠️ Nenhuma dotação disponível "
+                "para esta Unidade Orçamentária."
             )
 
     # ========================================================
@@ -32576,19 +32569,64 @@ def sisget_solicitacao_incluir_base(
         "### 📝 Dados da Solicitação"
     )
 
-    st.text_input(
+    # ========================================================
+    # CÓDIGO / NÚMERO
+    # ========================================================
+
+    col_codigo, col_numero = st.columns(
+        2
+    )
+
+    col_codigo.text_input(
         "Código",
         value=codigo,
         disabled=True
     )
 
-    prioridade = st.selectbox(
+    col_numero.text_input(
+        "Número",
+        value=str(
+            numero
+        ).zfill(6),
+        disabled=True
+    )
+
+    # ========================================================
+    # TIPO DO OBJETO / PRIORIDADE
+    # ========================================================
+
+    col_tipo, col_prioridade = st.columns(
+        2
+    )
+
+    tipo_objeto = col_tipo.selectbox(
+        "Tipo do Objeto *",
+        [
+            "Aquisição de Material",
+            "Contratação de Serviço",
+            "Obra / Serviço de Engenharia",
+            "Tecnologia da Informação",
+            "Locação",
+            "Manutenção",
+            "Serviço Continuado",
+            "Outros"
+        ],
+        key=(
+            f"sisget_sol_tipo_objeto_"
+            f"{tipo_solicitacao}_"
+            f"{reset}"
+        )
+    )
+
+    prioridade = col_prioridade.selectbox(
         "Prioridade *",
         [
+            "Baixa",
             "Normal",
             "Alta",
             "Urgente"
         ],
+        index=1,
         key=(
             f"sisget_sol_prioridade_"
             f"{tipo_solicitacao}_"
@@ -32596,15 +32634,37 @@ def sisget_solicitacao_incluir_base(
         )
     )
 
-    objeto = st.text_area(
-        "Objeto / Resumo *",
-        height=120,
+    # ========================================================
+    # TÍTULO / OBJETO
+    # ========================================================
+
+    titulo = st.text_input(
+        "Título / Objeto da Solicitação *",
+        max_chars=200,
         key=(
-            f"sisget_sol_objeto_"
+            f"sisget_sol_titulo_"
             f"{tipo_solicitacao}_"
             f"{reset}"
         )
     )
+
+    # ========================================================
+    # DESCRIÇÃO
+    # ========================================================
+
+    descricao = st.text_area(
+        "Descrição da Necessidade",
+        height=120,
+        key=(
+            f"sisget_sol_descricao_"
+            f"{tipo_solicitacao}_"
+            f"{reset}"
+        )
+    )
+
+    # ========================================================
+    # JUSTIFICATIVA
+    # ========================================================
 
     justificativa = st.text_area(
         "Justificativa *",
@@ -32616,18 +32676,58 @@ def sisget_solicitacao_incluir_base(
         )
     )
 
-    data_necessidade = st.date_input(
-        "Data da Necessidade",
-        value=datetime.now().date(),
+    # ========================================================
+    # SOLICITANTE
+    # ========================================================
+
+    solicitante = st.text_input(
+        "Solicitante",
+        value=st.session_state.get(
+            "usuario_logado",
+            ""
+        ),
         key=(
-            f"sisget_sol_data_"
+            f"sisget_sol_solicitante_"
             f"{tipo_solicitacao}_"
             f"{reset}"
         )
     )
 
+    # ========================================================
+    # DATAS
+    # ========================================================
+
+    col_data1, col_data2 = st.columns(
+        2
+    )
+
+    data_solicitacao = col_data1.date_input(
+        "Data da Solicitação *",
+        value=datetime.now().date(),
+        key=(
+            f"sisget_sol_data_solicitacao_"
+            f"{tipo_solicitacao}_"
+            f"{reset}"
+        )
+    )
+
+    data_necessidade = col_data2.date_input(
+        "Data da Necessidade",
+        value=datetime.now().date(),
+        key=(
+            f"sisget_sol_data_necessidade_"
+            f"{tipo_solicitacao}_"
+            f"{reset}"
+        )
+    )
+
+    # ========================================================
+    # OBSERVAÇÕES
+    # ========================================================
+
     observacao = st.text_area(
         "Observações",
+        height=100,
         key=(
             f"sisget_sol_observacao_"
             f"{tipo_solicitacao}_"
@@ -32646,7 +32746,7 @@ def sisget_solicitacao_incluir_base(
     )
 
     chave_itens = (
-        f"sisget_itens_nova_"
+        f"sisget_sol_itens_"
         f"{tipo_solicitacao}_"
         f"{reset}"
     )
@@ -32658,150 +32758,69 @@ def sisget_solicitacao_incluir_base(
         ] = []
 
     # ========================================================
-    # ENTIDADE PARA BUSCAR PRODUTOS
-    #
-    # PRIMEIRO: entidade da sessão
-    # SEGUNDO: entidade da unidade selecionada
+    # PRODUTOS
     # ========================================================
 
-    entidade_produtos = entidade_sessao
+    produtos = _sisget_fetch(
+        """
+        SELECT
+            p.id,
+            p.codigo,
 
-    # ========================================================
-    # PRODUTOS - PRIMEIRA BUSCA
-    # ========================================================
-
-    produtos = []
-
-    if entidade_produtos is not None:
-
-        produtos = _sisget_fetch(
-            """
-            SELECT
-                p.id,
-                p.codigo,
-
-                COALESCE(
-                    NULLIF(
-                        TRIM(p.produto),
-                        ''
-                    ),
-                    NULLIF(
-                        TRIM(p.descricao),
-                        ''
-                    ),
-                    'Produto sem descrição'
+            COALESCE(
+                NULLIF(
+                    TRIM(p.produto),
+                    ''
                 ),
-
-                p.descricao_complementar,
-
-                p.tipo_item,
-
-                g.codigo,
-                g.descricao,
-
-                sg.codigo,
-                sg.descricao,
-
-                uc.descricao,
-
-                um.descricao,
-                um.fator_conversao
-
-            FROM produtos p
-
-            LEFT JOIN grupos_produtos g
-                ON g.id = p.grupo_id
-
-            LEFT JOIN subgrupos_produtos sg
-                ON sg.id = p.subgrupo_id
-
-            LEFT JOIN unidades_compra uc
-                ON uc.id = p.unidade_compra_id
-
-            LEFT JOIN unidades_movimentacao um
-                ON um.id = p.unidade_movimentacao_id
-
-            WHERE p.ativo = TRUE
-              AND p.entidade_id = ?
-
-            ORDER BY
-                p.codigo
-            """,
-            (
-                entidade_produtos,
-            )
-        )
-
-    # ========================================================
-    # PRODUTOS - SEGUNDA BUSCA
-    # ========================================================
-
-    if not produtos:
-
-        produtos = _sisget_fetch(
-            """
-            SELECT
-                p.id,
-                p.codigo,
-
-                COALESCE(
-                    NULLIF(
-                        TRIM(p.produto),
-                        ''
-                    ),
-                    NULLIF(
-                        TRIM(p.descricao),
-                        ''
-                    ),
-                    'Produto sem descrição'
+                NULLIF(
+                    TRIM(p.descricao),
+                    ''
                 ),
+                'Produto sem descrição'
+            ),
 
-                p.descricao_complementar,
+            p.descricao_complementar,
 
-                p.tipo_item,
+            p.tipo_item,
 
-                g.codigo,
-                g.descricao,
+            g.codigo,
+            g.descricao,
 
-                sg.codigo,
-                sg.descricao,
+            sg.codigo,
+            sg.descricao,
 
-                uc.descricao,
+            uc.descricao,
 
-                um.descricao,
-                um.fator_conversao
+            um.descricao,
+            um.fator_conversao
 
-            FROM produtos p
+        FROM produtos p
 
-            LEFT JOIN grupos_produtos g
-                ON g.id = p.grupo_id
+        LEFT JOIN grupos_produtos g
+            ON g.id = p.grupo_id
 
-            LEFT JOIN subgrupos_produtos sg
-                ON sg.id = p.subgrupo_id
+        LEFT JOIN subgrupos_produtos sg
+            ON sg.id = p.subgrupo_id
 
-            LEFT JOIN unidades_compra uc
-                ON uc.id = p.unidade_compra_id
+        LEFT JOIN unidades_compra uc
+            ON uc.id = p.unidade_compra_id
 
-            LEFT JOIN unidades_movimentacao um
-                ON um.id = p.unidade_movimentacao_id
+        LEFT JOIN unidades_movimentacao um
+            ON um.id = p.unidade_movimentacao_id
 
-            WHERE p.ativo = TRUE
-              AND p.entidade_id = ?
+        WHERE p.entidade_id = ?
+          AND p.ativo = TRUE
 
-            ORDER BY
-                p.codigo
-            """,
-            (
-                entidade_id,
-            )
+        ORDER BY
+            p.codigo
+        """,
+        (
+            entidade_id,
         )
+    )
 
     # ========================================================
-    # TERCEIRA BUSCA
-    #
-    # SE AINDA NÃO ENCONTRAR, BUSCA TODOS OS PRODUTOS ATIVOS.
-    # ISSO EVITA TRAVAR O TESTE DO SISTEMA ENQUANTO AS
-    # ENTIDADES AINDA ESTÃO SENDO ORGANIZADAS.
+    # FALLBACK
     # ========================================================
 
     if not produtos:
@@ -32872,7 +32891,7 @@ def sisget_solicitacao_incluir_base(
         nome_produto,
 
         descricao_complementar,
-        tipo_item,
+        tipo_item_produto,
 
         codigo_grupo,
         descricao_grupo,
@@ -32909,7 +32928,7 @@ def sisget_solicitacao_incluir_base(
 
             "codigo": codigo_produto,
 
-            "produto": nome_produto,
+            "nome": nome_produto,
 
             "descricao_complementar": (
                 descricao_complementar
@@ -32917,7 +32936,7 @@ def sisget_solicitacao_incluir_base(
             ),
 
             "tipo_item": (
-                tipo_item
+                tipo_item_produto
                 or ""
             ),
 
@@ -32941,20 +32960,19 @@ def sisget_solicitacao_incluir_base(
         }
 
     # ========================================================
-    # FORMULÁRIO PARA ADICIONAR ITEM
+    # FORMULÁRIO DE ITEM
     # ========================================================
 
     if not mapa_produtos:
 
         st.warning(
-            "⚠️ Nenhum produto ativo encontrado "
-            "no Cadastro de Produtos."
+            "⚠️ Nenhum produto ativo cadastrado."
         )
 
     else:
 
         with st.form(
-            f"form_adicionar_item_"
+            f"sisget_form_item_"
             f"{tipo_solicitacao}_"
             f"{reset}",
             clear_on_submit=True
@@ -32972,7 +32990,7 @@ def sisget_solicitacao_incluir_base(
             ]
 
             # =================================================
-            # CLASSIFICAÇÃO
+            # GRUPO / SUBGRUPO
             # =================================================
 
             col_prod1, col_prod2 = st.columns(
@@ -33096,7 +33114,7 @@ def sisget_solicitacao_incluir_base(
 
                     "produto": (
                         dados_produto[
-                            "produto"
+                            "nome"
                         ]
                     ),
 
@@ -33124,7 +33142,7 @@ def sisget_solicitacao_incluir_base(
             st.rerun()
 
     # ========================================================
-    # ITENS ADICIONADOS
+    # LISTAGEM DOS ITENS
     # ========================================================
 
     itens = st.session_state[
@@ -33171,7 +33189,7 @@ def sisget_solicitacao_incluir_base(
             if col_i3.button(
                 "🗑️",
                 key=(
-                    f"remover_item_"
+                    f"sisget_remove_item_"
                     f"{tipo_solicitacao}_"
                     f"{reset}_"
                     f"{indice}"
@@ -33188,7 +33206,7 @@ def sisget_solicitacao_incluir_base(
         # TOTAL
         # ====================================================
 
-        valor_total = sum(
+        valor_total_solicitacao = sum(
             item[
                 "quantidade"
             ]
@@ -33196,12 +33214,13 @@ def sisget_solicitacao_incluir_base(
             item[
                 "valor_unitario"
             ]
+
             for item in itens
         )
 
         st.metric(
             "💰 Valor Estimado Total",
-            f"R$ {valor_total:,.2f}"
+            f"R$ {valor_total_solicitacao:,.2f}"
         )
 
     else:
@@ -33211,7 +33230,7 @@ def sisget_solicitacao_incluir_base(
         )
 
     # ========================================================
-    # BOTÃO SALVAR
+    # SALVAR
     # ========================================================
 
     st.markdown("---")
@@ -33221,14 +33240,14 @@ def sisget_solicitacao_incluir_base(
         type="primary",
         use_container_width=True,
         key=(
-            f"salvar_solicitacao_"
+            f"sisget_salvar_"
             f"{tipo_solicitacao}_"
             f"{reset}"
         )
     )
 
     # ========================================================
-    # SALVAR
+    # GRAVAÇÃO
     # ========================================================
 
     if salvar:
@@ -33237,10 +33256,10 @@ def sisget_solicitacao_incluir_base(
         # VALIDAÇÕES
         # ====================================================
 
-        if not objeto.strip():
+        if not titulo.strip():
 
             st.warning(
-                "⚠️ Informe o objeto da solicitação."
+                "⚠️ Informe o título/objeto da solicitação."
             )
 
             return
@@ -33269,13 +33288,13 @@ def sisget_solicitacao_incluir_base(
 
             st.warning(
                 "⚠️ Selecione pelo menos uma "
-                "dotação orçamentária."
+                "dotação/ficha orçamentária."
             )
 
             return
 
         # ====================================================
-        # RECALCULAR NÚMERO
+        # NÚMERO FINAL
         # ====================================================
 
         numero = sisget_proximo_numero_solicitacao(
@@ -33288,42 +33307,124 @@ def sisget_solicitacao_incluir_base(
             return
 
         codigo = (
-            f"{prefixos[tipo_solicitacao]}"
+            f"{prefixo}"
             f"-{exercicio}-"
             f"{str(numero).zfill(6)}"
         )
 
         # ====================================================
-        # GRAVAÇÃO
+        # RECONFIRMAR UNIDADE
+        # ====================================================
+
+        vinculos = _sisget_fetchone(
+            """
+            SELECT
+                orgao_id,
+                entidade_id,
+                unidade_orcamentaria_id
+
+            FROM unidades_administrativas
+
+            WHERE id = ?
+              AND ativo = TRUE
+            """,
+            (
+                ua_id,
+            )
+        )
+
+        if not vinculos:
+
+            st.error(
+                "❌ Não foi possível identificar "
+                "os vínculos da Unidade Administrativa."
+            )
+
+            return
+
+        (
+            orgao_id_salvar,
+            entidade_id_salvar,
+            uo_id_salvar
+        ) = vinculos
+
+        # ====================================================
+        # VALIDAÇÕES DOS VÍNCULOS
+        # ====================================================
+
+        if orgao_id_salvar is None:
+
+            st.error(
+                "❌ A Unidade Administrativa "
+                "não possui Órgão vinculado."
+            )
+
+            return
+
+        if entidade_id_salvar is None:
+
+            st.error(
+                "❌ A Unidade Administrativa "
+                "não possui Entidade vinculada."
+            )
+
+            return
+
+        if uo_id_salvar is None:
+
+            st.error(
+                "❌ A Unidade Administrativa "
+                "não possui Unidade Orçamentária vinculada."
+            )
+
+            return
+
+        # ====================================================
+        # GRAVAÇÃO ATÔMICA
         # ====================================================
 
         try:
 
             # =================================================
             # SOLICITAÇÃO
+            #
+            # GRAVA CAMPOS DA ESTRUTURA ANTIGA
+            # E DA ESTRUTURA NOVA.
             # =================================================
 
             cursor.execute(
                 """
                 INSERT INTO solicitacoes
                 (
-                    codigo,
-                    exercicio,
-                    numero,
-
-                    tipo_solicitacao,
-
+                    orgao_id,
+                    entidade_id,
+                    unidade_orcamentaria_id,
                     unidade_administrativa_id,
                     setor_id,
 
-                    solicitante_usuario_id,
+                    numero,
 
+                    data_solicitacao,
+
+                    solicitante,
+
+                    titulo,
+                    descricao,
                     prioridade,
-
-                    objeto,
                     justificativa,
 
+                    codigo,
+                    exercicio,
+                    tipo_solicitacao,
+
+                    tipo,
+
+                    solicitante_usuario_id,
+
+                    objeto,
+
                     data_necessidade,
+
                     observacao,
 
                     status,
@@ -33333,19 +33434,27 @@ def sisget_solicitacao_incluir_base(
                 )
                 VALUES
                 (
+                    ?, ?, ?, ?, ?,
+
+                    ?,
+
+                    ?,
+
+                    ?,
+
+                    ?, ?, ?, ?,
+
                     ?, ?, ?,
 
                     ?,
 
-                    ?, ?,
-
                     ?,
 
                     ?,
 
-                    ?, ?,
+                    ?,
 
-                    ?, ?,
+                    ?,
 
                     'RASCUNHO',
                     ?,
@@ -33356,25 +33465,41 @@ def sisget_solicitacao_incluir_base(
                 RETURNING id
                 """,
                 (
+                    orgao_id_salvar,
+                    entidade_id_salvar,
+                    uo_id_salvar,
+                    ua_id,
+                    setor_id,
+
+                    numero,
+
+                    data_solicitacao,
+
+                    solicitante.strip()
+                    or None,
+
+                    titulo.strip(),
+
+                    descricao.strip()
+                    or None,
+
+                    prioridade,
+
+                    justificativa.strip(),
+
                     codigo,
+
                     exercicio,
-                    str(
-                        numero
-                    ),
 
                     tipo_solicitacao,
 
-                    unidade_administrativa_id,
-                    setor_id,
+                    tipo_objeto,
 
                     st.session_state.get(
                         "usuario_id"
                     ),
 
-                    prioridade,
-
-                    objeto.strip(),
-                    justificativa.strip(),
+                    titulo.strip(),
 
                     data_necessidade,
 
@@ -33384,6 +33509,10 @@ def sisget_solicitacao_incluir_base(
                     etapa_inicial
                 )
             )
+
+            # =================================================
+            # ID
+            # =================================================
 
             retorno = cursor.fetchone()
 
@@ -33399,7 +33528,7 @@ def sisget_solicitacao_incluir_base(
             ]
 
             # =================================================
-            # DOTAÇÕES DA LICITAÇÃO
+            # DOTAÇÕES
             # =================================================
 
             if tipo_solicitacao == "LICITACAO":
@@ -33503,6 +33632,10 @@ def sisget_solicitacao_incluir_base(
 
             conn.commit()
 
+        # ====================================================
+        # ERRO
+        # ====================================================
+
         except Exception as erro:
 
             try:
@@ -33532,7 +33665,7 @@ def sisget_solicitacao_incluir_base(
         )
 
         # ====================================================
-        # LIMPAR ITENS
+        # LIMPAR CARRINHO
         # ====================================================
 
         st.session_state.pop(
