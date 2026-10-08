@@ -32248,7 +32248,7 @@ def sisget_solicitacao_incluir_base(
     )
 
     # ========================================================
-    # MENSAGEM DE SUCESSO
+    # MENSAGEM
     # ========================================================
 
     chave_mensagem = (
@@ -32462,7 +32462,6 @@ def sisget_solicitacao_incluir_base(
 
     # ========================================================
     # DOTAÇÕES
-    # SOMENTE LICITAÇÃO
     # ========================================================
 
     mapa_fichas = {}
@@ -32960,7 +32959,7 @@ def sisget_solicitacao_incluir_base(
         }
 
     # ========================================================
-    # FORMULÁRIO DE ITEM
+    # FORMULÁRIO DO ITEM
     # ========================================================
 
     if not mapa_produtos:
@@ -33230,7 +33229,7 @@ def sisget_solicitacao_incluir_base(
         )
 
     # ========================================================
-    # SALVAR
+    # BOTÃO SALVAR
     # ========================================================
 
     st.markdown("---")
@@ -33294,7 +33293,7 @@ def sisget_solicitacao_incluir_base(
             return
 
         # ====================================================
-        # NÚMERO FINAL
+        # RECALCULAR NÚMERO
         # ====================================================
 
         numero = sisget_proximo_numero_solicitacao(
@@ -33349,7 +33348,7 @@ def sisget_solicitacao_incluir_base(
         ) = vinculos
 
         # ====================================================
-        # VALIDAÇÕES DOS VÍNCULOS
+        # VALIDAR ÓRGÃO
         # ====================================================
 
         if orgao_id_salvar is None:
@@ -33361,6 +33360,10 @@ def sisget_solicitacao_incluir_base(
 
             return
 
+        # ====================================================
+        # VALIDAR ENTIDADE
+        # ====================================================
+
         if entidade_id_salvar is None:
 
             st.error(
@@ -33369,6 +33372,10 @@ def sisget_solicitacao_incluir_base(
             )
 
             return
+
+        # ====================================================
+        # VALIDAR UNIDADE ORÇAMENTÁRIA
+        # ====================================================
 
         if uo_id_salvar is None:
 
@@ -33388,11 +33395,14 @@ def sisget_solicitacao_incluir_base(
             SELECT
                 id,
                 ano
+
             FROM exercicios
+
             WHERE entidade_id = ?
               AND ano = ?
               AND ativo = TRUE
               AND encerrado = FALSE
+
             LIMIT 1
             """,
             (
@@ -33421,10 +33431,66 @@ def sisget_solicitacao_incluir_base(
         )
 
         # ====================================================
+        # TIPO ACEITO PELA CONSTRAINT solicitacoes_tipo_check
+        # ====================================================
+
+        mapa_tipo_banco = {
+            "Aquisição de Material": "Material",
+            "Contratação de Serviço": "Servico",
+            "Obra / Serviço de Engenharia": "Obra",
+            "Tecnologia da Informação": "Servico",
+            "Locação": "Locacao",
+            "Manutenção": "Servico",
+            "Serviço Continuado": "Servico",
+            "Outros": "Outro"
+        }
+
+        tipo_banco = mapa_tipo_banco.get(
+            tipo_objeto,
+            "Outro"
+        )
+
+        # ====================================================
+        # OBSERVAÇÃO COMPLETA
+        #
+        # COMO A TABELA ATUAL NÃO TEM COLUNA "descricao",
+        # A DESCRIÇÃO DA NECESSIDADE É PRESERVADA JUNTO
+        # À OBSERVAÇÃO.
+        # ====================================================
+
+        partes_observacao = []
+
+        if descricao.strip():
+
+            partes_observacao.append(
+                "Descrição da Necessidade:\n"
+                + descricao.strip()
+            )
+
+        if observacao.strip():
+
+            partes_observacao.append(
+                "Observações:\n"
+                + observacao.strip()
+            )
+
+        observacao_salvar = (
+            "\n\n".join(
+                partes_observacao
+            )
+            if partes_observacao
+            else None
+        )
+
+        # ====================================================
         # GRAVAÇÃO ATÔMICA
         # ====================================================
 
         try:
+
+            # =================================================
+            # SOLICITAÇÃO
+            # =================================================
 
             cursor.execute(
                 """
@@ -33495,20 +33561,28 @@ def sisget_solicitacao_incluir_base(
                     ua_id,
                     setor_id,
 
-                    str(numero),
+                    str(
+                        numero
+                    ),
+
                     data_solicitacao,
 
-                    tipo_objeto,
+                    tipo_banco,
+
                     titulo.strip(),
+
                     justificativa.strip(),
+
                     prioridade,
+
                     "Em elaboracao",
 
-                    observacao.strip()
-                    or None,
+                    observacao_salvar,
 
                     codigo,
+
                     exercicio,
+
                     tipo_solicitacao,
 
                     st.session_state.get(
@@ -33518,12 +33592,13 @@ def sisget_solicitacao_incluir_base(
                     data_necessidade,
 
                     "RASCUNHO",
+
                     etapa_inicial
                 )
             )
 
             # =================================================
-            # ID
+            # ID DA SOLICITAÇÃO
             # =================================================
 
             retorno = cursor.fetchone()
@@ -33677,7 +33752,7 @@ def sisget_solicitacao_incluir_base(
         )
 
         # ====================================================
-        # LIMPAR CARRINHO
+        # LIMPAR ITENS
         # ====================================================
 
         st.session_state.pop(
