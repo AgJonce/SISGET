@@ -13346,9 +13346,16 @@ def solicitacao_incluir():
             # ITENS
             # =================================================
 
-            for item in itens:
+            # =================================================
+            # ITENS
+            # =================================================
 
-                valor_total = (
+            for numero_item, item in enumerate(
+                itens,
+                start=1
+            ):
+
+                valor_total_item = (
                     item[
                         "quantidade"
                     ]
@@ -13364,23 +13371,16 @@ def solicitacao_incluir():
                     (
                         solicitacao_id,
                         produto_id,
-
-                        quantidade_solicitada,
-
+                        numero_item,
+                        quantidade,
+                        especificacao_complementar,
                         valor_estimado_unitario,
                         valor_estimado_total,
-
-                        observacao,
-
-                        ativo
+                        codigo
                     )
                     VALUES
                     (
-                        ?, ?,
-                        ?,
-                        ?, ?,
-                        ?,
-                        TRUE
+                        ?, ?, ?, ?, ?, ?, ?, ?
                     )
                     """,
                     (
@@ -13390,22 +13390,27 @@ def solicitacao_incluir():
                             "produto_id"
                         ],
 
+                        numero_item,
+
                         item[
                             "quantidade"
+                        ],
+
+                        item[
+                            "observacao"
                         ],
 
                         item[
                             "valor_unitario"
                         ],
 
-                        valor_total,
+                        valor_total_item,
 
                         item[
-                            "observacao"
+                            "codigo"
                         ]
                     )
                 )
-
             # =================================================
             # COMMIT
             # =================================================
