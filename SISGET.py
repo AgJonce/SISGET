@@ -31888,11 +31888,39 @@ def sisget_solicitacao_incluir_base(
     # ITENS
     # ========================================================
 
+    # ========================================================
+    # ITENS DA SOLICITAÇÃO
+    # BUSCAR DO CADASTRO DE PRODUTOS
+    # ========================================================
+
     st.markdown("---")
 
     st.markdown(
         "### 📦 Itens da Solicitação"
     )
+
+    # ========================================================
+    # ENTIDADE DO CADASTRO DE PRODUTOS
+    #
+    # O produto_incluir() grava utilizando a entidade
+    # que está na sessão do usuário.
+    # ========================================================
+
+    entidade_produtos = st.session_state.get(
+        "entidade_id"
+    )
+
+    if entidade_produtos is None:
+
+        st.error(
+            "❌ Entidade do usuário não identificada."
+        )
+
+        return
+
+    # ========================================================
+    # CONTROLE TEMPORÁRIO DOS ITENS
+    # ========================================================
 
     chave_itens = (
         f"sisget_itens_nova_"
@@ -31906,46 +31934,166 @@ def sisget_solicitacao_incluir_base(
             chave_itens
         ] = []
 
+    # ========================================================
+    # PRODUTOS CADASTRADOS
+    # ========================================================
+
     produtos = _sisget_fetch(
         """
         SELECT
-            id,
-            codigo,
+            p.id,
+            p.codigo,
+
             COALESCE(
-                NULLIF(produto, ''),
-                descricao
-            )
+                NULLIF(
+                    TRIM(p.produto),
+                    ''
+                ),
+                NULLIF(
+                    TRIM(p.descricao),
+                    ''
+                ),
+                'Produto sem descrição'
+            ) AS nome_produto,
 
-        FROM produtos
+            p.descricao_complementar,
 
-        WHERE entidade_id = ?
-          AND ativo = TRUE
+            p.tipo_item,
+
+            g.codigo,
+            g.descricao,
+
+            sg.codigo,
+            sg.descricao,
+
+            uc.descricao,
+
+            um.descricao,
+            um.fator_conversao
+
+        FROM produtos p
+
+        LEFT JOIN grupos_produtos g
+            ON g.id = p.grupo_id
+
+        LEFT JOIN subgrupos_produtos sg
+            ON sg.id = p.subgrupo_id
+
+        LEFT JOIN unidades_compra uc
+            ON uc.id = p.unidade_compra_id
+
+        LEFT JOIN unidades_movimentacao um
+            ON um.id = p.unidade_movimentacao_id
+
+        WHERE p.ativo = TRUE
+          AND p.entidade_id = ?
 
         ORDER BY
-            codigo
+            p.codigo,
+            nome_produto
         """,
         (
-            entidade_id,
+            entidade_produtos,
         )
     )
 
-    mapa_produtos = {
-        f"{codigo_produto} - {nome_produto}": produto_id
-        for (
-            produto_id,
-            codigo_produto,
-            nome_produto
-        ) in produtos
-    }
+    # ========================================================
+    # MAPA DOS PRODUTOS
+    # ========================================================
+
+    mapa_produtos = {}
+
+    for (
+        produto_id,
+        codigo_produto,
+        nome_produto,
+        descricao_complementar,
+        tipo_item,
+
+        codigo_grupo,
+        descricao_grupo,
+
+        codigo_subgrupo,
+        descricao_subgrupo,
+
+        unidade_compra,
+        unidade_movimentacao,
+        fator_conversao
+    ) in produtos:
+
+        grupo_texto = (
+            f"{codigo_grupo} - {descricao_grupo}"
+            if codigo_grupo
+            else "Sem grupo"
+        )
+
+        subgrupo_texto = (
+            f"{codigo_subgrupo} - {descricao_subgrupo}"
+            if codigo_subgrupo
+            else "Sem subgrupo"
+        )
+
+        unidade_texto = (
+            unidade_compra
+            or unidade_movimentacao
+            or ""
+        )
+
+        rotulo = (
+            f"{codigo_produto} - "
+            f"{nome_produto}"
+        )
+
+        mapa_produtos[
+            rotulo
+        ] = {
+            "id": produto_id,
+            "codigo": codigo_produto,
+            "produto": nome_produto,
+            "descricao_complementar": (
+                descricao_complementar
+                or ""
+            ),
+            "tipo_item": tipo_item,
+            "grupo": grupo_texto,
+            "subgrupo": subgrupo_texto,
+            "unidade_compra": (
+                unidade_compra
+                or ""
+            ),
+            "unidade_movimentacao": (
+                unidade_movimentacao
+                or ""
+            ),
+            "fator_conversao": (
+                float(
+                    fator_conversao
+                    or 1
+                )
+            ),
+            "unidade": unidade_texto
+        }
+
+    # ========================================================
+    # SEM PRODUTOS
+    # ========================================================
 
     if not mapa_produtos:
 
         st.warning(
             "⚠️ Nenhum produto ativo cadastrado "
-            "para esta entidade."
+            "no Cadastro de Produtos para esta entidade."
+        )
+
+        st.caption(
+            f"Entidade consultada: {entidade_produtos}"
         )
 
     else:
+
+        # ====================================================
+        # FORMULÁRIO DO ITEM
+        # ====================================================
 
         with st.form(
             f"form_adicionar_item_"
@@ -31961,7 +32109,74 @@ def sisget_solicitacao_incluir_base(
                 )
             )
 
-            col1, col2 = st.columns(2)
+            dados_produto = mapa_produtos[
+                produto_nome
+            ]
+
+            # ================================================
+            # INFORMAÇÕES DO PRODUTO
+            # ================================================
+
+            col_info1, col_info2 = st.columns(
+                2
+            )
+
+            col_info1.text_input(
+                "Grupo",
+                value=dados_produto[
+                    "grupo"
+                ],
+                disabled=True
+            )
+
+            col_info2.text_input(
+                "Subgrupo",
+                value=dados_produto[
+                    "subgrupo"
+                ],
+                disabled=True
+            )
+
+            col_info3, col_info4 = st.columns(
+                2
+            )
+
+            col_info3.text_input(
+                "Unidade de Compra",
+                value=dados_produto[
+                    "unidade_compra"
+                ],
+                disabled=True
+            )
+
+            col_info4.text_input(
+                "Unidade de Movimentação",
+                value=dados_produto[
+                    "unidade_movimentacao"
+                ],
+                disabled=True
+            )
+
+            if dados_produto[
+                "descricao_complementar"
+            ]:
+
+                st.text_area(
+                    "Descrição Complementar",
+                    value=dados_produto[
+                        "descricao_complementar"
+                    ],
+                    disabled=True,
+                    height=80
+                )
+
+            # ================================================
+            # QUANTIDADE / VALOR
+            # ================================================
+
+            col1, col2 = st.columns(
+                2
+            )
 
             quantidade = col1.number_input(
                 "Quantidade *",
@@ -31971,7 +32186,7 @@ def sisget_solicitacao_incluir_base(
             )
 
             valor_unitario = col2.number_input(
-                "Valor Estimado Unitário",
+                "Valor Estimado Unitário (R$)",
                 min_value=0.0,
                 value=0.0,
                 format="%.2f"
@@ -31988,27 +32203,51 @@ def sisget_solicitacao_incluir_base(
             )
 
         # ====================================================
-        # ADICIONAR ITEM
+        # ADICIONAR
         # ====================================================
 
         if adicionar:
+
+            dados_produto = mapa_produtos[
+                produto_nome
+            ]
 
             st.session_state[
                 chave_itens
             ].append(
                 {
                     "produto_id": (
-                        mapa_produtos[
-                            produto_nome
+                        dados_produto[
+                            "id"
                         ]
                     ),
-                    "produto": produto_nome,
+
+                    "codigo": (
+                        dados_produto[
+                            "codigo"
+                        ]
+                    ),
+
+                    "produto": (
+                        dados_produto[
+                            "produto"
+                        ]
+                    ),
+
+                    "unidade": (
+                        dados_produto[
+                            "unidade"
+                        ]
+                    ),
+
                     "quantidade": float(
                         quantidade
                     ),
+
                     "valor_unitario": float(
                         valor_unitario
                     ),
+
                     "observacao": (
                         observacao_item.strip()
                         or None
@@ -32017,409 +32256,6 @@ def sisget_solicitacao_incluir_base(
             )
 
             st.rerun()
-
-    # ========================================================
-    # LISTAR ITENS
-    # ========================================================
-
-    itens = st.session_state[
-        chave_itens
-    ]
-
-    if itens:
-
-        st.markdown(
-            "#### Itens adicionados"
-        )
-
-        for indice, item in enumerate(
-            itens
-        ):
-
-            col1, col2, col3 = st.columns(
-                [6, 2, 1]
-            )
-
-            col1.write(
-                item[
-                    "produto"
-                ]
-            )
-
-            valor_total_item = (
-                item[
-                    "quantidade"
-                ]
-                *
-                item[
-                    "valor_unitario"
-                ]
-            )
-
-            col2.write(
-                f"{item['quantidade']:,.2f} "
-                f"× R$ "
-                f"{item['valor_unitario']:,.2f}"
-                f" = R$ "
-                f"{valor_total_item:,.2f}"
-            )
-
-            if col3.button(
-                "🗑️",
-                key=(
-                    f"remover_item_"
-                    f"{tipo_solicitacao}_"
-                    f"{reset}_{indice}"
-                )
-            ):
-
-                itens.pop(
-                    indice
-                )
-
-                st.rerun()
-
-        # ====================================================
-        # TOTAL
-        # ====================================================
-
-        valor_total = sum(
-            item[
-                "quantidade"
-            ]
-            *
-            item[
-                "valor_unitario"
-            ]
-            for item in itens
-        )
-
-        st.metric(
-            "💰 Valor Estimado Total",
-            f"R$ {valor_total:,.2f}"
-        )
-
-    else:
-
-        st.info(
-            "Nenhum item adicionado."
-        )
-
-    # ========================================================
-    # SALVAR
-    # ========================================================
-
-    st.markdown("---")
-
-    salvar = st.button(
-        "💾 Salvar Solicitação",
-        type="primary",
-        use_container_width=True,
-        key=(
-            f"salvar_solicitacao_"
-            f"{tipo_solicitacao}_"
-            f"{reset}"
-        )
-    )
-
-    # ========================================================
-    # VALIDAÇÕES
-    # ========================================================
-
-    if salvar:
-
-        if not objeto.strip():
-
-            st.warning(
-                "⚠️ Informe o objeto da solicitação."
-            )
-
-            return
-
-        if not justificativa.strip():
-
-            st.warning(
-                "⚠️ Informe a justificativa."
-            )
-
-            return
-
-        if not itens:
-
-            st.warning(
-                "⚠️ Adicione pelo menos um item "
-                "à solicitação."
-            )
-
-            return
-
-        if (
-            tipo_solicitacao == "LICITACAO"
-            and
-            not fichas_escolhidas
-        ):
-
-            st.warning(
-                "⚠️ Selecione pelo menos uma "
-                "dotação orçamentária."
-            )
-
-            return
-
-        # ====================================================
-        # RECALCULAR NÚMERO
-        # ====================================================
-
-        numero = (
-            sisget_proximo_numero_solicitacao(
-                tipo_solicitacao,
-                exercicio
-            )
-        )
-
-        if numero is None:
-
-            return
-
-        codigo = (
-            f"{prefixos[tipo_solicitacao]}"
-            f"-{exercicio}-"
-            f"{str(numero).zfill(6)}"
-        )
-
-        # ====================================================
-        # GRAVAÇÃO
-        # ====================================================
-
-        try:
-
-            # =================================================
-            # SOLICITAÇÃO
-            # =================================================
-
-            cursor.execute(
-                """
-                INSERT INTO solicitacoes
-                (
-                    codigo,
-                    exercicio,
-                    numero,
-
-                    tipo_solicitacao,
-
-                    unidade_administrativa_id,
-                    setor_id,
-
-                    solicitante_usuario_id,
-
-                    prioridade,
-                    objeto,
-                    justificativa,
-
-                    data_necessidade,
-                    observacao,
-
-                    status,
-                    etapa_atual,
-
-                    ativo
-                )
-                VALUES
-                (
-                    ?, ?, ?,
-                    ?,
-                    ?, ?,
-                    ?,
-                    ?, ?, ?,
-                    ?, ?,
-                    'RASCUNHO',
-                    ?,
-                    TRUE
-                )
-                RETURNING id
-                """,
-                (
-                    codigo,
-                    exercicio,
-                    str(
-                        numero
-                    ),
-
-                    tipo_solicitacao,
-
-                    unidade_administrativa_id,
-                    setor_id,
-
-                    st.session_state.get(
-                        "usuario_id"
-                    ),
-
-                    prioridade,
-                    objeto.strip(),
-                    justificativa.strip(),
-
-                    data_necessidade,
-                    observacao.strip()
-                    or None,
-
-                    etapa_inicial
-                )
-            )
-
-            retorno = cursor.fetchone()
-
-            if not retorno:
-
-                raise Exception(
-                    "Não foi possível obter "
-                    "o ID da solicitação."
-                )
-
-            solicitacao_id = retorno[
-                0
-            ]
-
-            # =================================================
-            # DOTAÇÕES
-            # SOMENTE LICITAÇÃO
-            # =================================================
-
-            if tipo_solicitacao == "LICITACAO":
-
-                for ficha_nome in fichas_escolhidas:
-
-                    ficha_id = mapa_fichas[
-                        ficha_nome
-                    ]
-
-                    cursor.execute(
-                        """
-                        INSERT INTO
-                            solicitacoes_fichas_orcamentarias
-                        (
-                            solicitacao_id,
-                            ficha_orcamentaria_id
-                        )
-                        VALUES
-                        (
-                            ?, ?
-                        )
-                        """,
-                        (
-                            solicitacao_id,
-                            ficha_id
-                        )
-                    )
-
-            # =================================================
-            # ITENS
-            # =================================================
-
-            for item in itens:
-
-                valor_total_item = (
-                    item[
-                        "quantidade"
-                    ]
-                    *
-                    item[
-                        "valor_unitario"
-                    ]
-                )
-
-                cursor.execute(
-                    """
-                    INSERT INTO solicitacoes_itens
-                    (
-                        solicitacao_id,
-                        produto_id,
-
-                        quantidade_solicitada,
-
-                        valor_estimado_unitario,
-                        valor_estimado_total,
-
-                        observacao,
-
-                        ativo
-                    )
-                    VALUES
-                    (
-                        ?, ?,
-                        ?,
-                        ?, ?,
-                        ?,
-                        TRUE
-                    )
-                    """,
-                    (
-                        solicitacao_id,
-
-                        item[
-                            "produto_id"
-                        ],
-
-                        item[
-                            "quantidade"
-                        ],
-
-                        item[
-                            "valor_unitario"
-                        ],
-
-                        valor_total_item,
-
-                        item[
-                            "observacao"
-                        ]
-                    )
-                )
-
-            # =================================================
-            # COMMIT
-            # =================================================
-
-            conn.commit()
-
-        except Exception as erro:
-
-            try:
-
-                conn.rollback()
-
-            except Exception:
-
-                pass
-
-            st.error(
-                f"❌ Não foi possível salvar "
-                f"a solicitação: {erro}"
-            )
-
-            return
-
-        # ====================================================
-        # SUCESSO
-        # ====================================================
-
-        st.session_state[
-            chave_mensagem
-        ] = (
-            f"✅ Solicitação {codigo} "
-            f"cadastrada com sucesso!"
-        )
-
-        st.session_state.pop(
-            chave_itens,
-            None
-        )
-
-        st.session_state[
-            chave_reset
-        ] += 1
-
-        st.rerun()
-
 
 
 def solicitacao_interna_incluir():
