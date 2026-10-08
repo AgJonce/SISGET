@@ -33654,7 +33654,14 @@ def sisget_solicitacao_incluir_base(
             # ITENS
             # =================================================
 
-            for item in itens:
+            # =================================================
+            # ITENS
+            # =================================================
+
+            for numero_item, item in enumerate(
+                itens,
+                start=1
+            ):
 
                 valor_total_item = (
                     item[
@@ -33672,27 +33679,16 @@ def sisget_solicitacao_incluir_base(
                     (
                         solicitacao_id,
                         produto_id,
-
-                        quantidade_solicitada,
-
+                        numero_item,
+                        quantidade,
+                        especificacao_complementar,
                         valor_estimado_unitario,
                         valor_estimado_total,
-
-                        observacao,
-
-                        ativo
+                        codigo
                     )
                     VALUES
                     (
-                        ?, ?,
-
-                        ?,
-
-                        ?, ?,
-
-                        ?,
-
-                        TRUE
+                        ?, ?, ?, ?, ?, ?, ?, ?
                     )
                     """,
                     (
@@ -33702,8 +33698,14 @@ def sisget_solicitacao_incluir_base(
                             "produto_id"
                         ],
 
+                        numero_item,
+
                         item[
                             "quantidade"
+                        ],
+
+                        item[
+                            "observacao"
                         ],
 
                         item[
@@ -33713,11 +33715,10 @@ def sisget_solicitacao_incluir_base(
                         valor_total_item,
 
                         item[
-                            "observacao"
+                            "codigo"
                         ]
                     )
                 )
-
             # =================================================
             # COMMIT
             # =================================================
