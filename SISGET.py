@@ -31544,7 +31544,7 @@ def sisget_solicitacao_incluir_base(
     )
 
     # ========================================================
-    # MENSAGEM
+    # MENSAGEM DE SUCESSO
     # ========================================================
 
     chave_mensagem = (
@@ -31559,6 +31559,14 @@ def sisget_solicitacao_incluir_base(
                 chave_mensagem
             )
         )
+
+    # ========================================================
+    # ENTIDADE DA SESSÃO
+    # ========================================================
+
+    entidade_sessao = st.session_state.get(
+        "entidade_id"
+    )
 
     # ========================================================
     # UNIDADES ADMINISTRATIVAS
@@ -31617,7 +31625,7 @@ def sisget_solicitacao_incluir_base(
         return
 
     # ========================================================
-    # MAPA UNIDADES
+    # MAPA DAS UNIDADES
     # ========================================================
 
     mapa_unidades = {}
@@ -31627,7 +31635,7 @@ def sisget_solicitacao_incluir_base(
         codigo_unidade,
         nome_unidade,
 
-        entidade_id,
+        entidade_id_unidade,
         orgao_id,
         unidade_orcamentaria_id,
 
@@ -31655,7 +31663,7 @@ def sisget_solicitacao_incluir_base(
             rotulo
         ] = {
             "unidade_id": unidade_id,
-            "entidade_id": entidade_id,
+            "entidade_id": entidade_id_unidade,
             "orgao_id": orgao_id,
             "uo_id": unidade_orcamentaria_id
         }
@@ -31762,7 +31770,7 @@ def sisget_solicitacao_incluir_base(
 
     # ========================================================
     # DOTAÇÕES
-    # SOMENTE LICITAÇÃO
+    # SOMENTE PARA LICITAÇÃO
     # ========================================================
 
     fichas_escolhidas = []
@@ -31951,69 +31959,210 @@ def sisget_solicitacao_incluir_base(
         ] = []
 
     # ========================================================
-    # PRODUTOS DA MESMA ENTIDADE
+    # ENTIDADE PARA BUSCAR PRODUTOS
+    #
+    # PRIMEIRO: entidade da sessão
+    # SEGUNDO: entidade da unidade selecionada
     # ========================================================
 
-    produtos = _sisget_fetch(
-        """
-        SELECT
-            p.id,
-            p.codigo,
+    entidade_produtos = entidade_sessao
 
-            COALESCE(
-                NULLIF(
-                    TRIM(p.produto),
-                    ''
+    # ========================================================
+    # PRODUTOS - PRIMEIRA BUSCA
+    # ========================================================
+
+    produtos = []
+
+    if entidade_produtos is not None:
+
+        produtos = _sisget_fetch(
+            """
+            SELECT
+                p.id,
+                p.codigo,
+
+                COALESCE(
+                    NULLIF(
+                        TRIM(p.produto),
+                        ''
+                    ),
+                    NULLIF(
+                        TRIM(p.descricao),
+                        ''
+                    ),
+                    'Produto sem descrição'
                 ),
-                NULLIF(
-                    TRIM(p.descricao),
-                    ''
-                ),
-                'Produto sem descrição'
-            ),
 
-            p.descricao_complementar,
+                p.descricao_complementar,
 
-            p.tipo_item,
+                p.tipo_item,
 
-            g.codigo,
-            g.descricao,
+                g.codigo,
+                g.descricao,
 
-            sg.codigo,
-            sg.descricao,
+                sg.codigo,
+                sg.descricao,
 
-            uc.descricao,
+                uc.descricao,
 
-            um.descricao,
-            um.fator_conversao
+                um.descricao,
+                um.fator_conversao
 
-        FROM produtos p
+            FROM produtos p
 
-        LEFT JOIN grupos_produtos g
-            ON g.id = p.grupo_id
+            LEFT JOIN grupos_produtos g
+                ON g.id = p.grupo_id
 
-        LEFT JOIN subgrupos_produtos sg
-            ON sg.id = p.subgrupo_id
+            LEFT JOIN subgrupos_produtos sg
+                ON sg.id = p.subgrupo_id
 
-        LEFT JOIN unidades_compra uc
-            ON uc.id = p.unidade_compra_id
+            LEFT JOIN unidades_compra uc
+                ON uc.id = p.unidade_compra_id
 
-        LEFT JOIN unidades_movimentacao um
-            ON um.id = p.unidade_movimentacao_id
+            LEFT JOIN unidades_movimentacao um
+                ON um.id = p.unidade_movimentacao_id
 
-        WHERE p.ativo = TRUE
-          AND p.entidade_id = ?
+            WHERE p.ativo = TRUE
+              AND p.entidade_id = ?
 
-        ORDER BY
-            p.codigo
-        """,
-        (
-            entidade_id,
+            ORDER BY
+                p.codigo
+            """,
+            (
+                entidade_produtos,
+            )
         )
-    )
 
     # ========================================================
-    # MAPA PRODUTOS
+    # PRODUTOS - SEGUNDA BUSCA
+    # ========================================================
+
+    if not produtos:
+
+        produtos = _sisget_fetch(
+            """
+            SELECT
+                p.id,
+                p.codigo,
+
+                COALESCE(
+                    NULLIF(
+                        TRIM(p.produto),
+                        ''
+                    ),
+                    NULLIF(
+                        TRIM(p.descricao),
+                        ''
+                    ),
+                    'Produto sem descrição'
+                ),
+
+                p.descricao_complementar,
+
+                p.tipo_item,
+
+                g.codigo,
+                g.descricao,
+
+                sg.codigo,
+                sg.descricao,
+
+                uc.descricao,
+
+                um.descricao,
+                um.fator_conversao
+
+            FROM produtos p
+
+            LEFT JOIN grupos_produtos g
+                ON g.id = p.grupo_id
+
+            LEFT JOIN subgrupos_produtos sg
+                ON sg.id = p.subgrupo_id
+
+            LEFT JOIN unidades_compra uc
+                ON uc.id = p.unidade_compra_id
+
+            LEFT JOIN unidades_movimentacao um
+                ON um.id = p.unidade_movimentacao_id
+
+            WHERE p.ativo = TRUE
+              AND p.entidade_id = ?
+
+            ORDER BY
+                p.codigo
+            """,
+            (
+                entidade_id,
+            )
+        )
+
+    # ========================================================
+    # TERCEIRA BUSCA
+    #
+    # SE AINDA NÃO ENCONTRAR, BUSCA TODOS OS PRODUTOS ATIVOS.
+    # ISSO EVITA TRAVAR O TESTE DO SISTEMA ENQUANTO AS
+    # ENTIDADES AINDA ESTÃO SENDO ORGANIZADAS.
+    # ========================================================
+
+    if not produtos:
+
+        produtos = _sisget_fetch(
+            """
+            SELECT
+                p.id,
+                p.codigo,
+
+                COALESCE(
+                    NULLIF(
+                        TRIM(p.produto),
+                        ''
+                    ),
+                    NULLIF(
+                        TRIM(p.descricao),
+                        ''
+                    ),
+                    'Produto sem descrição'
+                ),
+
+                p.descricao_complementar,
+
+                p.tipo_item,
+
+                g.codigo,
+                g.descricao,
+
+                sg.codigo,
+                sg.descricao,
+
+                uc.descricao,
+
+                um.descricao,
+                um.fator_conversao
+
+            FROM produtos p
+
+            LEFT JOIN grupos_produtos g
+                ON g.id = p.grupo_id
+
+            LEFT JOIN subgrupos_produtos sg
+                ON sg.id = p.subgrupo_id
+
+            LEFT JOIN unidades_compra uc
+                ON uc.id = p.unidade_compra_id
+
+            LEFT JOIN unidades_movimentacao um
+                ON um.id = p.unidade_movimentacao_id
+
+            WHERE p.ativo = TRUE
+
+            ORDER BY
+                p.codigo
+            """
+        )
+
+    # ========================================================
+    # MAPA DOS PRODUTOS
     # ========================================================
 
     mapa_produtos = {}
@@ -32058,7 +32207,9 @@ def sisget_solicitacao_incluir_base(
             rotulo_produto
         ] = {
             "id": produto_id,
+
             "codigo": codigo_produto,
+
             "produto": nome_produto,
 
             "descricao_complementar": (
@@ -32091,14 +32242,14 @@ def sisget_solicitacao_incluir_base(
         }
 
     # ========================================================
-    # ADICIONAR ITEM
+    # FORMULÁRIO PARA ADICIONAR ITEM
     # ========================================================
 
     if not mapa_produtos:
 
         st.warning(
-            "⚠️ Nenhum produto ativo cadastrado "
-            "para esta entidade."
+            "⚠️ Nenhum produto ativo encontrado "
+            "no Cadastro de Produtos."
         )
 
     else:
@@ -32122,7 +32273,7 @@ def sisget_solicitacao_incluir_base(
             ]
 
             # =================================================
-            # PRODUTO
+            # CLASSIFICAÇÃO
             # =================================================
 
             col_prod1, col_prod2 = st.columns(
@@ -32145,6 +32296,10 @@ def sisget_solicitacao_incluir_base(
                 disabled=True
             )
 
+            # =================================================
+            # UNIDADES
+            # =================================================
+
             col_un1, col_un2 = st.columns(
                 2
             )
@@ -32164,6 +32319,10 @@ def sisget_solicitacao_incluir_base(
                 ],
                 disabled=True
             )
+
+            # =================================================
+            # DESCRIÇÃO COMPLEMENTAR
+            # =================================================
 
             if dados_produto[
                 "descricao_complementar"
@@ -32211,7 +32370,7 @@ def sisget_solicitacao_incluir_base(
             )
 
         # ====================================================
-        # ADICIONAR NO CARRINHO
+        # ADICIONAR ITEM
         # ====================================================
 
         if adicionar:
