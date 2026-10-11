@@ -33169,47 +33169,989 @@ def sisget_solicitacao_incluir_base(
     etapa_inicial
 ):
 
-    ...
+    # ========================================================
+    # RESET
+    # ========================================================
+
+    if chave_reset not in st.session_state:
+
+        st.session_state[
+            chave_reset
+        ] = 0
+
+    reset = st.session_state[
+        chave_reset
+    ]
+
+    # ========================================================
+    # EXERCÍCIO
+    # ========================================================
+
+    exercicio = datetime.now().year
+
+    # ========================================================
+    # NÚMERO
+    # ========================================================
+
+    numero = sisget_proximo_numero_solicitacao(
+        tipo_solicitacao,
+        exercicio
+    )
+
+    if numero is None:
+
+        return
+
+    # ========================================================
+    # PREFIXOS
+    # ========================================================
+
+    prefixos = {
+        "INTERNA": "INT",
+        "COMPRA": "COM",
+        "LICITACAO": "LIC"
+    }
+
+    prefixo = prefixos.get(
+        tipo_solicitacao,
+        "SOL"
+    )
+
+    codigo = (
+        f"{prefixo}"
+        f"-{exercicio}-"
+        f"{str(numero).zfill(6)}"
+    )
+
+    # ========================================================
+    # TÍTULO
+    # ========================================================
+
+    st.subheader(
+        titulo_tela
+    )
+
+    st.info(
+        f"🔢 Código da Solicitação: {codigo}"
+    )
+
+    # ========================================================
+    # MENSAGEM
+    # ========================================================
+
+    chave_mensagem = (
+        f"sisget_mensagem_"
+        f"{tipo_solicitacao.lower()}"
+    )
+
+    if chave_mensagem in st.session_state:
+
+        st.success(
+            st.session_state.pop(
+                chave_mensagem
+            )
+        )
+
+    # ========================================================
+    # UNIDADES ADMINISTRATIVAS
+    # ========================================================
+
+    unidades = _sisget_fetch(
+        """
+        SELECT
+            a.id,
+            a.codigo,
+            a.nome,
+
+            a.orgao_id,
+            a.entidade_id,
+            a.unidade_orcamentaria_id,
+
+            o.codigo,
+            o.nome,
+
+            e.codigo,
+            e.nome,
+
+            u.codigo,
+            u.nome
+
+        FROM unidades_administrativas a
+
+        INNER JOIN orgaos o
+            ON o.id = a.orgao_id
+
+        INNER JOIN entidades e
+            ON e.id = a.entidade_id
+
+        INNER JOIN unidades_orcamentarias u
+            ON u.id = a.unidade_orcamentaria_id
+
+        WHERE a.ativo = TRUE
+          AND o.ativo = TRUE
+          AND e.ativo = TRUE
+          AND u.ativo = TRUE
+
+        ORDER BY
+            o.codigo,
+            e.codigo,
+            u.codigo,
+            a.codigo
+        """
+    )
+
+    if not unidades:
+
+        st.warning(
+            "⚠️ Nenhuma Unidade Administrativa ativa."
+        )
+
+        return
+
+    # ========================================================
+    # MAPA DAS UNIDADES
+    # ========================================================
+
+    mapa_unidades = {}
+
+    for (
+        ua_id_banco,
+        ua_codigo,
+        ua_nome,
+
+        orgao_id_banco,
+        entidade_id_banco,
+        uo_id_banco,
+
+        orgao_codigo,
+        orgao_nome,
+
+        entidade_codigo,
+        entidade_nome,
+
+        uo_codigo,
+        uo_nome
+    ) in unidades:
+
+        rotulo = (
+            f"{orgao_codigo} - {orgao_nome}"
+            f" → "
+            f"{entidade_codigo} - {entidade_nome}"
+            f" → "
+            f"{uo_codigo} - {uo_nome}"
+            f" → "
+            f"{ua_codigo} - {ua_nome}"
+        )
+
+        mapa_unidades[
+            rotulo
+        ] = {
+            "ua_id": ua_id_banco,
+            "orgao_id": orgao_id_banco,
+            "entidade_id": entidade_id_banco,
+            "uo_id": uo_id_banco
+        }
+
+    # ========================================================
+    # ESTRUTURA ADMINISTRATIVA
+    # ========================================================
+
+    st.markdown(
+        "### 🏛️ Estrutura Administrativa"
+    )
+
+    unidade_nome = st.selectbox(
+        "Unidade Administrativa *",
+        list(
+            mapa_unidades.keys()
+        ),
+        key=(
+            f"sisget_sol_unidade_"
+            f"{tipo_solicitacao}_"
+            f"{reset}"
+        )
+    )
+
+    dados_unidade = mapa_unidades[
+        unidade_nome
+    ]
+
+    ua_id = dados_unidade[
+        "ua_id"
+    ]
+
+    orgao_id = dados_unidade[
+        "orgao_id"
+    ]
+
+    entidade_id = dados_unidade[
+        "entidade_id"
+    ]
+
+    uo_id = dados_unidade[
+        "uo_id"
+    ]
+
+    # ========================================================
+    # SETORES
+    # ========================================================
+
+    setores = _sisget_fetch(
+        """
+        SELECT
+            id,
+            codigo,
+            nome
+
+        FROM setores
+
+        WHERE unidade_administrativa_id = ?
+          AND ativo = TRUE
+
+        ORDER BY
+            codigo,
+            nome
+        """,
+        (
+            ua_id,
+        )
+    )
+
+    mapa_setores = {
+        "Sem setor específico": None
+    }
+
+    for (
+        setor_id_banco,
+        setor_codigo,
+        setor_nome_banco
+    ) in setores:
+
+        mapa_setores[
+            f"{setor_codigo} - {setor_nome_banco}"
+        ] = setor_id_banco
+
+    setor_nome = st.selectbox(
+        "Setor Solicitante",
+        list(
+            mapa_setores.keys()
+        ),
+        key=(
+            f"sisget_sol_setor_"
+            f"{tipo_solicitacao}_"
+            f"{reset}_"
+            f"{ua_id}"
+        )
+    )
+
+    setor_id = mapa_setores[
+        setor_nome
+    ]
+
+    # ========================================================
+    # DOTAÇÕES
+    # ========================================================
+
+    mapa_fichas = {}
+
+    fichas_escolhidas = []
+
+    if tipo_solicitacao == "LICITACAO":
+
+        st.markdown("---")
+
+        st.markdown(
+            "### 💰 Dotações Orçamentárias"
+        )
+
+        fichas = _sisget_fetch(
+            """
+            SELECT
+                id,
+                numero_ficha,
+                descricao,
+                natureza_despesa,
+                valor_atual,
+                valor_reservado
+
+            FROM fichas_orcamentarias
+
+            WHERE entidade_id = ?
+              AND unidade_orcamentaria_id = ?
+              AND exercicio = ?
+              AND ativo = TRUE
+
+            ORDER BY
+                numero_ficha
+            """,
+            (
+                entidade_id,
+                uo_id,
+                exercicio
+            )
+        )
+
+        for (
+            ficha_id,
+            numero_ficha,
+            descricao_ficha,
+            natureza_despesa,
+            valor_atual,
+            valor_reservado
+        ) in fichas:
+
+            disponivel = (
+                float(
+                    valor_atual or 0
+                )
+                -
+                float(
+                    valor_reservado or 0
+                )
+            )
+
+            rotulo_ficha = (
+                f"Ficha {numero_ficha}"
+                f" | "
+                f"{descricao_ficha or 'Sem descrição'}"
+                f" | Natureza: "
+                f"{natureza_despesa or '-'}"
+                f" | Disponível: "
+                f"R$ {disponivel:,.2f}"
+            )
+
+            mapa_fichas[
+                rotulo_ficha
+            ] = ficha_id
+
+        if mapa_fichas:
+
+            fichas_escolhidas = st.multiselect(
+                "Dotações / Fichas Orçamentárias *",
+                options=list(
+                    mapa_fichas.keys()
+                ),
+                key=(
+                    f"sisget_sol_fichas_"
+                    f"{tipo_solicitacao}_"
+                    f"{reset}_"
+                    f"{uo_id}"
+                )
+            )
+
+        else:
+
+            st.warning(
+                "⚠️ Nenhuma dotação disponível "
+                "para esta Unidade Orçamentária."
+            )
+
+    # ========================================================
+    # DADOS DA SOLICITAÇÃO
+    # ========================================================
+
+    st.markdown("---")
+
+    st.markdown(
+        "### 📝 Dados da Solicitação"
+    )
+
+    # ========================================================
+    # CÓDIGO / NÚMERO
+    # ========================================================
+
+    col_codigo, col_numero = st.columns(
+        2
+    )
+
+    col_codigo.text_input(
+        "Código",
+        value=codigo,
+        disabled=True
+    )
+
+    col_numero.text_input(
+        "Número",
+        value=str(
+            numero
+        ).zfill(6),
+        disabled=True
+    )
+
+    # ========================================================
+    # TIPO DO OBJETO / PRIORIDADE
+    # ========================================================
+
+    col_tipo, col_prioridade = st.columns(
+        2
+    )
+
+    tipo_objeto = col_tipo.selectbox(
+        "Tipo do Objeto *",
+        [
+            "Aquisição de Material",
+            "Contratação de Serviço",
+            "Obra / Serviço de Engenharia",
+            "Tecnologia da Informação",
+            "Locação",
+            "Manutenção",
+            "Serviço Continuado",
+            "Outros"
+        ],
+        key=(
+            f"sisget_sol_tipo_objeto_"
+            f"{tipo_solicitacao}_"
+            f"{reset}"
+        )
+    )
+
+    prioridade = col_prioridade.selectbox(
+        "Prioridade *",
+        [
+            "Baixa",
+            "Normal",
+            "Alta",
+            "Urgente"
+        ],
+        index=1,
+        key=(
+            f"sisget_sol_prioridade_"
+            f"{tipo_solicitacao}_"
+            f"{reset}"
+        )
+    )
+
+    # ========================================================
+    # TÍTULO / OBJETO
+    # ========================================================
+
+    titulo = st.text_input(
+        "Título / Objeto da Solicitação *",
+        max_chars=200,
+        key=(
+            f"sisget_sol_titulo_"
+            f"{tipo_solicitacao}_"
+            f"{reset}"
+        )
+    )
+
+    # ========================================================
+    # DESCRIÇÃO
+    # ========================================================
+
+    descricao = st.text_area(
+        "Descrição da Necessidade",
+        height=120,
+        key=(
+            f"sisget_sol_descricao_"
+            f"{tipo_solicitacao}_"
+            f"{reset}"
+        )
+    )
+
+    # ========================================================
+    # JUSTIFICATIVA
+    # ========================================================
+
+    justificativa = st.text_area(
+        "Justificativa *",
+        height=120,
+        key=(
+            f"sisget_sol_justificativa_"
+            f"{tipo_solicitacao}_"
+            f"{reset}"
+        )
+    )
+
+    # ========================================================
+    # SOLICITANTE
+    # ========================================================
+
+    solicitante = st.text_input(
+        "Solicitante",
+        value=st.session_state.get(
+            "usuario_logado",
+            ""
+        ),
+        key=(
+            f"sisget_sol_solicitante_"
+            f"{tipo_solicitacao}_"
+            f"{reset}"
+        )
+    )
+
+    # ========================================================
+    # DATAS
+    # ========================================================
+
+    col_data1, col_data2 = st.columns(
+        2
+    )
+
+    data_solicitacao = col_data1.date_input(
+        "Data da Solicitação *",
+        value=datetime.now().date(),
+        key=(
+            f"sisget_sol_data_solicitacao_"
+            f"{tipo_solicitacao}_"
+            f"{reset}"
+        )
+    )
+
+    data_necessidade = col_data2.date_input(
+        "Data da Necessidade",
+        value=datetime.now().date(),
+        key=(
+            f"sisget_sol_data_necessidade_"
+            f"{tipo_solicitacao}_"
+            f"{reset}"
+        )
+    )
+
+    # ========================================================
+    # OBSERVAÇÕES
+    # ========================================================
+
+    observacao = st.text_area(
+        "Observações",
+        height=100,
+        key=(
+            f"sisget_sol_observacao_"
+            f"{tipo_solicitacao}_"
+            f"{reset}"
+        )
+    )
+
+    # ========================================================
+    # ITENS DA SOLICITAÇÃO
+    # ========================================================
+
+    itens = sisget_itens_solicitacao(
+        tipo_solicitacao=tipo_solicitacao,
+        entidade_id=entidade_id,
+        reset=reset
+    )
+
+    # ========================================================
+    # BOTÃO SALVAR
+    # ========================================================
+
+    st.markdown("---")
+
+    salvar = st.button(
+        "💾 Salvar Solicitação",
+        type="primary",
+        use_container_width=True,
+        key=(
+            f"sisget_salvar_"
+            f"{tipo_solicitacao}_"
+            f"{reset}"
+        )
+    )
+
+    # ========================================================
+    # GRAVAÇÃO
+    # ========================================================
 
     if salvar:
 
-        ...
+        # ====================================================
+        # VALIDAÇÕES
+        # ====================================================
+
+        if not titulo.strip():
+
+            st.warning(
+                "⚠️ Informe o título/objeto da solicitação."
+            )
+
+            return
+
+        if not justificativa.strip():
+
+            st.warning(
+                "⚠️ Informe a justificativa."
+            )
+
+            return
+
+        if not itens:
+
+            st.warning(
+                "⚠️ Adicione pelo menos um item."
+            )
+
+            return
+
+        if (
+            tipo_solicitacao == "LICITACAO"
+            and
+            not fichas_escolhidas
+        ):
+
+            st.warning(
+                "⚠️ Selecione pelo menos uma "
+                "dotação/ficha orçamentária."
+            )
+
+            return
+
+        # ====================================================
+        # RECALCULAR NÚMERO
+        # ====================================================
+
+        numero = sisget_proximo_numero_solicitacao(
+            tipo_solicitacao,
+            exercicio
+        )
+
+        if numero is None:
+
+            return
+
+        codigo = (
+            f"{prefixo}"
+            f"-{exercicio}-"
+            f"{str(numero).zfill(6)}"
+        )
+
+        # ====================================================
+        # RECONFIRMAR UNIDADE
+        # ====================================================
+
+        vinculos = _sisget_fetchone(
+            """
+            SELECT
+                orgao_id,
+                entidade_id,
+                unidade_orcamentaria_id
+
+            FROM unidades_administrativas
+
+            WHERE id = ?
+              AND ativo = TRUE
+            """,
+            (
+                ua_id,
+            )
+        )
+
+        if not vinculos:
+
+            st.error(
+                "❌ Não foi possível identificar "
+                "os vínculos da Unidade Administrativa."
+            )
+
+            return
+
+        (
+            orgao_id_salvar,
+            entidade_id_salvar,
+            uo_id_salvar
+        ) = vinculos
+
+        # ====================================================
+        # VALIDAR ÓRGÃO
+        # ====================================================
+
+        if orgao_id_salvar is None:
+
+            st.error(
+                "❌ A Unidade Administrativa "
+                "não possui Órgão vinculado."
+            )
+
+            return
+
+        # ====================================================
+        # VALIDAR ENTIDADE
+        # ====================================================
+
+        if entidade_id_salvar is None:
+
+            st.error(
+                "❌ A Unidade Administrativa "
+                "não possui Entidade vinculada."
+            )
+
+            return
+
+        # ====================================================
+        # VALIDAR UNIDADE ORÇAMENTÁRIA
+        # ====================================================
+
+        if uo_id_salvar is None:
+
+            st.error(
+                "❌ A Unidade Administrativa "
+                "não possui Unidade Orçamentária vinculada."
+            )
+
+            return
+
+        # ====================================================
+        # EXERCÍCIO DA ENTIDADE
+        # ====================================================
+
+        registro_exercicio = _sisget_fetchone(
+            """
+            SELECT
+                id,
+                ano
+
+            FROM exercicios
+
+            WHERE entidade_id = ?
+              AND ano = ?
+              AND ativo = TRUE
+              AND encerrado = FALSE
+
+            LIMIT 1
+            """,
+            (
+                entidade_id_salvar,
+                exercicio
+            )
+        )
+
+        if not registro_exercicio:
+
+            st.error(
+                f"❌ A entidade selecionada não possui "
+                f"o exercício {exercicio} ativo e aberto."
+            )
+
+            return
+
+        exercicio_id = registro_exercicio[
+            0
+        ]
+
+        exercicio = int(
+            registro_exercicio[
+                1
+            ]
+        )
+
+        # ====================================================
+        # TIPO ACEITO PELA CONSTRAINT solicitacoes_tipo_check
+        # ====================================================
+
+        mapa_tipo_banco = {
+            "Aquisição de Material": "Material",
+            "Contratação de Serviço": "Servico",
+            "Obra / Serviço de Engenharia": "Obra",
+            "Tecnologia da Informação": "Servico",
+            "Locação": "Locacao",
+            "Manutenção": "Servico",
+            "Serviço Continuado": "Servico",
+            "Outros": "Outro"
+        }
+
+        tipo_banco = mapa_tipo_banco.get(
+            tipo_objeto,
+            "Outro"
+        )
+
+        # ====================================================
+        # OBSERVAÇÃO COMPLETA
+        #
+        # COMO A TABELA ATUAL NÃO TEM COLUNA "descricao",
+        # A DESCRIÇÃO DA NECESSIDADE É PRESERVADA JUNTO
+        # À OBSERVAÇÃO.
+        # ====================================================
+
+        partes_observacao = []
+
+        if descricao.strip():
+
+            partes_observacao.append(
+                "Descrição da Necessidade:\n"
+                + descricao.strip()
+            )
+
+        if observacao.strip():
+
+            partes_observacao.append(
+                "Observações:\n"
+                + observacao.strip()
+            )
+
+        observacao_salvar = (
+            "\n\n".join(
+                partes_observacao
+            )
+            if partes_observacao
+            else None
+        )
+
+        # ====================================================
+        # GRAVAÇÃO ATÔMICA
+        # ====================================================
 
         try:
 
-            # =============================================
-            # SALVA A SOLICITAÇÃO
-            # =============================================
+            # =================================================
+            # SOLICITAÇÃO
+            # =================================================
 
             cursor.execute(
                 """
                 INSERT INTO solicitacoes
-                ...
+                (
+                    entidade_id,
+                    exercicio_id,
+                    orgao_id,
+
+                    unidade_orcamentaria_id,
+                    unidade_administrativa_id,
+                    setor_id,
+
+                    numero,
+                    data_solicitacao,
+
+                    tipo,
+                    objeto,
+                    justificativa,
+                    prioridade,
+                    situacao,
+
+                    observacao,
+
+                    codigo,
+                    exercicio,
+                    tipo_solicitacao,
+
+                    solicitante_usuario_id,
+
+                    data_necessidade,
+
+                    status,
+                    etapa_atual,
+                    ativo
+                )
+                VALUES
+                (
+                    ?, ?, ?,
+
+                    ?, ?, ?,
+
+                    ?, ?,
+
+                    ?, ?, ?, ?, ?,
+
+                    ?,
+
+                    ?, ?, ?,
+
+                    ?,
+
+                    ?,
+
+                    ?,
+                    ?,
+                    TRUE
+                )
+
                 RETURNING id
                 """,
-                (...)
+                (
+                    entidade_id_salvar,
+                    exercicio_id,
+                    orgao_id_salvar,
+
+                    uo_id_salvar,
+                    ua_id,
+                    setor_id,
+
+                    str(
+                        numero
+                    ),
+
+                    data_solicitacao,
+
+                    tipo_banco,
+
+                    titulo.strip(),
+
+                    justificativa.strip(),
+
+                    prioridade,
+
+                    "Em elaboracao",
+
+                    observacao_salvar,
+
+                    codigo,
+
+                    exercicio,
+
+                    tipo_solicitacao,
+
+                    st.session_state.get(
+                        "usuario_id"
+                    ),
+
+                    data_necessidade,
+
+                    "RASCUNHO",
+
+                    etapa_inicial
+                )
             )
+
+            # =================================================
+            # ID DA SOLICITAÇÃO
+            # =================================================
 
             retorno = cursor.fetchone()
 
-            solicitacao_id = retorno[0]
+            if not retorno:
 
+                raise Exception(
+                    "Não foi possível obter "
+                    "o ID da solicitação."
+                )
 
-            # =============================================
+            solicitacao_id = retorno[
+                0
+            ]
+
+            # =================================================
             # DOTAÇÕES
-            # =============================================
+            # =================================================
 
             if tipo_solicitacao == "LICITACAO":
 
                 for ficha_nome in fichas_escolhidas:
 
-                    ...
+                    ficha_id = mapa_fichas[
+                        ficha_nome
+                    ]
 
+                    cursor.execute(
+                        """
+                        INSERT INTO
+                            solicitacoes_fichas_orcamentarias
+                        (
+                            solicitacao_id,
+                            ficha_orcamentaria_id
+                        )
+                        VALUES
+                        (
+                            ?, ?
+                        )
+                        """,
+                        (
+                            solicitacao_id,
+                            ficha_id
+                        )
+                    )
 
-            # =============================================
+            # =================================================
             # ITENS DA SOLICITAÇÃO
-            # AQUI ENTRA O BLOCO NOVO
-            # =============================================
+            # =================================================
 
             primeiro_codigo_item = sisget_proximo_codigo(
                 "solicitacoes_itens",
@@ -33233,14 +34175,20 @@ def sisget_solicitacao_incluir_base(
             ):
 
                 valor_total_item = (
-                    item["quantidade"]
+                    item[
+                        "quantidade"
+                    ]
                     *
-                    item["valor_unitario"]
+                    item[
+                        "valor_unitario"
+                    ]
                 )
 
                 codigo_item = str(
                     numero_codigo_item
-                ).zfill(6)
+                ).zfill(
+                    6
+                )
 
                 cursor.execute(
                     """
@@ -33262,18 +34210,35 @@ def sisget_solicitacao_incluir_base(
                     """,
                     (
                         solicitacao_id,
-                        item["produto_id"],
+
+                        item[
+                            "produto_id"
+                        ],
+
                         numero_item,
-                        item["quantidade"],
-                        item["observacao"],
-                        item["valor_unitario"],
+
+                        item[
+                            "quantidade"
+                        ],
+
+                        item[
+                            "observacao"
+                        ],
+
+                        item[
+                            "valor_unitario"
+                        ],
+
                         valor_total_item,
+
                         codigo_item
                     )
                 )
 
                 numero_codigo_item += 1
 
+            # =================================================
+            # COMMIT
             # =================================================
 
             conn.commit()
