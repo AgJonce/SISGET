@@ -32049,26 +32049,6 @@ def produto_incluir():
         )
 
     # ========================================================
-    # ITENS / CARACTERÍSTICAS COMPLEMENTARES
-    # ========================================================
-
-    chave_caracteristicas = (
-        f"sisget_produto_caracteristicas_"
-        f"{reset}_"
-        f"{grupo_id}"
-    )
-
-    if chave_caracteristicas not in st.session_state:
-
-        st.session_state[
-            chave_caracteristicas
-        ] = []
-
-    caracteristicas = st.session_state[
-        chave_caracteristicas
-    ]
-
-    # ========================================================
     # FORMULÁRIO PRINCIPAL
     # ========================================================
 
@@ -32292,16 +32272,14 @@ def produto_incluir():
             "Prazo de Vencimento (dias)",
             min_value=0,
             value=0,
-            step=1,
-            disabled=not controla_vencimento
+            step=1
         )
 
         alerta_vencimento_dias = col_venc2.number_input(
             "Avisar Vencimento com (dias)",
             min_value=0,
             value=30,
-            step=1,
-            disabled=not controla_vencimento
+            step=1
         )
 
         if controla_vencimento:
@@ -32447,114 +32425,6 @@ def produto_incluir():
             type="primary",
             use_container_width=True
         )
-
-    # ========================================================
-    # INSERIR ITENS / CARACTERÍSTICAS
-    # ========================================================
-
-    st.markdown(
-        "### ➕ Inserir Itens / Características"
-    )
-
-    with st.form(
-        f"form_produto_caracteristica_"
-        f"{reset}_"
-        f"{grupo_id}",
-        clear_on_submit=True
-    ):
-
-        col_car1, col_car2 = st.columns(
-            2
-        )
-
-        nome_caracteristica = col_car1.text_input(
-            "Item / Característica",
-            placeholder=(
-                "Ex.: Cor, Voltagem, Capacidade, Tamanho"
-            )
-        )
-
-        valor_caracteristica = col_car2.text_input(
-            "Valor",
-            placeholder=(
-                "Ex.: Branco, 220V, 500 GB, Grande"
-            )
-        )
-
-        adicionar_caracteristica = st.form_submit_button(
-            "➕ Inserir Item",
-            use_container_width=True
-        )
-
-    if adicionar_caracteristica:
-
-        nome_limpo = (
-            nome_caracteristica.strip()
-        )
-
-        valor_limpo = (
-            valor_caracteristica.strip()
-        )
-
-        if not nome_limpo:
-
-            st.warning(
-                "⚠️ Informe o nome do item/característica."
-            )
-
-        else:
-
-            caracteristicas.append(
-                {
-                    "nome": nome_limpo,
-                    "valor": valor_limpo
-                }
-            )
-
-            st.rerun()
-
-    if caracteristicas:
-
-        st.markdown(
-            "#### 📋 Itens inseridos"
-        )
-
-        for indice, item_caracteristica in enumerate(
-            caracteristicas
-        ):
-
-            col_c1, col_c2, col_c3 = st.columns(
-                [3, 4, 1]
-            )
-
-            col_c1.write(
-                item_caracteristica[
-                    "nome"
-                ]
-            )
-
-            col_c2.write(
-                item_caracteristica[
-                    "valor"
-                ]
-                or "-"
-            )
-
-            if col_c3.button(
-                "🗑️",
-                key=(
-                    f"produto_remover_caracteristica_"
-                    f"{reset}_"
-                    f"{grupo_id}_"
-                    f"{indice}"
-                )
-            ):
-
-                caracteristicas.pop(
-                    indice
-                )
-
-                st.rerun()
 
     # ========================================================
     # MENSAGEM
@@ -32777,24 +32647,6 @@ def produto_incluir():
                 especificacao.strip()
             )
 
-        if caracteristicas:
-
-            linhas_caracteristicas = [
-                (
-                    f"{item['nome']}: "
-                    f"{item['valor'] or '-'}"
-                )
-                for item in caracteristicas
-            ]
-
-            partes_especificacao.append(
-                "Itens / Características:\n"
-                +
-                "\n".join(
-                    linhas_caracteristicas
-                )
-            )
-
         if observacoes.strip():
 
             partes_especificacao.append(
@@ -32933,11 +32785,6 @@ def produto_incluir():
                 f"Código: {codigo} | "
                 f"Tipo: {tipo_grupo_banco} | "
                 f"Classificação: {tipo_produto}"
-            )
-
-            st.session_state.pop(
-                chave_caracteristicas,
-                None
             )
 
             st.session_state[
