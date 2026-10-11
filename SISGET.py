@@ -33726,6 +33726,12 @@ def sisget_solicitacao_incluir_base(
     # ITENS DA SOLICITAÇÃO
     # ========================================================
 
+    chave_itens = (
+        f"sisget_sol_itens_"
+        f"{tipo_solicitacao}_"
+        f"{reset}"
+    )
+
     itens = sisget_itens_solicitacao(
         tipo_solicitacao=tipo_solicitacao,
         entidade_id=entidade_id,
