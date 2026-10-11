@@ -31723,12 +31723,9 @@ def produto_incluir():
             codigo,
             descricao,
             tipo_grupo
-
         FROM grupos_produtos
-
         WHERE ativo = TRUE
           AND entidade_id = ?
-
         ORDER BY
             tipo_grupo,
             codigo,
@@ -31748,7 +31745,7 @@ def produto_incluir():
         return
 
     # ========================================================
-    # MAPA DOS GRUPOS
+    # MAPA DE GRUPOS
     # ========================================================
 
     mapa_grupos = {}
@@ -31775,10 +31772,6 @@ def produto_incluir():
             "tipo_grupo": grupo_tipo
         }
 
-    # ========================================================
-    # SELECIONAR GRUPO
-    # ========================================================
-
     grupo_nome = st.selectbox(
         "Grupo *",
         list(
@@ -31802,10 +31795,6 @@ def produto_incluir():
         "tipo_grupo"
     ]
 
-    # ========================================================
-    # VALIDAR TIPO DO GRUPO
-    # ========================================================
-
     if tipo_grupo not in (
         "Consumo",
         "Patrimonial"
@@ -31828,12 +31817,9 @@ def produto_incluir():
             id,
             codigo,
             descricao
-
         FROM subgrupos_produtos
-
         WHERE grupo_id = ?
           AND ativo = TRUE
-
         ORDER BY
             codigo,
             descricao
@@ -31867,11 +31853,8 @@ def produto_incluir():
             id,
             codigo,
             descricao
-
         FROM unidades_compra
-
         WHERE ativo = TRUE
-
         ORDER BY
             codigo,
             descricao
@@ -31889,11 +31872,8 @@ def produto_incluir():
             codigo,
             descricao,
             fator_conversao
-
         FROM unidades_movimentacao
-
         WHERE ativo = TRUE
-
         ORDER BY
             codigo,
             descricao
@@ -31916,18 +31896,10 @@ def produto_incluir():
 
         return
 
-    # ========================================================
-    # MAPA UNIDADES DE COMPRA
-    # ========================================================
-
     mapa_compras = {
         f"{codigo} - {descricao}": id_
         for id_, codigo, descricao in compras
     }
-
-    # ========================================================
-    # MAPA UNIDADES DE MOVIMENTAÇÃO
-    # ========================================================
 
     mapa_movimentos = {}
 
@@ -31961,7 +31933,7 @@ def produto_incluir():
         ] = id_
 
     # ========================================================
-    # PRÓXIMO CÓDIGO
+    # CÓDIGO
     # ========================================================
 
     codigo = sisget_proximo_codigo(
@@ -31978,30 +31950,39 @@ def produto_incluir():
     # ========================================================
 
     tipos_patrimoniais = [
-        "Móveis e Utensílios",
-        "Máquinas e Equipamentos",
-        "Equipamentos de Informática",
-        "Equipamentos Eletrônicos",
-        "Equipamentos de Comunicação",
-        "Equipamentos Hospitalares",
-        "Equipamentos Odontológicos",
-        "Equipamentos de Laboratório",
-        "Veículos",
-        "Máquinas Pesadas",
-        "Implementos Rodoviários",
-        "Obras e Instalações",
-        "Imóveis",
-        "Terrenos",
-        "Ferramentas Permanentes",
-        "Equipamentos de Segurança",
-        "Equipamentos de Áudio e Vídeo",
-        "Equipamentos Esportivos",
-        "Equipamentos Agrícolas",
-        "Equipamentos Industriais",
-        "Instrumentos Musicais",
+        "Aeronaves",
         "Acervo Bibliográfico",
+        "Aparelhos e Equipamentos de Comunicação",
+        "Aparelhos e Equipamentos Esportivos",
+        "Aparelhos e Equipamentos Hospitalares",
+        "Aparelhos e Equipamentos Odontológicos",
+        "Aparelhos e Utensílios Domésticos",
+        "Coleções e Materiais Bibliográficos",
+        "Equipamentos Agrícolas",
+        "Equipamentos de Áudio e Vídeo",
+        "Equipamentos de Informática",
+        "Equipamentos de Laboratório",
+        "Equipamentos de Proteção e Segurança",
+        "Equipamentos Eletrônicos",
+        "Equipamentos Industriais",
+        "Equipamentos Médicos",
+        "Ferramentas Permanentes",
+        "Imóveis",
+        "Implementos Agrícolas",
+        "Implementos Rodoviários",
+        "Instrumentos Musicais",
+        "Máquinas e Equipamentos",
+        "Máquinas Pesadas",
+        "Mobiliário em Geral",
+        "Móveis e Utensílios",
         "Obras de Arte",
+        "Obras e Instalações",
         "Semoventes",
+        "Terrenos",
+        "Veículos de Carga",
+        "Veículos de Passageiros",
+        "Veículos Especiais",
+        "Veículos em Geral",
         "Outros Bens Patrimoniais"
     ]
 
@@ -32010,49 +31991,50 @@ def produto_incluir():
     # ========================================================
 
     tipos_consumo = [
-        "Material de Expediente",
-        "Medicamentos",
-        "Material Hospitalar",
-        "Material Odontológico",
-        "Material de Laboratório",
-        "Material de Limpeza e Higiene",
+        "Água Mineral",
+        "Combustíveis",
+        "Gás Engarrafado",
         "Gêneros Alimentícios",
+        "Lubrificantes",
+        "Medicamentos",
+        "Material Automotivo",
+        "Material de Acondicionamento e Embalagem",
+        "Material de Áudio e Vídeo",
+        "Material de Cama, Mesa e Banho",
         "Material de Copa e Cozinha",
         "Material de Construção",
-        "Material Elétrico",
-        "Material Hidráulico",
-        "Material para Manutenção",
+        "Material de Expediente",
         "Material de Informática",
-        "Suprimentos de Impressão",
-        "Combustíveis",
-        "Lubrificantes",
-        "Peças para Veículos",
-        "Pneus e Câmaras",
-        "Material Automotivo",
-        "EPI - Equipamento de Proteção Individual",
-        "Uniformes e Vestuário",
-        "Material Escolar",
-        "Material Pedagógico",
-        "Material Esportivo",
-        "Material Gráfico",
+        "Material de Jardinagem",
+        "Material de Laboratório",
+        "Material de Limpeza e Higiene",
+        "Material de Manutenção",
+        "Material de Proteção e Segurança",
         "Material de Sinalização",
-        "Material de Segurança",
+        "Material de Telecomunicação",
+        "Material Elétrico",
+        "Material Escolar",
+        "Material Esportivo",
+        "Material Farmacológico",
+        "Material Gráfico",
+        "Material Hospitalar",
+        "Material Hidráulico",
+        "Material Médico",
+        "Material Odontológico",
+        "Material Pedagógico",
         "Material Químico",
         "Material Veterinário",
+        "Peças para Máquinas",
+        "Peças para Veículos",
+        "Pneus e Câmaras",
         "Ração e Alimentação Animal",
         "Sementes e Insumos Agrícolas",
-        "Material de Jardinagem",
-        "Material de Acondicionamento e Embalagem",
-        "Material para Áudio e Vídeo",
-        "Material de Telecomunicação",
-        "Material de Cama, Mesa e Banho",
+        "Suprimentos de Impressão",
+        "Uniformes e Vestuário",
+        "EPI - Equipamento de Proteção Individual",
         "Ferramentas de Consumo",
         "Outros Materiais de Consumo"
     ]
-
-    # ========================================================
-    # OPÇÕES CONFORME TIPO DO GRUPO
-    # ========================================================
 
     if tipo_grupo == "Patrimonial":
 
@@ -32067,7 +32049,27 @@ def produto_incluir():
         )
 
     # ========================================================
-    # FORMULÁRIO
+    # ITENS / CARACTERÍSTICAS COMPLEMENTARES
+    # ========================================================
+
+    chave_caracteristicas = (
+        f"sisget_produto_caracteristicas_"
+        f"{reset}_"
+        f"{grupo_id}"
+    )
+
+    if chave_caracteristicas not in st.session_state:
+
+        st.session_state[
+            chave_caracteristicas
+        ] = []
+
+    caracteristicas = st.session_state[
+        chave_caracteristicas
+    ]
+
+    # ========================================================
+    # FORMULÁRIO PRINCIPAL
     # ========================================================
 
     with st.form(
@@ -32075,10 +32077,6 @@ def produto_incluir():
         f"{reset}_"
         f"{grupo_id}"
     ):
-
-        # ====================================================
-        # IDENTIFICAÇÃO
-        # ====================================================
 
         st.markdown(
             "### 📦 Identificação"
@@ -32105,15 +32103,38 @@ def produto_incluir():
             "Descrição Complementar",
             height=100,
             placeholder=(
-                "Marca de referência, modelo, tamanho, "
-                "apresentação, composição ou outras "
-                "informações complementares."
+                "Informações adicionais que complementam "
+                "a descrição principal."
             )
         )
 
-        # ====================================================
-        # CLASSIFICAÇÃO
-        # ====================================================
+        col_id1, col_id2 = st.columns(
+            2
+        )
+
+        codigo_barras = col_id1.text_input(
+            "Código de Barras / EAN"
+        )
+
+        referencia = col_id2.text_input(
+            "Referência / Código do Fabricante"
+        )
+
+        col_id3, col_id4, col_id5 = st.columns(
+            3
+        )
+
+        marca = col_id3.text_input(
+            "Marca"
+        )
+
+        modelo = col_id4.text_input(
+            "Modelo"
+        )
+
+        fabricante = col_id5.text_input(
+            "Fabricante"
+        )
 
         st.markdown(
             "### 📁 Classificação"
@@ -32139,10 +32160,6 @@ def produto_incluir():
             )
         )
 
-        # ====================================================
-        # TIPO PRINCIPAL / CLASSIFICAÇÃO
-        # ====================================================
-
         col_tipo1, col_tipo2 = st.columns(
             2
         )
@@ -32150,11 +32167,7 @@ def produto_incluir():
         tipo_item = col_tipo1.text_input(
             "Tipo do Item",
             value=tipo_grupo,
-            disabled=True,
-            help=(
-                "Definido automaticamente "
-                "pelo Grupo selecionado."
-            )
+            disabled=True
         )
 
         tipo_produto = col_tipo2.selectbox(
@@ -32162,23 +32175,25 @@ def produto_incluir():
             opcoes_tipo_produto
         )
 
-        if tipo_grupo == "Patrimonial":
+        st.markdown(
+            "### 🏛️ Classificação Pública"
+        )
 
-            st.info(
-                "🏷️ Item Patrimonial: poderá ser integrado "
-                "ao módulo de Patrimônio."
-            )
+        col_pub1, col_pub2 = st.columns(
+            2
+        )
 
-        else:
+        ncm = col_pub1.text_input(
+            "NCM"
+        )
 
-            st.info(
-                "📦 Item de Consumo: poderá movimentar "
-                "estoque no Almoxarifado."
-            )
+        catmat_catser = col_pub2.text_input(
+            "CATMAT / CATSER"
+        )
 
-        # ====================================================
-        # UNIDADES
-        # ====================================================
+        codigo_tribunal = st.text_input(
+            "Classificação Tribunal de Contas"
+        )
 
         st.markdown(
             "### 📏 Unidades"
@@ -32202,16 +32217,17 @@ def produto_incluir():
             )
         )
 
-        # ====================================================
-        # CONTROLE DE ESTOQUE
-        # ====================================================
+        permite_fracionamento = st.checkbox(
+            "Permite Fracionamento",
+            value=False
+        )
 
         st.markdown(
             "### 📊 Controle de Estoque"
         )
 
-        col7, col8, col9 = st.columns(
-            3
+        col7, col8, col9, col10 = st.columns(
+            4
         )
 
         controla_estoque = col7.checkbox(
@@ -32229,97 +32245,183 @@ def produto_incluir():
             value=False
         )
 
-        # ====================================================
-        # REGRA LOTE + VENCIMENTO
-        # ====================================================
+        controla_numero_serie = col10.checkbox(
+            "Controla Nº de Série",
+            value=False
+        )
 
         if controla_vencimento:
 
             controla_lote = True
 
             st.info(
-                "📅 Itens com controle de vencimento "
-                "também terão controle de lote."
+                "📅 Item com controle de vencimento "
+                "também terá controle de lote."
             )
 
-        # ====================================================
-        # ESTOQUE MÍNIMO / PRAZO
-        # ====================================================
-
-        col10, col11 = st.columns(
-            2
+        col_est1, col_est2, col_est3 = st.columns(
+            3
         )
 
-        estoque_minimo = col10.number_input(
+        estoque_minimo = col_est1.number_input(
             "Estoque Mínimo",
             min_value=0.0,
             value=0.0,
             format="%.6f"
         )
 
-        vencimento_dias = col11.number_input(
+        estoque_maximo = col_est2.number_input(
+            "Estoque Máximo",
+            min_value=0.0,
+            value=0.0,
+            format="%.6f"
+        )
+
+        ponto_reposicao = col_est3.number_input(
+            "Ponto de Reposição",
+            min_value=0.0,
+            value=0.0,
+            format="%.6f"
+        )
+
+        col_venc1, col_venc2 = st.columns(
+            2
+        )
+
+        vencimento_dias = col_venc1.number_input(
             "Prazo de Vencimento (dias)",
             min_value=0,
             value=0,
             step=1,
-            disabled=not controla_vencimento,
-            help=(
-                "Quantidade padrão de dias "
-                "de validade do item."
-            )
+            disabled=not controla_vencimento
         )
 
-        # ====================================================
-        # DATA DE VENCIMENTO PADRÃO
-        # ====================================================
+        alerta_vencimento_dias = col_venc2.number_input(
+            "Avisar Vencimento com (dias)",
+            min_value=0,
+            value=30,
+            step=1,
+            disabled=not controla_vencimento
+        )
 
         if controla_vencimento:
 
             data_vencimento_padrao = st.date_input(
                 "Data de Vencimento Padrão",
-                value=datetime.now().date(),
-                help=(
-                    "Data de referência do produto. "
-                    "O vencimento real será controlado "
-                    "posteriormente por lote."
-                )
+                value=datetime.now().date()
             )
 
         else:
 
             data_vencimento_padrao = None
 
+        st.markdown(
+            "### 📍 Armazenamento"
+        )
+
+        localizacao_padrao = st.text_input(
+            "Localização Padrão no Almoxarifado",
+            placeholder=(
+                "Ex.: Almoxarifado Central / Prateleira A / Nível 2"
+            )
+        )
+
         # ====================================================
-        # CONTAS / NATUREZAS
+        # CAMPOS ESPECÍFICOS PARA MEDICAMENTOS
         # ====================================================
+
+        principio_ativo = ""
+        concentracao = ""
+        apresentacao = ""
+        registro_anvisa = ""
+
+        if tipo_produto in (
+            "Medicamentos",
+            "Material Farmacológico"
+        ):
+
+            st.markdown(
+                "### 💊 Dados de Medicamento"
+            )
+
+            principio_ativo = st.text_input(
+                "Princípio Ativo"
+            )
+
+            col_med1, col_med2 = st.columns(
+                2
+            )
+
+            concentracao = col_med1.text_input(
+                "Concentração"
+            )
+
+            apresentacao = col_med2.text_input(
+                "Apresentação"
+            )
+
+            registro_anvisa = st.text_input(
+                "Registro ANVISA"
+            )
+
+        # ====================================================
+        # CAMPOS ESPECÍFICOS PATRIMONIAIS
+        # ====================================================
+
+        vida_util_anos = 0
+        garantia_meses = 0
+        valor_minimo_incorporacao = 0.0
+
+        if tipo_grupo == "Patrimonial":
+
+            st.markdown(
+                "### 🏷️ Dados Patrimoniais"
+            )
+
+            col_pat1, col_pat2, col_pat3 = st.columns(
+                3
+            )
+
+            vida_util_anos = col_pat1.number_input(
+                "Vida Útil (anos)",
+                min_value=0,
+                value=0,
+                step=1
+            )
+
+            garantia_meses = col_pat2.number_input(
+                "Garantia (meses)",
+                min_value=0,
+                value=0,
+                step=1
+            )
+
+            valor_minimo_incorporacao = col_pat3.number_input(
+                "Valor Mínimo para Incorporação",
+                min_value=0.0,
+                value=0.0,
+                format="%.2f"
+            )
 
         st.markdown(
             "### 💰 Contas / Naturezas Orçamentárias"
         )
 
-        col12, col13 = st.columns(
+        conta_orcamentaria_padrao = st.text_input(
+            "Conta / Natureza Orçamentária Padrão"
+        )
+
+        col_conta1, col_conta2 = st.columns(
             2
         )
 
-        conta_orcamentaria_entrada = col12.text_input(
-            "Conta / Natureza Orçamentária Padrão - Entrada"
+        conta_orcamentaria_entrada = col_conta1.text_input(
+            "Conta / Natureza Orçamentária - Entrada"
         )
 
-        conta_orcamentaria_saida = col13.text_input(
-            "Conta / Natureza Orçamentária Padrão - Saída"
+        conta_orcamentaria_saida = col_conta2.text_input(
+            "Conta / Natureza Orçamentária - Saída"
         )
-
-        # ====================================================
-        # TRIBUNAL
-        # ====================================================
-
-        codigo_tribunal = st.text_input(
-            "Classificação Tribunal de Contas"
-        )
-
-        # ====================================================
-        # ESPECIFICAÇÃO
-        # ====================================================
 
         st.markdown(
             "### 📝 Especificação Técnica"
@@ -32329,21 +32431,130 @@ def produto_incluir():
             "Especificação Técnica",
             height=160,
             placeholder=(
-                "Características técnicas, material, medidas, "
-                "qualidade, composição, apresentação, "
+                "Características técnicas, composição, "
+                "dimensões, capacidade, qualidade, padrão, "
                 "garantia e demais requisitos."
             )
         )
 
-        # ====================================================
-        # SALVAR
-        # ====================================================
+        observacoes = st.text_area(
+            "Observações Gerais",
+            height=100
+        )
 
         salvar = st.form_submit_button(
             "💾 Salvar Produto",
             type="primary",
             use_container_width=True
         )
+
+    # ========================================================
+    # INSERIR ITENS / CARACTERÍSTICAS
+    # ========================================================
+
+    st.markdown(
+        "### ➕ Inserir Itens / Características"
+    )
+
+    with st.form(
+        f"form_produto_caracteristica_"
+        f"{reset}_"
+        f"{grupo_id}",
+        clear_on_submit=True
+    ):
+
+        col_car1, col_car2 = st.columns(
+            2
+        )
+
+        nome_caracteristica = col_car1.text_input(
+            "Item / Característica",
+            placeholder=(
+                "Ex.: Cor, Voltagem, Capacidade, Tamanho"
+            )
+        )
+
+        valor_caracteristica = col_car2.text_input(
+            "Valor",
+            placeholder=(
+                "Ex.: Branco, 220V, 500 GB, Grande"
+            )
+        )
+
+        adicionar_caracteristica = st.form_submit_button(
+            "➕ Inserir Item",
+            use_container_width=True
+        )
+
+    if adicionar_caracteristica:
+
+        nome_limpo = (
+            nome_caracteristica.strip()
+        )
+
+        valor_limpo = (
+            valor_caracteristica.strip()
+        )
+
+        if not nome_limpo:
+
+            st.warning(
+                "⚠️ Informe o nome do item/característica."
+            )
+
+        else:
+
+            caracteristicas.append(
+                {
+                    "nome": nome_limpo,
+                    "valor": valor_limpo
+                }
+            )
+
+            st.rerun()
+
+    if caracteristicas:
+
+        st.markdown(
+            "#### 📋 Itens inseridos"
+        )
+
+        for indice, item_caracteristica in enumerate(
+            caracteristicas
+        ):
+
+            col_c1, col_c2, col_c3 = st.columns(
+                [3, 4, 1]
+            )
+
+            col_c1.write(
+                item_caracteristica[
+                    "nome"
+                ]
+            )
+
+            col_c2.write(
+                item_caracteristica[
+                    "valor"
+                ]
+                or "-"
+            )
+
+            if col_c3.button(
+                "🗑️",
+                key=(
+                    f"produto_remover_caracteristica_"
+                    f"{reset}_"
+                    f"{grupo_id}_"
+                    f"{indice}"
+                )
+            ):
+
+                caracteristicas.pop(
+                    indice
+                )
+
+                st.rerun()
 
     # ========================================================
     # MENSAGEM
@@ -32365,10 +32576,6 @@ def produto_incluir():
 
         descricao = descricao.strip()
 
-        # ====================================================
-        # VALIDAR DESCRIÇÃO
-        # ====================================================
-
         if not descricao:
 
             st.warning(
@@ -32386,9 +32593,7 @@ def produto_incluir():
             SELECT
                 id,
                 tipo_grupo
-
             FROM grupos_produtos
-
             WHERE id = ?
               AND entidade_id = ?
               AND ativo = TRUE
@@ -32412,10 +32617,6 @@ def produto_incluir():
             1
         ]
 
-        # ====================================================
-        # VALIDAR TIPO DO GRUPO
-        # ====================================================
-
         if tipo_grupo_banco not in (
             "Consumo",
             "Patrimonial"
@@ -32426,10 +32627,6 @@ def produto_incluir():
             )
 
             return
-
-        # ====================================================
-        # VALIDAR CLASSIFICAÇÃO
-        # ====================================================
 
         if tipo_grupo_banco == "Patrimonial":
 
@@ -32451,19 +32648,11 @@ def produto_incluir():
 
                 return
 
-        # ====================================================
-        # ITEM PATRIMONIAL
-        # ====================================================
-
         item_patrimonial = (
             tipo_grupo_banco
             ==
             "Patrimonial"
         )
-
-        # ====================================================
-        # CONTROLE DE ESTOQUE
-        # ====================================================
 
         controla_estoque_salvar = bool(
             controla_estoque
@@ -32472,10 +32661,6 @@ def produto_incluir():
         estoque_minimo_salvar = float(
             estoque_minimo
         )
-
-        # ====================================================
-        # CONTROLE DE LOTE / VENCIMENTO
-        # ====================================================
 
         if controla_vencimento:
 
@@ -32503,10 +32688,6 @@ def produto_incluir():
 
             data_vencimento_salvar = None
 
-        # ====================================================
-        # SUBGRUPO
-        # ====================================================
-
         subgrupo_id = mapa_subgrupos[
             subgrupo_nome
         ]
@@ -32519,9 +32700,7 @@ def produto_incluir():
             """
             SELECT
                 id
-
             FROM subgrupos_produtos
-
             WHERE id = ?
               AND grupo_id = ?
               AND ativo = TRUE
@@ -32549,9 +32728,7 @@ def produto_incluir():
             """
             SELECT
                 id
-
             FROM produtos
-
             WHERE entidade_id = ?
               AND UPPER(
                     COALESCE(
@@ -32579,10 +32756,6 @@ def produto_incluir():
 
             return
 
-        # ====================================================
-        # RECALCULAR CÓDIGO
-        # ====================================================
-
         codigo = sisget_proximo_codigo(
             "produtos",
             tamanho=6,
@@ -32593,8 +32766,54 @@ def produto_incluir():
         )
 
         # ====================================================
-        # GRAVAR
+        # MONTAR ESPECIFICAÇÃO COMPLETA
         # ====================================================
+
+        partes_especificacao = []
+
+        if especificacao.strip():
+
+            partes_especificacao.append(
+                especificacao.strip()
+            )
+
+        if caracteristicas:
+
+            linhas_caracteristicas = [
+                (
+                    f"{item['nome']}: "
+                    f"{item['valor'] or '-'}"
+                )
+                for item in caracteristicas
+            ]
+
+            partes_especificacao.append(
+                "Itens / Características:\n"
+                +
+                "\n".join(
+                    linhas_caracteristicas
+                )
+            )
+
+        if observacoes.strip():
+
+            partes_especificacao.append(
+                "Observações:\n"
+                +
+                observacoes.strip()
+            )
+
+        especificacao_salvar = (
+            "\n\n".join(
+                partes_especificacao
+            )
+            if partes_especificacao
+            else None
+        )
+
+        # ====================================================
+        # GRAVAR
+        # ========================================================
 
         sucesso = _sisget_salvar(
             """
@@ -32689,7 +32908,7 @@ def produto_incluir():
                 vencimento_dias_salvar,
                 data_vencimento_salvar,
 
-                conta_orcamentaria_entrada.strip()
+                conta_orcamentaria_padrao.strip()
                 or None,
 
                 conta_orcamentaria_entrada.strip()
@@ -32701,14 +32920,9 @@ def produto_incluir():
                 codigo_tribunal.strip()
                 or None,
 
-                especificacao.strip()
-                or None
+                especificacao_salvar
             )
         )
-
-        # ====================================================
-        # SUCESSO
-        # ====================================================
 
         if sucesso:
 
@@ -32721,11 +32935,17 @@ def produto_incluir():
                 f"Classificação: {tipo_produto}"
             )
 
+            st.session_state.pop(
+                chave_caracteristicas,
+                None
+            )
+
             st.session_state[
                 "sisget_produto_reset"
             ] += 1
 
             st.rerun()
+
 def produto_localizar():
 
     df = _sisget_dataframe(
