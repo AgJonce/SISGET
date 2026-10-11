@@ -30030,6 +30030,10 @@ def cadastro_subgrupos_produtos():
 
 def subgrupo_produto_incluir():
 
+    # ========================================================
+    # ENTIDADE
+    # ========================================================
+
     entidade_id = st.session_state.get(
         "entidade_id"
     )
@@ -30042,6 +30046,10 @@ def subgrupo_produto_incluir():
 
         return
 
+    # ========================================================
+    # RESET
+    # ========================================================
+
     if "sisget_subgrupo_reset" not in st.session_state:
 
         st.session_state[
@@ -30052,21 +30060,36 @@ def subgrupo_produto_incluir():
         "sisget_subgrupo_reset"
     ]
 
+    # ========================================================
+    # GRUPOS
+    # ========================================================
+
     grupos = _sisget_fetch(
         """
         SELECT
             id,
             codigo,
-            descricao
+            descricao,
+            tipo_grupo
+
         FROM grupos_produtos
+
         WHERE ativo = TRUE
           AND entidade_id = ?
-        ORDER BY codigo
+
+        ORDER BY
+            tipo_grupo,
+            codigo,
+            descricao
         """,
         (
             entidade_id,
         )
     )
+
+    # ========================================================
+    # VALIDAR GRUPOS
+    # ========================================================
 
     if not grupos:
 
@@ -30076,22 +30099,109 @@ def subgrupo_produto_incluir():
 
         return
 
-    mapa_grupos = {
-        f"{codigo} - {descricao}": id_
-        for id_, codigo, descricao in grupos
-    }
+    # ========================================================
+    # MAPA DOS GRUPOS
+    # ========================================================
+
+    mapa_grupos = {}
+
+    for (
+        grupo_id_banco,
+        grupo_codigo,
+        grupo_descricao,
+        grupo_tipo
+    ) in grupos:
+
+        rotulo = (
+            f"{grupo_codigo} - "
+            f"{grupo_descricao} "
+            f"[{grupo_tipo}]"
+        )
+
+        mapa_grupos[
+            rotulo
+        ] = {
+            "id": grupo_id_banco,
+            "codigo": grupo_codigo,
+            "descricao": grupo_descricao,
+            "tipo_grupo": grupo_tipo
+        }
+
+    # ========================================================
+    # GRUPO
+    # ========================================================
+
+    st.markdown(
+        "### 📂 Grupo do Subgrupo"
+    )
 
     grupo_nome = st.selectbox(
         "Grupo *",
         list(
             mapa_grupos.keys()
         ),
-        key=f"subgrupo_grupo_{reset}"
+        key=(
+            f"subgrupo_grupo_"
+            f"{reset}"
+        )
     )
 
-    grupo_id = mapa_grupos[
+    dados_grupo = mapa_grupos[
         grupo_nome
     ]
+
+    grupo_id = dados_grupo[
+        "id"
+    ]
+
+    tipo_grupo = dados_grupo[
+        "tipo_grupo"
+    ]
+
+    # ========================================================
+    # TIPO DO GRUPO
+    # ========================================================
+
+    col_grupo1, col_grupo2 = st.columns(
+        [3, 1]
+    )
+
+    col_grupo1.text_input(
+        "Grupo Selecionado",
+        value=(
+            f"{dados_grupo['codigo']} - "
+            f"{dados_grupo['descricao']}"
+        ),
+        disabled=True
+    )
+
+    col_grupo2.text_input(
+        "Tipo",
+        value=tipo_grupo,
+        disabled=True
+    )
+
+    # ========================================================
+    # INFORMAÇÃO DO TIPO
+    # ========================================================
+
+    if tipo_grupo == "Consumo":
+
+        st.info(
+            "📦 Este subgrupo será vinculado a um "
+            "Grupo de Material de Consumo."
+        )
+
+    elif tipo_grupo == "Patrimonial":
+
+        st.info(
+            "🏷️ Este subgrupo será vinculado a um "
+            "Grupo Patrimonial."
+        )
+
+    # ========================================================
+    # PRÓXIMO CÓDIGO
+    # ========================================================
 
     codigo = sisget_proximo_codigo(
         "subgrupos_produtos",
@@ -30102,9 +30212,20 @@ def subgrupo_produto_incluir():
         )
     )
 
+    # ========================================================
+    # FORMULÁRIO
+    # ========================================================
+
     with st.form(
-        f"form_subgrupo_incluir_{reset}_{grupo_id}"
+        f"form_subgrupo_incluir_"
+        f"{reset}_"
+        f"{grupo_id}",
+        clear_on_submit=False
     ):
+
+        st.markdown(
+            "### 📝 Dados do Subgrupo"
+        )
 
         col1, col2 = st.columns(
             [1, 4]
@@ -30120,11 +30241,33 @@ def subgrupo_produto_incluir():
             "Descrição *"
         )
 
+        # ====================================================
+        # TIPO HERDADO
+        # ====================================================
+
+        st.text_input(
+            "Tipo do Subgrupo",
+            value=tipo_grupo,
+            disabled=True,
+            help=(
+                "O tipo do Subgrupo é definido "
+                "automaticamente pelo Grupo selecionado."
+            )
+        )
+
+        # ====================================================
+        # SALVAR
+        # ====================================================
+
         salvar = st.form_submit_button(
             "💾 Salvar Subgrupo",
             type="primary",
             use_container_width=True
         )
+
+    # ========================================================
+    # MENSAGEM
+    # ========================================================
 
     if "sisget_mensagem_subgrupo" in st.session_state:
 
@@ -30134,9 +30277,17 @@ def subgrupo_produto_incluir():
             )
         )
 
+    # ========================================================
+    # SALVAR
+    # ========================================================
+
     if salvar:
 
         descricao = descricao.strip()
+
+        # ====================================================
+        # VALIDAÇÃO
+        # ====================================================
 
         if not descricao:
 
@@ -30146,11 +30297,68 @@ def subgrupo_produto_incluir():
 
             return
 
+        # ====================================================
+        # REVALIDAR GRUPO
+        # ====================================================
+
+        grupo_valido = _sisget_fetchone(
+            """
+            SELECT
+                id,
+                tipo_grupo
+
+            FROM grupos_produtos
+
+            WHERE id = ?
+              AND entidade_id = ?
+              AND ativo = TRUE
+            """,
+            (
+                grupo_id,
+                entidade_id
+            )
+        )
+
+        if not grupo_valido:
+
+            st.warning(
+                "⚠️ O Grupo selecionado não está "
+                "mais disponível."
+            )
+
+            return
+
+        tipo_grupo_banco = grupo_valido[
+            1
+        ]
+
+        # ====================================================
+        # VALIDAR TIPO
+        # ====================================================
+
+        if tipo_grupo_banco not in (
+            "Consumo",
+            "Patrimonial"
+        ):
+
+            st.error(
+                "❌ O Grupo selecionado possui "
+                "um tipo inválido."
+            )
+
+            return
+
+        # ====================================================
+        # DUPLICIDADE
+        # ====================================================
+
         existe = _sisget_fetchone(
             """
             SELECT
                 id
+
             FROM subgrupos_produtos
+
             WHERE grupo_id = ?
               AND UPPER(descricao) = UPPER(?)
             """,
@@ -30163,10 +30371,15 @@ def subgrupo_produto_incluir():
         if existe:
 
             st.warning(
-                "⚠️ Já existe um subgrupo com esta descrição neste Grupo."
+                "⚠️ Já existe um subgrupo com "
+                "esta descrição neste Grupo."
             )
 
             return
+
+        # ====================================================
+        # RECALCULAR CÓDIGO
+        # ====================================================
 
         codigo = sisget_proximo_codigo(
             "subgrupos_produtos",
@@ -30176,6 +30389,10 @@ def subgrupo_produto_incluir():
                 grupo_id,
             )
         )
+
+        # ====================================================
+        # GRAVAR
+        # ====================================================
 
         sucesso = _sisget_salvar(
             """
@@ -30198,12 +30415,18 @@ def subgrupo_produto_incluir():
             )
         )
 
+        # ====================================================
+        # SUCESSO
+        # ====================================================
+
         if sucesso:
 
             st.session_state[
                 "sisget_mensagem_subgrupo"
             ] = (
-                f"✅ Subgrupo salvo com sucesso. Código: {codigo}"
+                f"✅ Subgrupo salvo com sucesso. "
+                f"Código: {codigo} | "
+                f"Tipo: {tipo_grupo_banco}"
             )
 
             st.session_state[
@@ -30211,7 +30434,6 @@ def subgrupo_produto_incluir():
             ] += 1
 
             st.rerun()
-
 
 def subgrupo_produto_localizar():
 
