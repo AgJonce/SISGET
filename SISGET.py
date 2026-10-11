@@ -33274,12 +33274,64 @@ def sisget_solicitacao_incluir_base(
 
                 numero_codigo_item += 1
 
-
-            # =============================================
-            # COMMIT
-            # =============================================
+            # =================================================
 
             conn.commit()
+
+        # ====================================================
+        # ERRO
+        # ====================================================
+
+        except Exception as erro:
+
+            try:
+
+                conn.rollback()
+
+            except Exception:
+
+                pass
+
+            st.error(
+                f"❌ Não foi possível salvar "
+                f"a solicitação: {erro}"
+            )
+
+            return
+
+        # ====================================================
+        # SUCESSO
+        # ====================================================
+
+        st.session_state[
+            chave_mensagem
+        ] = (
+            f"✅ Solicitação {codigo} "
+            f"salva com sucesso!"
+        )
+
+        # ====================================================
+        # LIMPAR ITENS
+        # ====================================================
+
+        st.session_state.pop(
+            chave_itens,
+            None
+        )
+
+        # ====================================================
+        # RESET
+        # ====================================================
+
+        st.session_state[
+            chave_reset
+        ] += 1
+
+        # ====================================================
+        # RERUN
+        # ====================================================
+
+        st.rerun()
 
 
 def solicitacao_interna_incluir():
@@ -33290,7 +33342,6 @@ def solicitacao_interna_incluir():
         "sisget_solicitacao_interna_reset",
         "ALMOXARIFADO"
     )
-
 
 def solicitacao_compra_incluir():
 
