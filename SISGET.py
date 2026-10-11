@@ -31682,6 +31682,10 @@ def cadastro_produtos():
 
 def produto_incluir():
 
+    # ========================================================
+    # ENTIDADE
+    # ========================================================
+
     entidade_id = st.session_state.get(
         "entidade_id"
     )
@@ -31694,6 +31698,10 @@ def produto_incluir():
 
         return
 
+    # ========================================================
+    # RESET
+    # ========================================================
+
     if "sisget_produto_reset" not in st.session_state:
 
         st.session_state[
@@ -31704,16 +31712,27 @@ def produto_incluir():
         "sisget_produto_reset"
     ]
 
+    # ========================================================
+    # GRUPOS
+    # ========================================================
+
     grupos = _sisget_fetch(
         """
         SELECT
             id,
             codigo,
-            descricao
+            descricao,
+            tipo_grupo
+
         FROM grupos_produtos
+
         WHERE ativo = TRUE
           AND entidade_id = ?
-        ORDER BY codigo
+
+        ORDER BY
+            tipo_grupo,
+            codigo,
+            descricao
         """,
         (
             entidade_id,
@@ -31728,22 +31747,80 @@ def produto_incluir():
 
         return
 
-    mapa_grupos = {
-        f"{codigo} - {descricao}": id_
-        for id_, codigo, descricao in grupos
-    }
+    # ========================================================
+    # MAPA DOS GRUPOS
+    # ========================================================
+
+    mapa_grupos = {}
+
+    for (
+        grupo_id_banco,
+        grupo_codigo,
+        grupo_descricao,
+        grupo_tipo
+    ) in grupos:
+
+        rotulo_grupo = (
+            f"{grupo_codigo} - "
+            f"{grupo_descricao} "
+            f"[{grupo_tipo}]"
+        )
+
+        mapa_grupos[
+            rotulo_grupo
+        ] = {
+            "id": grupo_id_banco,
+            "codigo": grupo_codigo,
+            "descricao": grupo_descricao,
+            "tipo_grupo": grupo_tipo
+        }
+
+    # ========================================================
+    # SELECIONAR GRUPO
+    # ========================================================
 
     grupo_nome = st.selectbox(
         "Grupo *",
         list(
             mapa_grupos.keys()
         ),
-        key=f"produto_grupo_{reset}"
+        key=(
+            f"produto_grupo_"
+            f"{reset}"
+        )
     )
 
-    grupo_id = mapa_grupos[
+    dados_grupo = mapa_grupos[
         grupo_nome
     ]
+
+    grupo_id = dados_grupo[
+        "id"
+    ]
+
+    tipo_grupo = dados_grupo[
+        "tipo_grupo"
+    ]
+
+    # ========================================================
+    # VALIDAR TIPO DO GRUPO
+    # ========================================================
+
+    if tipo_grupo not in (
+        "Consumo",
+        "Patrimonial"
+    ):
+
+        st.error(
+            "❌ O Grupo selecionado não possui "
+            "um tipo válido."
+        )
+
+        return
+
+    # ========================================================
+    # SUBGRUPOS
+    # ========================================================
 
     subgrupos = _sisget_fetch(
         """
@@ -31751,10 +31828,15 @@ def produto_incluir():
             id,
             codigo,
             descricao
+
         FROM subgrupos_produtos
+
         WHERE grupo_id = ?
           AND ativo = TRUE
-        ORDER BY codigo
+
+        ORDER BY
+            codigo,
+            descricao
         """,
         (
             grupo_id,
@@ -31764,7 +31846,8 @@ def produto_incluir():
     if not subgrupos:
 
         st.warning(
-            "⚠️ Cadastre um Subgrupo para o Grupo selecionado."
+            "⚠️ Cadastre um Subgrupo para "
+            "o Grupo selecionado."
         )
 
         return
@@ -31774,17 +31857,30 @@ def produto_incluir():
         for id_, codigo, descricao in subgrupos
     }
 
+    # ========================================================
+    # UNIDADES DE COMPRA
+    # ========================================================
+
     compras = _sisget_fetch(
         """
         SELECT
             id,
             codigo,
             descricao
+
         FROM unidades_compra
+
         WHERE ativo = TRUE
-        ORDER BY codigo
+
+        ORDER BY
+            codigo,
+            descricao
         """
     )
+
+    # ========================================================
+    # UNIDADES DE MOVIMENTAÇÃO
+    # ========================================================
 
     movimentos = _sisget_fetch(
         """
@@ -31793,9 +31889,14 @@ def produto_incluir():
             codigo,
             descricao,
             fator_conversao
+
         FROM unidades_movimentacao
+
         WHERE ativo = TRUE
-        ORDER BY codigo
+
+        ORDER BY
+            codigo,
+            descricao
         """
     )
 
@@ -31815,10 +31916,18 @@ def produto_incluir():
 
         return
 
+    # ========================================================
+    # MAPA UNIDADES DE COMPRA
+    # ========================================================
+
     mapa_compras = {
         f"{codigo} - {descricao}": id_
         for id_, codigo, descricao in compras
     }
+
+    # ========================================================
+    # MAPA UNIDADES DE MOVIMENTAÇÃO
+    # ========================================================
 
     mapa_movimentos = {}
 
@@ -31851,6 +31960,10 @@ def produto_incluir():
             descricao_mapa
         ] = id_
 
+    # ========================================================
+    # PRÓXIMO CÓDIGO
+    # ========================================================
+
     codigo = sisget_proximo_codigo(
         "produtos",
         tamanho=6,
@@ -31860,9 +31973,104 @@ def produto_incluir():
         )
     )
 
+    # ========================================================
+    # CLASSIFICAÇÕES DETALHADAS
+    # ========================================================
+
+    tipos_patrimoniais = [
+        "Móveis e Utensílios",
+        "Máquinas e Equipamentos",
+        "Equipamentos de Informática",
+        "Equipamentos Eletrônicos",
+        "Equipamentos de Comunicação",
+        "Equipamentos Hospitalares",
+        "Equipamentos Odontológicos",
+        "Equipamentos de Laboratório",
+        "Veículos",
+        "Máquinas Pesadas",
+        "Implementos Rodoviários",
+        "Obras e Instalações",
+        "Imóveis",
+        "Terrenos",
+        "Ferramentas Permanentes",
+        "Equipamentos de Segurança",
+        "Equipamentos de Áudio e Vídeo",
+        "Equipamentos Esportivos",
+        "Equipamentos Agrícolas",
+        "Equipamentos Industriais",
+        "Instrumentos Musicais",
+        "Acervo Bibliográfico",
+        "Obras de Arte",
+        "Semoventes",
+        "Outros Bens Patrimoniais"
+    ]
+
+    tipos_consumo = [
+        "Material de Expediente",
+        "Medicamentos",
+        "Material Hospitalar",
+        "Material Odontológico",
+        "Material de Laboratório",
+        "Material de Limpeza e Higiene",
+        "Gêneros Alimentícios",
+        "Material de Copa e Cozinha",
+        "Material de Construção",
+        "Material Elétrico",
+        "Material Hidráulico",
+        "Material para Manutenção",
+        "Material de Informática",
+        "Suprimentos de Impressão",
+        "Combustíveis",
+        "Lubrificantes",
+        "Peças para Veículos",
+        "Pneus e Câmaras",
+        "Material Automotivo",
+        "EPI - Equipamento de Proteção Individual",
+        "Uniformes e Vestuário",
+        "Material Escolar",
+        "Material Pedagógico",
+        "Material Esportivo",
+        "Material Gráfico",
+        "Material de Sinalização",
+        "Material de Segurança",
+        "Material Químico",
+        "Material Veterinário",
+        "Ração e Alimentação Animal",
+        "Sementes e Insumos Agrícolas",
+        "Material de Jardinagem",
+        "Material de Acondicionamento e Embalagem",
+        "Material para Áudio e Vídeo",
+        "Material de Telecomunicação",
+        "Material de Cama, Mesa e Banho",
+        "Ferramentas de Consumo",
+        "Outros Materiais de Consumo"
+    ]
+
+    if tipo_grupo == "Patrimonial":
+
+        opcoes_tipo_produto = (
+            tipos_patrimoniais
+        )
+
+    else:
+
+        opcoes_tipo_produto = (
+            tipos_consumo
+        )
+
+    # ========================================================
+    # FORMULÁRIO
+    # ========================================================
+
     with st.form(
-        f"form_produto_{reset}_{grupo_id}"
+        f"form_produto_"
+        f"{reset}_"
+        f"{grupo_id}"
     ):
+
+        # ====================================================
+        # IDENTIFICAÇÃO
+        # ====================================================
 
         st.markdown(
             "### 📦 Identificação"
@@ -31880,27 +32088,39 @@ def produto_incluir():
 
         descricao = col2.text_input(
             "Descrição do Produto *",
-            placeholder="Ex.: Papel A4 branco 75 g/m²"
+            placeholder=(
+                "Ex.: Papel A4 branco 75 g/m²"
+            )
         )
 
         descricao_complementar = st.text_area(
             "Descrição Complementar",
             height=100,
             placeholder=(
-                "Informações adicionais que complementam "
-                "a descrição principal do item."
+                "Marca de referência, modelo, tamanho, "
+                "apresentação, composição ou outras "
+                "informações complementares."
             )
         )
+
+        # ====================================================
+        # CLASSIFICAÇÃO
+        # ====================================================
 
         st.markdown(
             "### 📁 Classificação"
         )
 
-        col3, col4 = st.columns(2)
+        col3, col4 = st.columns(
+            2
+        )
 
         col3.text_input(
             "Grupo",
-            value=grupo_nome,
+            value=(
+                f"{dados_grupo['codigo']} - "
+                f"{dados_grupo['descricao']}"
+            ),
             disabled=True
         )
 
@@ -31911,20 +32131,64 @@ def produto_incluir():
             )
         )
 
-        tipo_item = st.selectbox(
-            "Tipo do Item *",
-            [
-                "Consumo",
-                "Patrimonial",
-                "Serviço"
-            ]
+        # ====================================================
+        # TIPO PRINCIPAL
+        # ====================================================
+
+        col_tipo1, col_tipo2 = st.columns(
+            2
         )
+
+        tipo_item = col_tipo1.text_input(
+            "Tipo do Item",
+            value=tipo_grupo,
+            disabled=True,
+            help=(
+                "Definido automaticamente "
+                "pelo tipo do Grupo."
+            )
+        )
+
+        # ====================================================
+        # CLASSIFICAÇÃO DETALHADA
+        # ====================================================
+
+        tipo_produto = col_tipo2.selectbox(
+            "Classificação do Item *",
+            opcoes_tipo_produto
+        )
+
+        # ====================================================
+        # INFORMAÇÃO DO TIPO
+        # ====================================================
+
+        if tipo_grupo == "Patrimonial":
+
+            st.info(
+                "🏷️ Item Patrimonial: será tratado como "
+                "bem permanente e poderá ser integrado "
+                "ao módulo de Patrimônio."
+            )
+
+        else:
+
+            st.info(
+                "📦 Item de Consumo: será tratado como "
+                "material consumível e poderá movimentar "
+                "estoque no Almoxarifado."
+            )
+
+        # ====================================================
+        # UNIDADES
+        # ====================================================
 
         st.markdown(
             "### 📏 Unidades"
         )
 
-        col5, col6 = st.columns(2)
+        col5, col6 = st.columns(
+            2
+        )
 
         unidade_compra_nome = col5.selectbox(
             "Unidade de Compra *",
@@ -31940,11 +32204,17 @@ def produto_incluir():
             )
         )
 
+        # ====================================================
+        # CONTROLE DE ESTOQUE
+        # ====================================================
+
         st.markdown(
             "### 📊 Controle de Estoque"
         )
 
-        col7, col8 = st.columns(2)
+        col7, col8 = st.columns(
+            2
+        )
 
         controla_estoque = col7.checkbox(
             "Controla Estoque",
@@ -31958,11 +32228,17 @@ def produto_incluir():
             format="%.6f"
         )
 
+        # ====================================================
+        # CONTAS / NATUREZAS
+        # ====================================================
+
         st.markdown(
             "### 💰 Contas / Naturezas Orçamentárias"
         )
 
-        col9, col10 = st.columns(2)
+        col9, col10 = st.columns(
+            2
+        )
 
         conta_orcamentaria_entrada = col9.text_input(
             "Conta / Natureza Orçamentária Padrão - Entrada"
@@ -31972,9 +32248,21 @@ def produto_incluir():
             "Conta / Natureza Orçamentária Padrão - Saída"
         )
 
+        # ====================================================
+        # TRIBUNAL DE CONTAS
+        # ====================================================
+
         codigo_tribunal = st.text_input(
-            "Classificação Tribunal de Contas"
+            "Classificação Tribunal de Contas",
+            placeholder=(
+                "Código/classificação utilizada "
+                "para integração ou prestação de contas."
+            )
         )
+
+        # ====================================================
+        # ESPECIFICAÇÃO TÉCNICA
+        # ====================================================
 
         st.markdown(
             "### 📝 Especificação Técnica"
@@ -31984,16 +32272,26 @@ def produto_incluir():
             "Especificação Técnica",
             height=160,
             placeholder=(
-                "Características técnicas, material, medidas, "
-                "qualidade, padrão e demais requisitos."
+                "Informe características técnicas, material, "
+                "dimensões, capacidade, potência, qualidade, "
+                "composição, apresentação, garantia e demais "
+                "requisitos necessários."
             )
         )
+
+        # ====================================================
+        # SALVAR
+        # ====================================================
 
         salvar = st.form_submit_button(
             "💾 Salvar Produto",
             type="primary",
             use_container_width=True
         )
+
+    # ========================================================
+    # MENSAGEM
+    # ========================================================
 
     if "sisget_mensagem_produto" in st.session_state:
 
@@ -32003,9 +32301,17 @@ def produto_incluir():
             )
         )
 
+    # ========================================================
+    # SALVAR
+    # ========================================================
+
     if salvar:
 
         descricao = descricao.strip()
+
+        # ====================================================
+        # VALIDAR DESCRIÇÃO
+        # ====================================================
 
         if not descricao:
 
@@ -32015,36 +32321,160 @@ def produto_incluir():
 
             return
 
-        item_patrimonial = (
-            tipo_item == "Patrimonial"
+        # ====================================================
+        # REVALIDAR GRUPO
+        # ====================================================
+
+        grupo_valido = _sisget_fetchone(
+            """
+            SELECT
+                id,
+                tipo_grupo
+
+            FROM grupos_produtos
+
+            WHERE id = ?
+              AND entidade_id = ?
+              AND ativo = TRUE
+            """,
+            (
+                grupo_id,
+                entidade_id
+            )
         )
 
-        if tipo_item == "Serviço":
+        if not grupo_valido:
 
-            controla_estoque_salvar = False
-            estoque_minimo_salvar = 0.0
+            st.error(
+                "❌ O Grupo selecionado não "
+                "está mais disponível."
+            )
+
+            return
+
+        tipo_grupo_banco = (
+            grupo_valido[
+                1
+            ]
+        )
+
+        # ====================================================
+        # VALIDAR TIPO
+        # ====================================================
+
+        if tipo_grupo_banco not in (
+            "Consumo",
+            "Patrimonial"
+        ):
+
+            st.error(
+                "❌ O Grupo possui um tipo inválido."
+            )
+
+            return
+
+        # ====================================================
+        # VALIDAR CLASSIFICAÇÃO
+        # ====================================================
+
+        if tipo_grupo_banco == "Patrimonial":
+
+            if tipo_produto not in tipos_patrimoniais:
+
+                st.error(
+                    "❌ Classificação patrimonial inválida."
+                )
+
+                return
 
         else:
 
-            controla_estoque_salvar = (
-                controla_estoque
-            )
+            if tipo_produto not in tipos_consumo:
 
-            estoque_minimo_salvar = float(
-                estoque_minimo
-            )
+                st.error(
+                    "❌ Classificação de consumo inválida."
+                )
+
+                return
+
+        # ====================================================
+        # ITEM PATRIMONIAL
+        # ====================================================
+
+        item_patrimonial = (
+            tipo_grupo_banco
+            ==
+            "Patrimonial"
+        )
+
+        # ====================================================
+        # CONTROLE DE ESTOQUE
+        # ====================================================
+
+        controla_estoque_salvar = (
+            controla_estoque
+        )
+
+        estoque_minimo_salvar = float(
+            estoque_minimo
+        )
+
+        # ====================================================
+        # SUBGRUPO
+        # ====================================================
 
         subgrupo_id = mapa_subgrupos[
             subgrupo_nome
         ]
 
+        # ====================================================
+        # VALIDAR SUBGRUPO
+        # ====================================================
+
+        subgrupo_valido = _sisget_fetchone(
+            """
+            SELECT
+                id
+
+            FROM subgrupos_produtos
+
+            WHERE id = ?
+              AND grupo_id = ?
+              AND ativo = TRUE
+            """,
+            (
+                subgrupo_id,
+                grupo_id
+            )
+        )
+
+        if not subgrupo_valido:
+
+            st.error(
+                "❌ O Subgrupo selecionado não "
+                "pertence mais ao Grupo informado."
+            )
+
+            return
+
+        # ====================================================
+        # DUPLICIDADE
+        # ====================================================
+
         existe = _sisget_fetchone(
             """
             SELECT
                 id
+
             FROM produtos
+
             WHERE entidade_id = ?
-              AND UPPER(COALESCE(produto, descricao)) = UPPER(?)
+              AND UPPER(
+                    COALESCE(
+                        produto,
+                        descricao
+                    )
+                  ) = UPPER(?)
               AND grupo_id = ?
               AND subgrupo_id = ?
             """,
@@ -32059,10 +32489,15 @@ def produto_incluir():
         if existe:
 
             st.warning(
-                "⚠️ Já existe um produto com esta descrição neste Grupo/Subgrupo."
+                "⚠️ Já existe um produto com esta "
+                "descrição neste Grupo/Subgrupo."
             )
 
             return
+
+        # ====================================================
+        # RECALCULAR CÓDIGO
+        # ====================================================
 
         codigo = sisget_proximo_codigo(
             "produtos",
@@ -32072,6 +32507,10 @@ def produto_incluir():
                 entidade_id,
             )
         )
+
+        # ====================================================
+        # GRAVAR
+        # ====================================================
 
         sucesso = _sisget_salvar(
             """
@@ -32139,8 +32578,8 @@ def produto_incluir():
                 grupo_id,
                 subgrupo_id,
 
-                tipo_item,
-                tipo_item,
+                tipo_produto,
+                tipo_grupo_banco,
                 item_patrimonial,
 
                 mapa_compras[
@@ -32171,12 +32610,19 @@ def produto_incluir():
             )
         )
 
+        # ====================================================
+        # SUCESSO
+        # ====================================================
+
         if sucesso:
 
             st.session_state[
                 "sisget_mensagem_produto"
             ] = (
-                f"✅ Produto salvo com sucesso. Código: {codigo}"
+                f"✅ Produto salvo com sucesso. "
+                f"Código: {codigo} | "
+                f"Tipo: {tipo_grupo_banco} | "
+                f"Classificação: {tipo_produto}"
             )
 
             st.session_state[
