@@ -31974,7 +31974,7 @@ def produto_incluir():
     )
 
     # ========================================================
-    # CLASSIFICAÇÕES DETALHADAS
+    # CLASSIFICAÇÕES PATRIMONIAIS
     # ========================================================
 
     tipos_patrimoniais = [
@@ -32004,6 +32004,10 @@ def produto_incluir():
         "Semoventes",
         "Outros Bens Patrimoniais"
     ]
+
+    # ========================================================
+    # CLASSIFICAÇÕES DE CONSUMO
+    # ========================================================
 
     tipos_consumo = [
         "Material de Expediente",
@@ -32045,6 +32049,10 @@ def produto_incluir():
         "Ferramentas de Consumo",
         "Outros Materiais de Consumo"
     ]
+
+    # ========================================================
+    # OPÇÕES CONFORME TIPO DO GRUPO
+    # ========================================================
 
     if tipo_grupo == "Patrimonial":
 
@@ -32132,7 +32140,7 @@ def produto_incluir():
         )
 
         # ====================================================
-        # TIPO PRINCIPAL
+        # TIPO PRINCIPAL / CLASSIFICAÇÃO
         # ====================================================
 
         col_tipo1, col_tipo2 = st.columns(
@@ -32145,36 +32153,26 @@ def produto_incluir():
             disabled=True,
             help=(
                 "Definido automaticamente "
-                "pelo tipo do Grupo."
+                "pelo Grupo selecionado."
             )
         )
-
-        # ====================================================
-        # CLASSIFICAÇÃO DETALHADA
-        # ====================================================
 
         tipo_produto = col_tipo2.selectbox(
             "Classificação do Item *",
             opcoes_tipo_produto
         )
 
-        # ====================================================
-        # INFORMAÇÃO DO TIPO
-        # ====================================================
-
         if tipo_grupo == "Patrimonial":
 
             st.info(
-                "🏷️ Item Patrimonial: será tratado como "
-                "bem permanente e poderá ser integrado "
+                "🏷️ Item Patrimonial: poderá ser integrado "
                 "ao módulo de Patrimônio."
             )
 
         else:
 
             st.info(
-                "📦 Item de Consumo: será tratado como "
-                "material consumível e poderá movimentar "
+                "📦 Item de Consumo: poderá movimentar "
                 "estoque no Almoxarifado."
             )
 
@@ -32212,8 +32210,8 @@ def produto_incluir():
             "### 📊 Controle de Estoque"
         )
 
-        col7, col8 = st.columns(
-            2
+        col7, col8, col9 = st.columns(
+            3
         )
 
         controla_estoque = col7.checkbox(
@@ -32221,12 +32219,75 @@ def produto_incluir():
             value=True
         )
 
-        estoque_minimo = col8.number_input(
+        controla_lote = col8.checkbox(
+            "Controla Lote",
+            value=False
+        )
+
+        controla_vencimento = col9.checkbox(
+            "Controla Vencimento",
+            value=False
+        )
+
+        # ====================================================
+        # REGRA LOTE + VENCIMENTO
+        # ====================================================
+
+        if controla_vencimento:
+
+            controla_lote = True
+
+            st.info(
+                "📅 Itens com controle de vencimento "
+                "também terão controle de lote."
+            )
+
+        # ====================================================
+        # ESTOQUE MÍNIMO / PRAZO
+        # ====================================================
+
+        col10, col11 = st.columns(
+            2
+        )
+
+        estoque_minimo = col10.number_input(
             "Estoque Mínimo",
             min_value=0.0,
             value=0.0,
             format="%.6f"
         )
+
+        vencimento_dias = col11.number_input(
+            "Prazo de Vencimento (dias)",
+            min_value=0,
+            value=0,
+            step=1,
+            disabled=not controla_vencimento,
+            help=(
+                "Quantidade padrão de dias "
+                "de validade do item."
+            )
+        )
+
+        # ====================================================
+        # DATA DE VENCIMENTO PADRÃO
+        # ====================================================
+
+        if controla_vencimento:
+
+            data_vencimento_padrao = st.date_input(
+                "Data de Vencimento Padrão",
+                value=datetime.now().date(),
+                help=(
+                    "Data de referência do produto. "
+                    "O vencimento real será controlado "
+                    "posteriormente por lote."
+                )
+            )
+
+        else:
+
+            data_vencimento_padrao = None
 
         # ====================================================
         # CONTAS / NATUREZAS
@@ -32236,32 +32297,28 @@ def produto_incluir():
             "### 💰 Contas / Naturezas Orçamentárias"
         )
 
-        col9, col10 = st.columns(
+        col12, col13 = st.columns(
             2
         )
 
-        conta_orcamentaria_entrada = col9.text_input(
+        conta_orcamentaria_entrada = col12.text_input(
             "Conta / Natureza Orçamentária Padrão - Entrada"
         )
 
-        conta_orcamentaria_saida = col10.text_input(
+        conta_orcamentaria_saida = col13.text_input(
             "Conta / Natureza Orçamentária Padrão - Saída"
         )
 
         # ====================================================
-        # TRIBUNAL DE CONTAS
+        # TRIBUNAL
         # ====================================================
 
         codigo_tribunal = st.text_input(
-            "Classificação Tribunal de Contas",
-            placeholder=(
-                "Código/classificação utilizada "
-                "para integração ou prestação de contas."
-            )
+            "Classificação Tribunal de Contas"
         )
 
         # ====================================================
-        # ESPECIFICAÇÃO TÉCNICA
+        # ESPECIFICAÇÃO
         # ====================================================
 
         st.markdown(
@@ -32272,10 +32329,9 @@ def produto_incluir():
             "Especificação Técnica",
             height=160,
             placeholder=(
-                "Informe características técnicas, material, "
-                "dimensões, capacidade, potência, qualidade, "
-                "composição, apresentação, garantia e demais "
-                "requisitos necessários."
+                "Características técnicas, material, medidas, "
+                "qualidade, composição, apresentação, "
+                "garantia e demais requisitos."
             )
         )
 
@@ -32346,20 +32402,18 @@ def produto_incluir():
         if not grupo_valido:
 
             st.error(
-                "❌ O Grupo selecionado não "
-                "está mais disponível."
+                "❌ O Grupo selecionado não está "
+                "mais disponível."
             )
 
             return
 
-        tipo_grupo_banco = (
-            grupo_valido[
-                1
-            ]
-        )
+        tipo_grupo_banco = grupo_valido[
+            1
+        ]
 
         # ====================================================
-        # VALIDAR TIPO
+        # VALIDAR TIPO DO GRUPO
         # ====================================================
 
         if tipo_grupo_banco not in (
@@ -32411,13 +32465,43 @@ def produto_incluir():
         # CONTROLE DE ESTOQUE
         # ====================================================
 
-        controla_estoque_salvar = (
+        controla_estoque_salvar = bool(
             controla_estoque
         )
 
         estoque_minimo_salvar = float(
             estoque_minimo
         )
+
+        # ====================================================
+        # CONTROLE DE LOTE / VENCIMENTO
+        # ====================================================
+
+        if controla_vencimento:
+
+            controla_lote_salvar = True
+
+            controla_vencimento_salvar = True
+
+            vencimento_dias_salvar = int(
+                vencimento_dias
+            )
+
+            data_vencimento_salvar = (
+                data_vencimento_padrao
+            )
+
+        else:
+
+            controla_lote_salvar = bool(
+                controla_lote
+            )
+
+            controla_vencimento_salvar = False
+
+            vencimento_dias_salvar = None
+
+            data_vencimento_salvar = None
 
         # ====================================================
         # SUBGRUPO
@@ -32451,8 +32535,8 @@ def produto_incluir():
         if not subgrupo_valido:
 
             st.error(
-                "❌ O Subgrupo selecionado não "
-                "pertence mais ao Grupo informado."
+                "❌ O Subgrupo selecionado não pertence "
+                "mais ao Grupo informado."
             )
 
             return
@@ -32536,6 +32620,11 @@ def produto_incluir():
                 controla_estoque,
                 estoque_minimo,
 
+                controla_lote,
+                controla_vencimento,
+                vencimento_dias,
+                data_vencimento_padrao,
+
                 conta_orcamentaria_padrao,
                 conta_orcamentaria_entrada,
                 conta_orcamentaria_saida,
@@ -32558,6 +32647,8 @@ def produto_incluir():
                 ?, ?,
 
                 ?, ?,
+
+                ?, ?, ?, ?,
 
                 ?, ?, ?,
 
@@ -32592,6 +32683,11 @@ def produto_incluir():
 
                 controla_estoque_salvar,
                 estoque_minimo_salvar,
+
+                controla_lote_salvar,
+                controla_vencimento_salvar,
+                vencimento_dias_salvar,
+                data_vencimento_salvar,
 
                 conta_orcamentaria_entrada.strip()
                 or None,
