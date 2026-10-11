@@ -29613,6 +29613,10 @@ def cadastro_grupos_produtos():
 
 def grupo_produto_incluir():
 
+    # ========================================================
+    # ENTIDADE
+    # ========================================================
+
     entidade_id = st.session_state.get(
         "entidade_id"
     )
@@ -29625,6 +29629,10 @@ def grupo_produto_incluir():
 
         return
 
+    # ========================================================
+    # RESET
+    # ========================================================
+
     if "sisget_grupo_reset" not in st.session_state:
 
         st.session_state[
@@ -29635,6 +29643,10 @@ def grupo_produto_incluir():
         "sisget_grupo_reset"
     ]
 
+    # ========================================================
+    # PRÓXIMO CÓDIGO
+    # ========================================================
+
     codigo = sisget_proximo_codigo(
         "grupos_produtos",
         tamanho=3,
@@ -29644,9 +29656,18 @@ def grupo_produto_incluir():
         )
     )
 
+    # ========================================================
+    # FORMULÁRIO
+    # ========================================================
+
     with st.form(
-        f"form_grupo_incluir_{reset}"
+        f"form_grupo_incluir_{reset}",
+        clear_on_submit=False
     ):
+
+        st.markdown(
+            "### 📁 Identificação do Grupo"
+        )
 
         col1, col2 = st.columns(
             [1, 4]
@@ -29662,11 +29683,51 @@ def grupo_produto_incluir():
             "Descrição *"
         )
 
+        # ====================================================
+        # TIPO DO GRUPO
+        # ====================================================
+
+        tipo_grupo = st.selectbox(
+            "Tipo do Grupo *",
+            [
+                "Consumo",
+                "Patrimonial"
+            ],
+            key=(
+                f"sisget_grupo_tipo_"
+                f"{reset}"
+            )
+        )
+
+        # ====================================================
+        # INFORMAÇÃO
+        # ====================================================
+
+        if tipo_grupo == "Consumo":
+
+            st.info(
+                "📦 Grupo destinado a materiais de consumo."
+            )
+
+        elif tipo_grupo == "Patrimonial":
+
+            st.info(
+                "🏷️ Grupo destinado a bens patrimoniais."
+            )
+
+        # ====================================================
+        # SALVAR
+        # ====================================================
+
         salvar = st.form_submit_button(
             "💾 Salvar Grupo",
             type="primary",
             use_container_width=True
         )
+
+    # ========================================================
+    # MENSAGEM
+    # ========================================================
 
     if "sisget_mensagem_grupo" in st.session_state:
 
@@ -29676,9 +29737,17 @@ def grupo_produto_incluir():
             )
         )
 
+    # ========================================================
+    # SALVAR
+    # ========================================================
+
     if salvar:
 
         descricao = descricao.strip()
+
+        # ====================================================
+        # VALIDAÇÃO DA DESCRIÇÃO
+        # ====================================================
 
         if not descricao:
 
@@ -29688,6 +29757,25 @@ def grupo_produto_incluir():
 
             return
 
+        # ====================================================
+        # VALIDAÇÃO DO TIPO
+        # ====================================================
+
+        if tipo_grupo not in (
+            "Consumo",
+            "Patrimonial"
+        ):
+
+            st.warning(
+                "⚠️ Selecione um tipo de grupo válido."
+            )
+
+            return
+
+        # ====================================================
+        # VERIFICAR DUPLICIDADE
+        # ====================================================
+
         existe = _sisget_fetchone(
             """
             SELECT
@@ -29695,20 +29783,27 @@ def grupo_produto_incluir():
             FROM grupos_produtos
             WHERE entidade_id = ?
               AND UPPER(descricao) = UPPER(?)
+              AND tipo_grupo = ?
             """,
             (
                 entidade_id,
-                descricao
+                descricao,
+                tipo_grupo
             )
         )
 
         if existe:
 
             st.warning(
-                "⚠️ Já existe um grupo com esta descrição."
+                "⚠️ Já existe um grupo com esta "
+                "descrição e tipo."
             )
 
             return
+
+        # ====================================================
+        # RECALCULAR CÓDIGO
+        # ====================================================
 
         codigo = sisget_proximo_codigo(
             "grupos_produtos",
@@ -29719,6 +29814,10 @@ def grupo_produto_incluir():
             )
         )
 
+        # ====================================================
+        # GRAVAR
+        # ====================================================
+
         sucesso = _sisget_salvar(
             """
             INSERT INTO grupos_produtos
@@ -29726,26 +29825,34 @@ def grupo_produto_incluir():
                 entidade_id,
                 codigo,
                 descricao,
+                tipo_grupo,
                 ativo
             )
             VALUES
             (
-                ?, ?, ?, TRUE
+                ?, ?, ?, ?, TRUE
             )
             """,
             (
                 entidade_id,
                 codigo,
-                descricao
+                descricao,
+                tipo_grupo
             )
         )
+
+        # ====================================================
+        # SUCESSO
+        # ====================================================
 
         if sucesso:
 
             st.session_state[
                 "sisget_mensagem_grupo"
             ] = (
-                f"✅ Grupo salvo com sucesso. Código: {codigo}"
+                f"✅ Grupo salvo com sucesso. "
+                f"Código: {codigo} | "
+                f"Tipo: {tipo_grupo}"
             )
 
             st.session_state[
@@ -29753,7 +29860,6 @@ def grupo_produto_incluir():
             ] += 1
 
             st.rerun()
-
 
 def grupo_produto_localizar():
 
