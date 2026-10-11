@@ -32175,10 +32175,993 @@ def modulo_solicitacao_licitacao():
     )
 
 
-# ============================================================
-# BASE DE INCLUSÃO DAS SOLICITAÇÕES
-# ============================================================
+def sisget_itens_solicitacao(
+    tipo_solicitacao,
+    entidade_id,
+    reset
+):
 
+    # ========================================================
+    # CHAVES
+    # ========================================================
+
+    chave_itens = (
+        f"sisget_sol_itens_"
+        f"{tipo_solicitacao}_"
+        f"{reset}"
+    )
+
+    chave_acao = (
+        f"sisget_sol_itens_acao_"
+        f"{tipo_solicitacao}_"
+        f"{reset}"
+    )
+
+    chave_mensagem = (
+        f"sisget_sol_itens_mensagem_"
+        f"{tipo_solicitacao}_"
+        f"{reset}"
+    )
+
+    # ========================================================
+    # SESSION STATE
+    # ========================================================
+
+    if chave_itens not in st.session_state:
+
+        st.session_state[
+            chave_itens
+        ] = []
+
+    if chave_acao not in st.session_state:
+
+        st.session_state[
+            chave_acao
+        ] = None
+
+    itens = st.session_state[
+        chave_itens
+    ]
+
+    # ========================================================
+    # TÍTULO
+    # ========================================================
+
+    st.markdown("---")
+
+    st.markdown(
+        "### 📦 Itens da Solicitação"
+    )
+
+    # ========================================================
+    # MENSAGEM
+    # ========================================================
+
+    if chave_mensagem in st.session_state:
+
+        st.success(
+            st.session_state.pop(
+                chave_mensagem
+            )
+        )
+
+    # ========================================================
+    # BOTÕES
+    # ========================================================
+
+    col1, col2, col3 = st.columns(
+        3
+    )
+
+    if col1.button(
+        "➕ Incluir",
+        use_container_width=True,
+        type="primary",
+        key=(
+            f"sisget_item_incluir_"
+            f"{tipo_solicitacao}_"
+            f"{reset}"
+        )
+    ):
+
+        st.session_state[
+            chave_acao
+        ] = "INCLUIR"
+
+        st.rerun()
+
+    if col2.button(
+        "🔎 Localizar",
+        use_container_width=True,
+        key=(
+            f"sisget_item_localizar_"
+            f"{tipo_solicitacao}_"
+            f"{reset}"
+        )
+    ):
+
+        st.session_state[
+            chave_acao
+        ] = "LOCALIZAR"
+
+        st.rerun()
+
+    if col3.button(
+        "🗑️ Excluir",
+        use_container_width=True,
+        key=(
+            f"sisget_item_excluir_"
+            f"{tipo_solicitacao}_"
+            f"{reset}"
+        )
+    ):
+
+        st.session_state[
+            chave_acao
+        ] = "EXCLUIR"
+
+        st.rerun()
+
+    # ========================================================
+    # AÇÃO ATUAL
+    # ========================================================
+
+    acao = st.session_state.get(
+        chave_acao
+    )
+
+    # ========================================================
+    # INCLUIR
+    # ========================================================
+
+    if acao == "INCLUIR":
+
+        st.markdown(
+            "#### ➕ Incluir Item"
+        )
+
+        # ====================================================
+        # PRODUTOS
+        # ====================================================
+
+        produtos = _sisget_fetch(
+            """
+            SELECT
+                p.id,
+                p.codigo,
+
+                COALESCE(
+                    NULLIF(
+                        TRIM(p.produto),
+                        ''
+                    ),
+                    NULLIF(
+                        TRIM(p.descricao),
+                        ''
+                    ),
+                    'Produto sem descrição'
+                ),
+
+                p.descricao_complementar,
+
+                p.tipo_item,
+
+                g.codigo,
+                g.descricao,
+
+                sg.codigo,
+                sg.descricao,
+
+                uc.descricao,
+
+                um.descricao,
+
+                um.fator_conversao
+
+            FROM produtos p
+
+            LEFT JOIN grupos_produtos g
+                ON g.id = p.grupo_id
+
+            LEFT JOIN subgrupos_produtos sg
+                ON sg.id = p.subgrupo_id
+
+            LEFT JOIN unidades_compra uc
+                ON uc.id = p.unidade_compra_id
+
+            LEFT JOIN unidades_movimentacao um
+                ON um.id = p.unidade_movimentacao_id
+
+            WHERE p.entidade_id = ?
+              AND p.ativo = TRUE
+
+            ORDER BY
+                p.codigo
+            """,
+            (
+                entidade_id,
+            )
+        )
+
+        # ====================================================
+        # FALLBACK
+        # ====================================================
+
+        if not produtos:
+
+            produtos = _sisget_fetch(
+                """
+                SELECT
+                    p.id,
+                    p.codigo,
+
+                    COALESCE(
+                        NULLIF(
+                            TRIM(p.produto),
+                            ''
+                        ),
+                        NULLIF(
+                            TRIM(p.descricao),
+                            ''
+                        ),
+                        'Produto sem descrição'
+                    ),
+
+                    p.descricao_complementar,
+
+                    p.tipo_item,
+
+                    g.codigo,
+                    g.descricao,
+
+                    sg.codigo,
+                    sg.descricao,
+
+                    uc.descricao,
+
+                    um.descricao,
+
+                    um.fator_conversao
+
+                FROM produtos p
+
+                LEFT JOIN grupos_produtos g
+                    ON g.id = p.grupo_id
+
+                LEFT JOIN subgrupos_produtos sg
+                    ON sg.id = p.subgrupo_id
+
+                LEFT JOIN unidades_compra uc
+                    ON uc.id = p.unidade_compra_id
+
+                LEFT JOIN unidades_movimentacao um
+                    ON um.id = p.unidade_movimentacao_id
+
+                WHERE p.ativo = TRUE
+
+                ORDER BY
+                    p.codigo
+                """
+            )
+
+        # ====================================================
+        # MAPA PRODUTOS
+        # ====================================================
+
+        mapa_produtos = {}
+
+        for (
+            produto_id,
+            codigo_produto,
+            nome_produto,
+
+            descricao_complementar,
+
+            tipo_item,
+
+            grupo_codigo,
+            grupo_descricao,
+
+            subgrupo_codigo,
+            subgrupo_descricao,
+
+            unidade_compra,
+
+            unidade_movimentacao,
+
+            fator_conversao
+        ) in produtos:
+
+            rotulo = (
+                f"{codigo_produto} - "
+                f"{nome_produto}"
+            )
+
+            mapa_produtos[
+                rotulo
+            ] = {
+                "id": produto_id,
+
+                "codigo": codigo_produto,
+
+                "produto": nome_produto,
+
+                "descricao_complementar": (
+                    descricao_complementar
+                    or ""
+                ),
+
+                "tipo_item": (
+                    tipo_item
+                    or ""
+                ),
+
+                "grupo": (
+                    (
+                        f"{grupo_codigo} - "
+                        f"{grupo_descricao}"
+                    )
+                    if grupo_codigo
+                    else ""
+                ),
+
+                "subgrupo": (
+                    (
+                        f"{subgrupo_codigo} - "
+                        f"{subgrupo_descricao}"
+                    )
+                    if subgrupo_codigo
+                    else ""
+                ),
+
+                "unidade_compra": (
+                    unidade_compra
+                    or ""
+                ),
+
+                "unidade_movimentacao": (
+                    unidade_movimentacao
+                    or ""
+                ),
+
+                "fator_conversao": float(
+                    fator_conversao
+                    or 1
+                )
+            }
+
+        # ====================================================
+        # SEM PRODUTO
+        # ====================================================
+
+        if not mapa_produtos:
+
+            st.warning(
+                "⚠️ Nenhum produto ativo cadastrado."
+            )
+
+        else:
+
+            # =================================================
+            # FORMULÁRIO
+            # =================================================
+
+            with st.form(
+                f"sisget_form_incluir_item_"
+                f"{tipo_solicitacao}_"
+                f"{reset}",
+                clear_on_submit=True
+            ):
+
+                produto_nome = st.selectbox(
+                    "Produto *",
+                    list(
+                        mapa_produtos.keys()
+                    )
+                )
+
+                dados_produto = mapa_produtos[
+                    produto_nome
+                ]
+
+                # =============================================
+                # INFORMAÇÕES
+                # =============================================
+
+                col_prod1, col_prod2 = st.columns(
+                    2
+                )
+
+                col_prod1.text_input(
+                    "Grupo",
+                    value=dados_produto[
+                        "grupo"
+                    ],
+                    disabled=True
+                )
+
+                col_prod2.text_input(
+                    "Subgrupo",
+                    value=dados_produto[
+                        "subgrupo"
+                    ],
+                    disabled=True
+                )
+
+                col_uni1, col_uni2 = st.columns(
+                    2
+                )
+
+                col_uni1.text_input(
+                    "Unidade de Compra",
+                    value=dados_produto[
+                        "unidade_compra"
+                    ],
+                    disabled=True
+                )
+
+                col_uni2.text_input(
+                    "Unidade de Movimentação",
+                    value=dados_produto[
+                        "unidade_movimentacao"
+                    ],
+                    disabled=True
+                )
+
+                # =============================================
+                # DESCRIÇÃO
+                # =============================================
+
+                if dados_produto[
+                    "descricao_complementar"
+                ]:
+
+                    st.text_area(
+                        "Descrição Complementar",
+                        value=dados_produto[
+                            "descricao_complementar"
+                        ],
+                        disabled=True,
+                        height=80
+                    )
+
+                # =============================================
+                # QUANTIDADE / VALOR
+                # =============================================
+
+                col_qtd, col_valor = st.columns(
+                    2
+                )
+
+                quantidade = col_qtd.number_input(
+                    "Quantidade *",
+                    min_value=0.000001,
+                    value=1.0,
+                    format="%.6f"
+                )
+
+                valor_unitario = col_valor.number_input(
+                    "Valor Estimado Unitário (R$)",
+                    min_value=0.0,
+                    value=0.0,
+                    format="%.2f"
+                )
+
+                especificacao = st.text_area(
+                    "Especificação / Observação do Item",
+                    height=80
+                )
+
+                col_salvar, col_cancelar = st.columns(
+                    2
+                )
+
+                incluir = col_salvar.form_submit_button(
+                    "💾 Adicionar Item",
+                    type="primary",
+                    use_container_width=True
+                )
+
+                cancelar = col_cancelar.form_submit_button(
+                    "↩️ Cancelar",
+                    use_container_width=True
+                )
+
+            # =================================================
+            # CANCELAR
+            # =================================================
+
+            if cancelar:
+
+                st.session_state[
+                    chave_acao
+                ] = None
+
+                st.rerun()
+
+            # =================================================
+            # ADICIONAR
+            # =================================================
+
+            if incluir:
+
+                produto = mapa_produtos[
+                    produto_nome
+                ]
+
+                # =============================================
+                # EVITAR MESMO PRODUTO DUPLICADO
+                # =============================================
+
+                produto_ja_existe = any(
+                    item[
+                        "produto_id"
+                    ] == produto[
+                        "id"
+                    ]
+                    for item in itens
+                )
+
+                if produto_ja_existe:
+
+                    st.warning(
+                        "⚠️ Este produto já foi adicionado "
+                        "à solicitação."
+                    )
+
+                else:
+
+                    itens.append(
+                        {
+                            "produto_id": (
+                                produto[
+                                    "id"
+                                ]
+                            ),
+
+                            "codigo": (
+                                produto[
+                                    "codigo"
+                                ]
+                            ),
+
+                            "produto": (
+                                produto[
+                                    "produto"
+                                ]
+                            ),
+
+                            "unidade": (
+                                produto[
+                                    "unidade_compra"
+                                ]
+                            ),
+
+                            "quantidade": float(
+                                quantidade
+                            ),
+
+                            "valor_unitario": float(
+                                valor_unitario
+                            ),
+
+                            "observacao": (
+                                especificacao.strip()
+                                or None
+                            )
+                        }
+                    )
+
+                    st.session_state[
+                        chave_mensagem
+                    ] = (
+                        "✅ Item adicionado com sucesso."
+                    )
+
+                    st.session_state[
+                        chave_acao
+                    ] = None
+
+                    st.rerun()
+
+    # ========================================================
+    # LOCALIZAR
+    # ========================================================
+
+    elif acao == "LOCALIZAR":
+
+        st.markdown(
+            "#### 🔎 Localizar Item"
+        )
+
+        if not itens:
+
+            st.info(
+                "Nenhum item foi incluído nesta solicitação."
+            )
+
+        else:
+
+            pesquisa = st.text_input(
+                "Pesquisar por código ou produto",
+                key=(
+                    f"sisget_item_pesquisa_"
+                    f"{tipo_solicitacao}_"
+                    f"{reset}"
+                )
+            )
+
+            pesquisa_normalizada = (
+                pesquisa.strip().lower()
+            )
+
+            encontrados = []
+
+            for indice, item in enumerate(
+                itens,
+                start=1
+            ):
+
+                texto_busca = (
+                    f"{item.get('codigo', '')} "
+                    f"{item.get('produto', '')}"
+                ).lower()
+
+                if (
+                    not pesquisa_normalizada
+                    or
+                    pesquisa_normalizada
+                    in texto_busca
+                ):
+
+                    encontrados.append(
+                        {
+                            "Item": indice,
+
+                            "Código": item.get(
+                                "codigo",
+                                ""
+                            ),
+
+                            "Produto": item.get(
+                                "produto",
+                                ""
+                            ),
+
+                            "Unidade": item.get(
+                                "unidade",
+                                ""
+                            ),
+
+                            "Quantidade": item.get(
+                                "quantidade",
+                                0
+                            ),
+
+                            "Valor Unitário": item.get(
+                                "valor_unitario",
+                                0
+                            ),
+
+                            "Valor Total": (
+                                float(
+                                    item.get(
+                                        "quantidade",
+                                        0
+                                    )
+                                )
+                                *
+                                float(
+                                    item.get(
+                                        "valor_unitario",
+                                        0
+                                    )
+                                )
+                            )
+                        }
+                    )
+
+            if encontrados:
+
+                st.dataframe(
+                    encontrados,
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        "Quantidade": st.column_config.NumberColumn(
+                            "Quantidade",
+                            format="%.6f"
+                        ),
+
+                        "Valor Unitário": st.column_config.NumberColumn(
+                            "Valor Unitário",
+                            format="R$ %.2f"
+                        ),
+
+                        "Valor Total": st.column_config.NumberColumn(
+                            "Valor Total",
+                            format="R$ %.2f"
+                        )
+                    }
+                )
+
+            else:
+
+                st.warning(
+                    "⚠️ Nenhum item encontrado."
+                )
+
+        if st.button(
+            "↩️ Voltar",
+            key=(
+                f"sisget_item_localizar_voltar_"
+                f"{tipo_solicitacao}_"
+                f"{reset}"
+            )
+        ):
+
+            st.session_state[
+                chave_acao
+            ] = None
+
+            st.rerun()
+
+    # ========================================================
+    # EXCLUIR
+    # ========================================================
+
+    elif acao == "EXCLUIR":
+
+        st.markdown(
+            "#### 🗑️ Excluir Item"
+        )
+
+        if not itens:
+
+            st.info(
+                "Nenhum item disponível para exclusão."
+            )
+
+            if st.button(
+                "↩️ Voltar",
+                key=(
+                    f"sisget_item_excluir_voltar_vazio_"
+                    f"{tipo_solicitacao}_"
+                    f"{reset}"
+                )
+            ):
+
+                st.session_state[
+                    chave_acao
+                ] = None
+
+                st.rerun()
+
+        else:
+
+            mapa_exclusao = {}
+
+            for indice, item in enumerate(
+                itens
+            ):
+
+                rotulo = (
+                    f"{indice + 1:03d}"
+                    f" | "
+                    f"{item.get('codigo', '')}"
+                    f" - "
+                    f"{item.get('produto', '')}"
+                    f" | Qtd.: "
+                    f"{item.get('quantidade', 0):,.2f}"
+                )
+
+                mapa_exclusao[
+                    rotulo
+                ] = indice
+
+            item_excluir = st.selectbox(
+                "Selecione o Item *",
+                list(
+                    mapa_exclusao.keys()
+                ),
+                key=(
+                    f"sisget_item_excluir_select_"
+                    f"{tipo_solicitacao}_"
+                    f"{reset}"
+                )
+            )
+
+            indice_excluir = mapa_exclusao[
+                item_excluir
+            ]
+
+            dados_excluir = itens[
+                indice_excluir
+            ]
+
+            st.warning(
+                "O item selecionado será removido "
+                "da solicitação."
+            )
+
+            col_excluir, col_voltar = st.columns(
+                2
+            )
+
+            if col_excluir.button(
+                "🗑️ Confirmar Exclusão",
+                type="primary",
+                use_container_width=True,
+                key=(
+                    f"sisget_item_confirmar_exclusao_"
+                    f"{tipo_solicitacao}_"
+                    f"{reset}"
+                )
+            ):
+
+                produto_excluido = dados_excluir.get(
+                    "produto",
+                    "Item"
+                )
+
+                itens.pop(
+                    indice_excluir
+                )
+
+                st.session_state[
+                    chave_mensagem
+                ] = (
+                    f"✅ {produto_excluido} removido "
+                    f"da solicitação."
+                )
+
+                st.session_state[
+                    chave_acao
+                ] = None
+
+                st.rerun()
+
+            if col_voltar.button(
+                "↩️ Cancelar",
+                use_container_width=True,
+                key=(
+                    f"sisget_item_cancelar_exclusao_"
+                    f"{tipo_solicitacao}_"
+                    f"{reset}"
+                )
+            ):
+
+                st.session_state[
+                    chave_acao
+                ] = None
+
+                st.rerun()
+
+    # ========================================================
+    # RESUMO DOS ITENS
+    # ========================================================
+
+    st.markdown("---")
+
+    st.markdown(
+        "#### 📋 Itens incluídos"
+    )
+
+    if not itens:
+
+        st.info(
+            "Nenhum item adicionado."
+        )
+
+    else:
+
+        dados_tabela = []
+
+        valor_total_solicitacao = 0.0
+
+        for numero_item, item in enumerate(
+            itens,
+            start=1
+        ):
+
+            quantidade_item = float(
+                item.get(
+                    "quantidade",
+                    0
+                )
+            )
+
+            valor_unitario_item = float(
+                item.get(
+                    "valor_unitario",
+                    0
+                )
+            )
+
+            valor_total_item = (
+                quantidade_item
+                *
+                valor_unitario_item
+            )
+
+            valor_total_solicitacao += (
+                valor_total_item
+            )
+
+            dados_tabela.append(
+                {
+                    "Item": numero_item,
+
+                    "Código": item.get(
+                        "codigo",
+                        ""
+                    ),
+
+                    "Produto": item.get(
+                        "produto",
+                        ""
+                    ),
+
+                    "Unidade": item.get(
+                        "unidade",
+                        ""
+                    ),
+
+                    "Quantidade": quantidade_item,
+
+                    "Valor Unitário": (
+                        valor_unitario_item
+                    ),
+
+                    "Valor Total": (
+                        valor_total_item
+                    )
+                }
+            )
+
+        st.dataframe(
+            dados_tabela,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Item": st.column_config.NumberColumn(
+                    "Item",
+                    format="%d"
+                ),
+
+                "Quantidade": st.column_config.NumberColumn(
+                    "Quantidade",
+                    format="%.6f"
+                ),
+
+                "Valor Unitário": st.column_config.NumberColumn(
+                    "Valor Unitário",
+                    format="R$ %.2f"
+                ),
+
+                "Valor Total": st.column_config.NumberColumn(
+                    "Valor Total",
+                    format="R$ %.2f"
+                )
+            }
+        )
+
+        col_total1, col_total2 = st.columns(
+            [3, 1]
+        )
+
+        with col_total2:
+
+            st.metric(
+                "💰 Total",
+                f"R$ {valor_total_solicitacao:,.2f}"
+            )
+
+    # ========================================================
+    # RETORNO
+    # ========================================================
+
+    return itens
 def sisget_solicitacao_incluir_base(
     tipo_solicitacao,
     titulo_tela,
@@ -32740,498 +33723,14 @@ def sisget_solicitacao_incluir_base(
     )
 
     # ========================================================
-    # ITENS
+    # ITENS DA SOLICITAÇÃO
     # ========================================================
 
-    st.markdown("---")
-
-    st.markdown(
-        "### 📦 Itens da Solicitação"
+    itens = sisget_itens_solicitacao(
+        tipo_solicitacao=tipo_solicitacao,
+        entidade_id=entidade_id,
+        reset=reset
     )
-
-    chave_itens = (
-        f"sisget_sol_itens_"
-        f"{tipo_solicitacao}_"
-        f"{reset}"
-    )
-
-    if chave_itens not in st.session_state:
-
-        st.session_state[
-            chave_itens
-        ] = []
-
-    # ========================================================
-    # PRODUTOS
-    # ========================================================
-
-    produtos = _sisget_fetch(
-        """
-        SELECT
-            p.id,
-            p.codigo,
-
-            COALESCE(
-                NULLIF(
-                    TRIM(p.produto),
-                    ''
-                ),
-                NULLIF(
-                    TRIM(p.descricao),
-                    ''
-                ),
-                'Produto sem descrição'
-            ),
-
-            p.descricao_complementar,
-
-            p.tipo_item,
-
-            g.codigo,
-            g.descricao,
-
-            sg.codigo,
-            sg.descricao,
-
-            uc.descricao,
-
-            um.descricao,
-            um.fator_conversao
-
-        FROM produtos p
-
-        LEFT JOIN grupos_produtos g
-            ON g.id = p.grupo_id
-
-        LEFT JOIN subgrupos_produtos sg
-            ON sg.id = p.subgrupo_id
-
-        LEFT JOIN unidades_compra uc
-            ON uc.id = p.unidade_compra_id
-
-        LEFT JOIN unidades_movimentacao um
-            ON um.id = p.unidade_movimentacao_id
-
-        WHERE p.entidade_id = ?
-          AND p.ativo = TRUE
-
-        ORDER BY
-            p.codigo
-        """,
-        (
-            entidade_id,
-        )
-    )
-
-    # ========================================================
-    # FALLBACK
-    # ========================================================
-
-    if not produtos:
-
-        produtos = _sisget_fetch(
-            """
-            SELECT
-                p.id,
-                p.codigo,
-
-                COALESCE(
-                    NULLIF(
-                        TRIM(p.produto),
-                        ''
-                    ),
-                    NULLIF(
-                        TRIM(p.descricao),
-                        ''
-                    ),
-                    'Produto sem descrição'
-                ),
-
-                p.descricao_complementar,
-
-                p.tipo_item,
-
-                g.codigo,
-                g.descricao,
-
-                sg.codigo,
-                sg.descricao,
-
-                uc.descricao,
-
-                um.descricao,
-                um.fator_conversao
-
-            FROM produtos p
-
-            LEFT JOIN grupos_produtos g
-                ON g.id = p.grupo_id
-
-            LEFT JOIN subgrupos_produtos sg
-                ON sg.id = p.subgrupo_id
-
-            LEFT JOIN unidades_compra uc
-                ON uc.id = p.unidade_compra_id
-
-            LEFT JOIN unidades_movimentacao um
-                ON um.id = p.unidade_movimentacao_id
-
-            WHERE p.ativo = TRUE
-
-            ORDER BY
-                p.codigo
-            """
-        )
-
-    # ========================================================
-    # MAPA DOS PRODUTOS
-    # ========================================================
-
-    mapa_produtos = {}
-
-    for (
-        produto_id,
-        codigo_produto,
-        nome_produto,
-
-        descricao_complementar,
-        tipo_item_produto,
-
-        codigo_grupo,
-        descricao_grupo,
-
-        codigo_subgrupo,
-        descricao_subgrupo,
-
-        unidade_compra,
-        unidade_movimentacao,
-        fator_conversao
-    ) in produtos:
-
-        grupo_texto = (
-            f"{codigo_grupo} - {descricao_grupo}"
-            if codigo_grupo
-            else "Sem grupo"
-        )
-
-        subgrupo_texto = (
-            f"{codigo_subgrupo} - {descricao_subgrupo}"
-            if codigo_subgrupo
-            else "Sem subgrupo"
-        )
-
-        rotulo_produto = (
-            f"{codigo_produto} - "
-            f"{nome_produto}"
-        )
-
-        mapa_produtos[
-            rotulo_produto
-        ] = {
-            "id": produto_id,
-
-            "codigo": codigo_produto,
-
-            "nome": nome_produto,
-
-            "descricao_complementar": (
-                descricao_complementar
-                or ""
-            ),
-
-            "tipo_item": (
-                tipo_item_produto
-                or ""
-            ),
-
-            "grupo": grupo_texto,
-
-            "subgrupo": subgrupo_texto,
-
-            "unidade_compra": (
-                unidade_compra
-                or ""
-            ),
-
-            "unidade_movimentacao": (
-                unidade_movimentacao
-                or ""
-            ),
-
-            "fator_conversao": float(
-                fator_conversao or 1
-            )
-        }
-
-    # ========================================================
-    # FORMULÁRIO DO ITEM
-    # ========================================================
-
-    if not mapa_produtos:
-
-        st.warning(
-            "⚠️ Nenhum produto ativo cadastrado."
-        )
-
-    else:
-
-        with st.form(
-            f"sisget_form_item_"
-            f"{tipo_solicitacao}_"
-            f"{reset}",
-            clear_on_submit=True
-        ):
-
-            produto_nome = st.selectbox(
-                "Produto *",
-                list(
-                    mapa_produtos.keys()
-                )
-            )
-
-            dados_produto = mapa_produtos[
-                produto_nome
-            ]
-
-            # =================================================
-            # GRUPO / SUBGRUPO
-            # =================================================
-
-            col_prod1, col_prod2 = st.columns(
-                2
-            )
-
-            col_prod1.text_input(
-                "Grupo",
-                value=dados_produto[
-                    "grupo"
-                ],
-                disabled=True
-            )
-
-            col_prod2.text_input(
-                "Subgrupo",
-                value=dados_produto[
-                    "subgrupo"
-                ],
-                disabled=True
-            )
-
-            # =================================================
-            # UNIDADES
-            # =================================================
-
-            col_un1, col_un2 = st.columns(
-                2
-            )
-
-            col_un1.text_input(
-                "Unidade de Compra",
-                value=dados_produto[
-                    "unidade_compra"
-                ],
-                disabled=True
-            )
-
-            col_un2.text_input(
-                "Unidade de Movimentação",
-                value=dados_produto[
-                    "unidade_movimentacao"
-                ],
-                disabled=True
-            )
-
-            # =================================================
-            # DESCRIÇÃO COMPLEMENTAR
-            # =================================================
-
-            if dados_produto[
-                "descricao_complementar"
-            ]:
-
-                st.text_area(
-                    "Descrição Complementar",
-                    value=dados_produto[
-                        "descricao_complementar"
-                    ],
-                    disabled=True,
-                    height=80
-                )
-
-            # =================================================
-            # QUANTIDADE / VALOR
-            # =================================================
-
-            col_item1, col_item2 = st.columns(
-                2
-            )
-
-            quantidade = col_item1.number_input(
-                "Quantidade *",
-                min_value=0.000001,
-                value=1.0,
-                format="%.6f"
-            )
-
-            valor_unitario = col_item2.number_input(
-                "Valor Estimado Unitário (R$)",
-                min_value=0.0,
-                value=0.0,
-                format="%.2f"
-            )
-
-            observacao_item = st.text_input(
-                "Observação do Item"
-            )
-
-            adicionar = st.form_submit_button(
-                "➕ Adicionar Item",
-                type="primary",
-                use_container_width=True
-            )
-
-        # ====================================================
-        # ADICIONAR ITEM
-        # ====================================================
-
-        if adicionar:
-
-            dados_produto = mapa_produtos[
-                produto_nome
-            ]
-
-            st.session_state[
-                chave_itens
-            ].append(
-                {
-                    "produto_id": (
-                        dados_produto[
-                            "id"
-                        ]
-                    ),
-
-                    "codigo": (
-                        dados_produto[
-                            "codigo"
-                        ]
-                    ),
-
-                    "produto": (
-                        dados_produto[
-                            "nome"
-                        ]
-                    ),
-
-                    "unidade": (
-                        dados_produto[
-                            "unidade_compra"
-                        ]
-                    ),
-
-                    "quantidade": float(
-                        quantidade
-                    ),
-
-                    "valor_unitario": float(
-                        valor_unitario
-                    ),
-
-                    "observacao": (
-                        observacao_item.strip()
-                        or None
-                    )
-                }
-            )
-
-            st.rerun()
-
-    # ========================================================
-    # LISTAGEM DOS ITENS
-    # ========================================================
-
-    itens = st.session_state[
-        chave_itens
-    ]
-
-    if itens:
-
-        st.markdown(
-            "#### 📋 Itens adicionados"
-        )
-
-        for indice, item in enumerate(
-            itens
-        ):
-
-            valor_total_item = (
-                item[
-                    "quantidade"
-                ]
-                *
-                item[
-                    "valor_unitario"
-                ]
-            )
-
-            col_i1, col_i2, col_i3 = st.columns(
-                [6, 3, 1]
-            )
-
-            col_i1.write(
-                f"{item['codigo']} - "
-                f"{item['produto']}"
-            )
-
-            col_i2.write(
-                f"{item['quantidade']:,.2f}"
-                f" × "
-                f"R$ {item['valor_unitario']:,.2f}"
-                f" = "
-                f"R$ {valor_total_item:,.2f}"
-            )
-
-            if col_i3.button(
-                "🗑️",
-                key=(
-                    f"sisget_remove_item_"
-                    f"{tipo_solicitacao}_"
-                    f"{reset}_"
-                    f"{indice}"
-                )
-            ):
-
-                itens.pop(
-                    indice
-                )
-
-                st.rerun()
-
-        # ====================================================
-        # TOTAL
-        # ====================================================
-
-        valor_total_solicitacao = sum(
-            item[
-                "quantidade"
-            ]
-            *
-            item[
-                "valor_unitario"
-            ]
-
-            for item in itens
-        )
-
-        st.metric(
-            "💰 Valor Estimado Total",
-            f"R$ {valor_total_solicitacao:,.2f}"
-        )
-
-    else:
-
-        st.info(
-            "Nenhum item adicionado."
-        )
 
     # ========================================================
     # BOTÃO SALVAR
