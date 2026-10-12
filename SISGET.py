@@ -37332,41 +37332,80 @@ def planejamento_dashboard():
 
 def sisget_mapa_solicitacoes(
     tipo_solicitacao=None,
-    somente_ativas=True
+    somente_ativas=True,
+    excluir_com_cotacao=False
 ):
+
     sql = """
         SELECT
-            id,
-            codigo,
-            objeto,
-            tipo_solicitacao,
-            status,
-            etapa_atual
-        FROM solicitacoes
+            s.id,
+            s.codigo,
+            s.objeto,
+            s.tipo_solicitacao,
+            s.status,
+            s.etapa_atual
+
+        FROM solicitacoes s
+
         WHERE 1 = 1
     """
 
     parametros = []
 
+
     if somente_ativas:
-        sql += " AND ativo = TRUE "
+
+        sql += """
+            AND s.ativo = TRUE
+        """
+
 
     if tipo_solicitacao:
-        sql += " AND tipo_solicitacao = ? "
-        parametros.append(tipo_solicitacao)
+
+        sql += """
+            AND s.tipo_solicitacao = ?
+        """
+
+        parametros.append(
+            tipo_solicitacao
+        )
+
+
+    # ========================================================
+    # NÃO MOSTRAR SOLICITAÇÃO QUE JÁ POSSUI COTAÇÃO
+    # ========================================================
+
+    if excluir_com_cotacao:
+
+        sql += """
+            AND NOT EXISTS
+            (
+                SELECT 1
+
+                FROM cotacoes c
+
+                WHERE c.solicitacao_id = s.id
+            )
+        """
+
 
     sql += """
         ORDER BY
-            exercicio DESC,
-            numero DESC
+            s.exercicio DESC,
+            s.numero DESC
     """
+
 
     dados = _sisget_fetch(
         sql,
-        tuple(parametros)
+        tuple(
+            parametros
+        )
     )
 
+
     mapa = {}
+
 
     for (
         id_,
@@ -37385,39 +37424,59 @@ def sisget_mapa_solicitacoes(
             f" | {etapa or ''}"
         )
 
-        mapa[nome] = id_
+
+        mapa[
+            nome
+        ] = id_
+
 
     return mapa
-
 
 def sisget_selecionar_solicitacao(
     label,
     key,
-    tipo_solicitacao=None
+    tipo_solicitacao=None,
+    excluir_com_cotacao=False
 ):
+
     mapa = sisget_mapa_solicitacoes(
-        tipo_solicitacao=tipo_solicitacao
+        tipo_solicitacao=tipo_solicitacao,
+        excluir_com_cotacao=excluir_com_cotacao
     )
 
+
     if not mapa:
-        st.warning(
-            "⚠️ Nenhuma solicitação disponível."
-        )
+
+        if excluir_com_cotacao:
+
+            st.warning(
+                "⚠️ Nenhuma solicitação disponível para cotação. "
+                "As solicitações que já possuem cotação não são "
+                "exibidas novamente."
+            )
+
+        else:
+
+            st.warning(
+                "⚠️ Nenhuma solicitação disponível."
+            )
+
+
         return None
+
 
     nome = st.selectbox(
         label,
-        list(mapa.keys()),
+        list(
+            mapa.keys()
+        ),
         key=key
     )
 
-    return mapa[nome]
 
-
-# ============================================================
-# SUBMENU COMPLETO DE SOLICITAÇÕES
-# Esta definição substitui a anterior.
-# ============================================================
+    return mapa[
+        nome
+    ]
 
 def modulo_tipos_solicitacoes():
 
@@ -37559,8 +37618,10 @@ def solicitacao_item_incluir():
     ]
 
     solicitacao_id = sisget_selecionar_solicitacao(
-        "Solicitação *",
-        f"item_solicitacao_{reset}"
+        "Solicitação para Licitação *",
+        f"cotacao_solicitacao_{reset}",
+        "LICITACAO",
+        excluir_com_cotacao=True
     )
 
     if not solicitacao_id:
