@@ -39902,165 +39902,674 @@ def _cotacao_buscar_pncp(
     data_final,
     uf=None,
     codigos_modalidade=None,
-    limite_contratacoes=40,
+    limite_contratacoes=20,
     incluir_estimados=False
 ):
+
+    import requests
+
+    from concurrent.futures import (
+        ThreadPoolExecutor,
+        as_completed
+    )
+
+
+    # ========================================================
+    # CONFIGURAÇÕES
+    # ========================================================
+
     if codigos_modalidade is None:
-        codigos_modalidade = [6]
+
+        codigos_modalidade = [
+            6
+        ]
+
+
+    limite_contratacoes = max(
+        5,
+        min(
+            int(
+                limite_contratacoes
+            ),
+            50
+        )
+    )
+
+
+    max_workers = min(
+        10,
+        limite_contratacoes
+    )
+
+
+    headers = {
+        "accept": "application/json",
+        "User-Agent": "SISGET/1.0"
+    }
+
+
+    # ========================================================
+    # FUNÇÃO HTTP INTERNA RÁPIDA
+    # ========================================================
+
+    def get_json(
+        url,
+        parametros=None,
+        timeout=12
+    ):
+
+        try:
+
+            resposta = requests.get(
+                url,
+                params=parametros,
+                headers=headers,
+                timeout=timeout
+            )
+
+
+            if resposta.status_code in (
+                204,
+                404
+            ):
+
+                return []
+
+
+            resposta.raise_for_status()
+
+
+            dados = resposta.json()
+
+
+            return _cotacao_lista_json(
+                dados
+            )
+
+
+        except Exception:
+
+            return []
+
+
+    # ========================================================
+    # 1. BUSCAR CONTRATAÇÕES
+    # ========================================================
 
     url_consulta = (
-        "https://pncp.gov.br/api/consulta/v1/"
+        "https://pncp.gov.br/"
+        "api/consulta/v1/"
         "contratacoes/publicacao"
     )
 
+
     contratacoes = []
 
+
     for modalidade in codigos_modalidade:
+
         params = {
-            "dataInicial": data_inicial.strftime("%Y%m%d"),
-            "dataFinal": data_final.strftime("%Y%m%d"),
-            "codigoModalidadeContratacao": int(modalidade),
+            "dataInicial": data_inicial.strftime(
+                "%Y%m%d"
+            ),
+            "dataFinal": data_final.strftime(
+                "%Y%m%d"
+            ),
+            "codigoModalidadeContratacao": int(
+                modalidade
+            ),
             "pagina": 1,
-            "tamanhoPagina": 50
+            "tamanhoPagina": min(
+                limite_contratacoes,
+                50
+            )
         }
 
+
         if uf:
-            params["uf"] = uf
 
-        retorno = _cotacao_http_json(url_consulta, params, timeout=35)
+            params[
+                "uf"
+            ] = uf
 
-        if not retorno["ok"]:
-            continue
 
-        for contratacao in _cotacao_lista_json(retorno["dados"]):
-            contratacoes.append(contratacao)
+        lista = get_json(
+            url_consulta,
+            params,
+            timeout=15
+        )
 
-            if len(contratacoes) >= int(limite_contratacoes):
+
+        for contratacao in lista:
+
+            contratacoes.append(
+                contratacao
+            )
+
+
+            if len(
+                contratacoes
+            ) >= limite_contratacoes:
+
                 break
 
-        if len(contratacoes) >= int(limite_contratacoes):
+
+        if len(
+            contratacoes
+        ) >= limite_contratacoes:
+
             break
 
-    resultados = []
+
+    if not contratacoes:
+
+        return []
+
+
+    # ========================================================
+    # 2. PREPARAR CONTRATAÇÕES
+    # ========================================================
+
+    compras = []
+
 
     for contratacao in contratacoes:
-        cnpj_orgao, ano, sequencial, numero_controle = (
-            _cotacao_identificar_compra_pncp(contratacao)
+
+        (
+            cnpj_orgao,
+            ano,
+            sequencial,
+            numero_controle
+        ) = _cotacao_identificar_compra_pncp(
+            contratacao
         )
 
-        if not (cnpj_orgao and ano and sequencial):
+
+        if not (
+            cnpj_orgao
+            and
+            ano
+            and
+            sequencial
+        ):
+
             continue
 
-        url_itens = (
-            f"https://pncp.gov.br/api/pncp/v1/orgaos/{cnpj_orgao}/"
-            f"compras/{ano}/{sequencial}/itens"
+
+        orgao_entidade = (
+            contratacao.get(
+                "orgaoEntidade"
+            )
+            or {}
         )
 
-        retorno_itens = _cotacao_http_json(url_itens, timeout=25)
 
-        if not retorno_itens["ok"]:
-            continue
-
-        itens_pncp = _cotacao_lista_json(retorno_itens["dados"])
-
-        orgao_entidade = contratacao.get("orgaoEntidade") or {}
-        unidade = contratacao.get("unidadeOrgao") or contratacao.get("unidade") or {}
-
-        nome_orgao = (
-            orgao_entidade.get("razaoSocial")
-            or contratacao.get("razaoSocial")
-            or ""
+        unidade = (
+            contratacao.get(
+                "unidadeOrgao"
+            )
+            or contratacao.get(
+                "unidade"
+            )
+            or {}
         )
 
-        uf_resultado = (
-            unidade.get("ufSigla")
-            or contratacao.get("uf")
-            or ""
+
+        compras.append(
+            {
+                "contratacao": contratacao,
+                "cnpj_orgao": cnpj_orgao,
+                "ano": ano,
+                "sequencial": sequencial,
+                "numero_controle": numero_controle,
+
+                "nome_orgao": (
+                    orgao_entidade.get(
+                        "razaoSocial"
+                    )
+                    or contratacao.get(
+                        "razaoSocial"
+                    )
+                    or ""
+                ),
+
+                "uf": (
+                    unidade.get(
+                        "ufSigla"
+                    )
+                    or contratacao.get(
+                        "uf"
+                    )
+                    or ""
+                ),
+
+                "codigo_unidade": (
+                    unidade.get(
+                        "codigoUnidade"
+                    )
+                    or unidade.get(
+                        "codigo"
+                    )
+                    or ""
+                ),
+
+                "nome_unidade": (
+                    unidade.get(
+                        "nomeUnidade"
+                    )
+                    or unidade.get(
+                        "nome"
+                    )
+                    or ""
+                )
+            }
         )
 
-        for item in itens_pncp:
-            descricao = item.get("descricao") or ""
 
-            if not _cotacao_texto_compativel(termo, descricao):
+    if not compras:
+
+        return []
+
+
+    # ========================================================
+    # 3. BUSCAR ITENS EM PARALELO
+    # ========================================================
+
+    def buscar_itens_compra(
+        compra
+    ):
+
+        url = (
+            "https://pncp.gov.br/"
+            f"api/pncp/v1/orgaos/"
+            f"{compra['cnpj_orgao']}/"
+            f"compras/"
+            f"{compra['ano']}/"
+            f"{compra['sequencial']}/"
+            f"itens"
+        )
+
+
+        itens = get_json(
+            url,
+            timeout=12
+        )
+
+
+        return (
+            compra,
+            itens
+        )
+
+
+    itens_compativeis = []
+
+
+    with ThreadPoolExecutor(
+        max_workers=max_workers
+    ) as executor:
+
+        futuros = [
+            executor.submit(
+                buscar_itens_compra,
+                compra
+            )
+            for compra in compras
+        ]
+
+
+        for futuro in as_completed(
+            futuros
+        ):
+
+            try:
+
+                compra, itens_pncp = futuro.result()
+
+            except Exception:
+
                 continue
 
-            numero_item = item.get("numeroItem")
 
-            if numero_item is None:
+            for item in itens_pncp:
+
+                descricao = (
+                    item.get(
+                        "descricao"
+                    )
+                    or ""
+                )
+
+
+                if not _cotacao_texto_compativel(
+                    termo,
+                    descricao
+                ):
+
+                    continue
+
+
+                numero_item = item.get(
+                    "numeroItem"
+                )
+
+
+                if numero_item is None:
+
+                    continue
+
+
+                itens_compativeis.append(
+                    (
+                        compra,
+                        item
+                    )
+                )
+
+
+    if not itens_compativeis:
+
+        return []
+
+
+    # ========================================================
+    # 4. BUSCAR RESULTADOS HOMOLOGADOS EM PARALELO
+    # ========================================================
+
+    def buscar_resultados_item(
+        compra,
+        item
+    ):
+
+        numero_item = item.get(
+            "numeroItem"
+        )
+
+
+        url = (
+            "https://pncp.gov.br/"
+            f"api/pncp/v1/orgaos/"
+            f"{compra['cnpj_orgao']}/"
+            f"compras/"
+            f"{compra['ano']}/"
+            f"{compra['sequencial']}/"
+            f"itens/"
+            f"{numero_item}/"
+            f"resultados"
+        )
+
+
+        resultados = get_json(
+            url,
+            timeout=12
+        )
+
+
+        return (
+            compra,
+            item,
+            resultados
+        )
+
+
+    resultados_finais = []
+
+
+    max_workers_resultados = min(
+        12,
+        max(
+            1,
+            len(
+                itens_compativeis
+            )
+        )
+    )
+
+
+    with ThreadPoolExecutor(
+        max_workers=max_workers_resultados
+    ) as executor:
+
+        futuros = [
+            executor.submit(
+                buscar_resultados_item,
+                compra,
+                item
+            )
+            for (
+                compra,
+                item
+            ) in itens_compativeis
+        ]
+
+
+        for futuro in as_completed(
+            futuros
+        ):
+
+            try:
+
+                (
+                    compra,
+                    item,
+                    lista_resultados
+                ) = futuro.result()
+
+            except Exception:
+
                 continue
 
-            url_resultados = (
-                f"https://pncp.gov.br/api/pncp/v1/orgaos/{cnpj_orgao}/"
-                f"compras/{ano}/{sequencial}/itens/{numero_item}/resultados"
+
+            descricao = (
+                item.get(
+                    "descricao"
+                )
+                or ""
             )
 
-            retorno_resultados = _cotacao_http_json(
-                url_resultados,
-                timeout=25
-            )
 
-            lista_resultados = (
-                _cotacao_lista_json(retorno_resultados["dados"])
-                if retorno_resultados["ok"]
-                else []
-            )
+            # =================================================
+            # PREÇO HOMOLOGADO
+            # =================================================
 
             if lista_resultados:
+
                 for resultado in lista_resultados:
+
+                    valor = (
+                        resultado.get(
+                            "valorUnitarioHomologado"
+                        )
+                        or 0
+                    )
+
+
                     try:
-                        valor = float(resultado.get("valorUnitarioHomologado") or 0)
+
+                        valor = float(
+                            valor
+                            or 0
+                        )
+
                     except Exception:
+
                         valor = 0
 
+
                     if valor <= 0:
+
                         continue
 
-                    resultados.append({
-                        "fonte": "PNCP - Homologado",
-                        "origem": "PNCP",
-                        "cnpj": resultado.get("niFornecedor") or "",
-                        "fornecedor": resultado.get("nomeRazaoSocialFornecedor") or "",
-                        "descricao": descricao,
-                        "valor_unitario": valor,
-                        "data": resultado.get("dataResultado") or contratacao.get("dataPublicacaoPncp"),
-                        "orgao": nome_orgao,
-                        "uf": uf_resultado,
-                        "marca": "",
-                        "codigo_catalogo": "",
-                        "referencia": numero_controle,
-                        "codigo_uasg": unidade.get("codigoUnidade") or unidade.get("codigo") or "",
-                        "nome_uasg": unidade.get("nomeUnidade") or unidade.get("nome") or "",
-                        "id_compra": numero_controle,
-                        "percentual_desconto": resultado.get("percentualDesconto") or 0
-                    })
+
+                    resultados_finais.append(
+                        {
+                            "fonte": "PNCP - Homologado",
+
+                            "origem": "PNCP",
+
+                            "cnpj": (
+                                resultado.get(
+                                    "niFornecedor"
+                                )
+                                or ""
+                            ),
+
+                            "fornecedor": (
+                                resultado.get(
+                                    "nomeRazaoSocialFornecedor"
+                                )
+                                or ""
+                            ),
+
+                            "descricao": descricao,
+
+                            "valor_unitario": valor,
+
+                            "data": (
+                                resultado.get(
+                                    "dataResultado"
+                                )
+                                or compra[
+                                    "contratacao"
+                                ].get(
+                                    "dataPublicacaoPncp"
+                                )
+                            ),
+
+                            "orgao": compra[
+                                "nome_orgao"
+                            ],
+
+                            "uf": compra[
+                                "uf"
+                            ],
+
+                            "marca": (
+                                resultado.get(
+                                    "marca"
+                                )
+                                or ""
+                            ),
+
+                            "codigo_catalogo": "",
+
+                            "referencia": compra[
+                                "numero_controle"
+                            ],
+
+                            "codigo_uasg": compra[
+                                "codigo_unidade"
+                            ],
+
+                            "nome_uasg": compra[
+                                "nome_unidade"
+                            ],
+
+                            "id_compra": compra[
+                                "numero_controle"
+                            ],
+
+                            "percentual_desconto": (
+                                resultado.get(
+                                    "percentualDesconto"
+                                )
+                                or 0
+                            )
+                        }
+                    )
+
+
+            # =================================================
+            # PREÇO ESTIMADO
+            # =================================================
 
             elif incluir_estimados:
+
+                valor_estimado = (
+                    item.get(
+                        "valorUnitarioEstimado"
+                    )
+                    or 0
+                )
+
+
                 try:
-                    valor_estimado = float(item.get("valorUnitarioEstimado") or 0)
+
+                    valor_estimado = float(
+                        valor_estimado
+                        or 0
+                    )
+
                 except Exception:
+
                     valor_estimado = 0
 
-                if valor_estimado > 0:
-                    resultados.append({
-                        "fonte": "PNCP - Estimado",
-                        "origem": "PNCP_ESTIMADO",
-                        "cnpj": "",
-                        "fornecedor": "",
-                        "descricao": descricao,
-                        "valor_unitario": valor_estimado,
-                        "data": contratacao.get("dataPublicacaoPncp"),
-                        "orgao": nome_orgao,
-                        "uf": uf_resultado,
-                        "marca": "",
-                        "codigo_catalogo": "",
-                        "referencia": numero_controle,
-                        "codigo_uasg": unidade.get("codigoUnidade") or "",
-                        "nome_uasg": unidade.get("nomeUnidade") or "",
-                        "id_compra": numero_controle,
-                        "percentual_desconto": 0
-                    })
 
-    return resultados
+                if valor_estimado <= 0:
+
+                    continue
+
+
+                resultados_finais.append(
+                    {
+                        "fonte": "PNCP - Estimado",
+
+                        "origem": "PNCP_ESTIMADO",
+
+                        "cnpj": "",
+
+                        "fornecedor": "",
+
+                        "descricao": descricao,
+
+                        "valor_unitario": valor_estimado,
+
+                        "data": compra[
+                            "contratacao"
+                        ].get(
+                            "dataPublicacaoPncp"
+                        ),
+
+                        "orgao": compra[
+                            "nome_orgao"
+                        ],
+
+                        "uf": compra[
+                            "uf"
+                        ],
+
+                        "marca": "",
+
+                        "codigo_catalogo": "",
+
+                        "referencia": compra[
+                            "numero_controle"
+                        ],
+
+                        "codigo_uasg": compra[
+                            "codigo_unidade"
+                        ],
+
+                        "nome_uasg": compra[
+                            "nome_unidade"
+                        ],
+
+                        "id_compra": compra[
+                            "numero_controle"
+                        ],
+
+                        "percentual_desconto": 0
+                    }
+                )
+
+
+    # ========================================================
+    # 5. REMOVER DUPLICADOS
+    # ========================================================
+
+    return _cotacao_deduplicar_resultados(
+        resultados_finais
+    )
 
 
 def _cotacao_deduplicar_resultados(resultados):
