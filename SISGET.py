@@ -38400,6 +38400,65 @@ def modulo_documentos_solicitacoes():
 
 def cadastro_itens_solicitacoes():
 
+    # ========================================================
+    # ESTADO DO PAINEL DE ESTORNO
+    # ========================================================
+
+    if "sisget_mostrar_estorno_itens" not in st.session_state:
+
+        st.session_state[
+            "sisget_mostrar_estorno_itens"
+        ] = False
+
+
+    # ========================================================
+    # BOTÃO ESTORNAR
+    # ========================================================
+
+    col_estorno, col_espaco = st.columns(
+        [
+            1,
+            3
+        ]
+    )
+
+
+    with col_estorno:
+
+        if st.button(
+            "↩️ Estornar Solicitação",
+            use_container_width=True,
+            key="sisget_estornar_solicitacao_itens"
+        ):
+
+            st.session_state[
+                "sisget_mostrar_estorno_itens"
+            ] = not st.session_state[
+                "sisget_mostrar_estorno_itens"
+            ]
+
+
+    # ========================================================
+    # PAINEL DE ESTORNO
+    # ========================================================
+
+    if st.session_state[
+        "sisget_mostrar_estorno_itens"
+    ]:
+
+        st.markdown("---")
+
+
+        solicitacao_estornar()
+
+
+        st.markdown("---")
+
+
+    # ========================================================
+    # TELA PADRÃO DE ITENS
+    # ========================================================
+
     sisget_tela_principal(
         titulo="Itens das Solicitações",
         chave="solicitacoes_itens",
@@ -38410,6 +38469,7 @@ def cadastro_itens_solicitacoes():
         func_imprimir=solicitacao_item_imprimir,
         icone="📦"
     )
+
 
 
 def solicitacao_item_incluir():
