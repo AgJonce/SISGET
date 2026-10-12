@@ -32316,8 +32316,10 @@ def produto_incluir():
             )
         )
 
+
         # ====================================================
-        # CAMPOS ESPECÍFICOS PARA MEDICAMENTOS
+        # DADOS DE MEDICAMENTO
+        # APARECE SOMENTE PARA CLASSIFICAÇÃO "Medicamentos"
         # ====================================================
 
         principio_ativo = ""
@@ -32325,17 +32327,14 @@ def produto_incluir():
         apresentacao = ""
         registro_anvisa = ""
 
-        if tipo_produto in (
-            "Medicamentos",
-            "Material Farmacológico"
-        ):
+        if tipo_produto == "Medicamentos":
 
             st.markdown(
                 "### 💊 Dados de Medicamento"
             )
 
             principio_ativo = st.text_input(
-                "Princípio Ativo"
+                "Princípio Ativo *"
             )
 
             col_med1, col_med2 = st.columns(
@@ -32343,15 +32342,18 @@ def produto_incluir():
             )
 
             concentracao = col_med1.text_input(
-                "Concentração"
+                "Concentração *",
+                placeholder="Ex.: 500 mg"
             )
 
             apresentacao = col_med2.text_input(
-                "Apresentação"
+                "Apresentação *",
+                placeholder="Ex.: Comprimido, cápsula, frasco"
             )
 
             registro_anvisa = st.text_input(
-                "Registro ANVISA"
+                "Registro ANVISA",
+                placeholder="Número do registro, quando aplicável"
             )
 
         # ====================================================
