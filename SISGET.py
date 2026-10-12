@@ -32282,10 +32282,22 @@ def produto_incluir():
             step=1
         )
 
+        numero_lote = None
+
         if controla_vencimento:
 
+            st.markdown(
+                "### 📦 Controle de Lote e Vencimento"
+            )
+
+            numero_lote = st.text_input(
+                "Número do Lote *",
+                max_chars=100,
+                placeholder="Ex.: LOT2026-001"
+            )
+
             data_vencimento_padrao = st.date_input(
-                "Data de Vencimento Padrão",
+                "Data de Vencimento",
                 value=datetime.now().date()
             )
 
@@ -32455,6 +32467,21 @@ def produto_incluir():
             return
 
         # ====================================================
+        # VALIDAR LOTE
+        # ====================================================
+
+        if controla_vencimento:
+
+            if not numero_lote or not numero_lote.strip():
+
+                st.warning(
+                    "⚠️ Informe o número do lote "
+                    "para itens que controlam vencimento."
+                )
+
+                return
+
+        # ====================================================
         # REVALIDAR GRUPO
         # ====================================================
 
@@ -32538,6 +32565,10 @@ def produto_incluir():
 
             controla_vencimento_salvar = True
 
+            numero_lote_salvar = (
+                numero_lote.strip()
+            )
+
             vencimento_dias_salvar = int(
                 vencimento_dias
             )
@@ -32553,6 +32584,8 @@ def produto_incluir():
             )
 
             controla_vencimento_salvar = False
+
+            numero_lote_salvar = None
 
             vencimento_dias_salvar = None
 
@@ -32693,6 +32726,7 @@ def produto_incluir():
 
                 controla_lote,
                 controla_vencimento,
+                numero_lote,
                 vencimento_dias,
                 data_vencimento_padrao,
 
@@ -32719,7 +32753,7 @@ def produto_incluir():
 
                 ?, ?,
 
-                ?, ?, ?, ?,
+                ?, ?, ?, ?, ?,
 
                 ?, ?, ?,
 
@@ -32757,6 +32791,7 @@ def produto_incluir():
 
                 controla_lote_salvar,
                 controla_vencimento_salvar,
+                numero_lote_salvar,
                 vencimento_dias_salvar,
                 data_vencimento_salvar,
 
