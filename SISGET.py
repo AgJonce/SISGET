@@ -37312,23 +37312,7 @@ def planejamento_dashboard():
         else 0
     )
 
-# ============================================================
-# COMPLEMENTO CRUD COMPLETO - DOCUMENTOS E FLUXO
-# ============================================================
-# As defs abaixo completam o módulo com telas próprias de:
-# Itens, DFD, ETP, Riscos, Cotações, Fichas, Financeiro,
-# Enquadramento, TR, Histórico e Assinaturas.
-#
-# IMPORTANTE:
-# No início do SISGET.py deixe:
-# import hashlib
-# from datetime import datetime
-# ============================================================
 
-
-# ============================================================
-# MAPA / SELEÇÃO DE SOLICITAÇÕES
-# ============================================================
 
 def sisget_mapa_solicitacoes(
     tipo_solicitacao=None,
@@ -37477,6 +37461,732 @@ def sisget_selecionar_solicitacao(
     return mapa[
         nome
     ]
+def sisget_grupos_fluxo_solicitacao():
+
+    return [
+        {
+            "ordem": 1,
+            "grupo": "ITENS",
+            "nome": "📦 Itens",
+            "etapas": [
+                "APROVACAO",
+                "ITENS"
+            ],
+            "etapa_destino": "APROVACAO"
+        },
+
+        {
+            "ordem": 2,
+            "grupo": "DFD",
+            "nome": "📄 DFD",
+            "etapas": [
+                "DFD"
+            ],
+            "etapa_destino": "DFD"
+        },
+
+        {
+            "ordem": 3,
+            "grupo": "ETP",
+            "nome": "📘 ETP",
+            "etapas": [
+                "ETP"
+            ],
+            "etapa_destino": "ETP"
+        },
+
+        {
+            "ordem": 4,
+            "grupo": "RISCOS",
+            "nome": "⚠️ Mapa de Riscos",
+            "etapas": [
+                "RISCOS"
+            ],
+            "etapa_destino": "RISCOS"
+        },
+
+        {
+            "ordem": 5,
+            "grupo": "COTACOES",
+            "nome": "💲 Cotações",
+            "etapas": [
+                "COMPRAS",
+                "COTACOES"
+            ],
+            "etapa_destino": "COMPRAS"
+        },
+
+        {
+            "ordem": 6,
+            "grupo": "FICHAS",
+            "nome": "🧾 Fichas Orçamentárias",
+            "etapas": [
+                "CONTABILIDADE",
+                "FICHAS"
+            ],
+            "etapa_destino": "CONTABILIDADE"
+        },
+
+        {
+            "ordem": 7,
+            "grupo": "FINANCEIRO",
+            "nome": "💰 Financeiro",
+            "etapas": [
+                "FINANCEIRO",
+                "ORDENADOR"
+            ],
+            "etapa_destino": "FINANCEIRO"
+        },
+
+        {
+            "ordem": 8,
+            "grupo": "ENQUADRAMENTO",
+            "nome": "⚖️ Enquadramento",
+            "etapas": [
+                "LICITACAO",
+                "ENQUADRAMENTO"
+            ],
+            "etapa_destino": "LICITACAO"
+        },
+
+        {
+            "ordem": 9,
+            "grupo": "TR",
+            "nome": "📑 Termo de Referência - TR",
+            "etapas": [
+                "TR",
+                "LIBERACAO_LICITACAO"
+            ],
+            "etapa_destino": "TR"
+        }
+    ]
+
+
+# ============================================================
+# IDENTIFICAR GRUPO ATUAL
+# ============================================================
+
+
+def sisget_grupo_atual_solicitacao(
+    etapa_atual
+):
+
+    etapa_atual = str(
+        etapa_atual
+        or ""
+    ).strip().upper()
+
+
+    grupos = sisget_grupos_fluxo_solicitacao()
+
+
+    for grupo in grupos:
+
+        if etapa_atual in grupo[
+            "etapas"
+        ]:
+
+            return grupo
+
+
+    return None
+
+
+# ============================================================
+# GRUPO ANTERIOR
+# ============================================================
+
+
+def sisget_grupo_anterior_solicitacao(
+    etapa_atual
+):
+
+    grupos = sisget_grupos_fluxo_solicitacao()
+
+
+    grupo_atual = sisget_grupo_atual_solicitacao(
+        etapa_atual
+    )
+
+
+    if not grupo_atual:
+
+        return None
+
+
+    indice_atual = grupo_atual[
+        "ordem"
+    ] - 1
+
+
+    if indice_atual <= 0:
+
+        return None
+
+
+    return grupos[
+        indice_atual - 1
+    ]
+
+
+# ============================================================
+# ESTORNAR SOLICITAÇÃO
+# ============================================================
+
+
+def solicitacao_estornar():
+
+    # ========================================================
+    # TÍTULO
+    # ========================================================
+
+    st.subheader(
+        "↩️ Estornar Solicitação"
+    )
+
+
+    st.caption(
+        "O estorno retorna a solicitação somente para o grupo "
+        "imediatamente anterior e mantém todos os dados já gravados."
+    )
+
+
+    # ========================================================
+    # SOLICITAÇÕES
+    # ========================================================
+
+    solicitacoes = _sisget_fetch(
+        """
+        SELECT
+            s.id,
+            s.codigo,
+            s.numero,
+            s.objeto,
+            s.status,
+            s.etapa_atual
+
+        FROM solicitacoes s
+
+        WHERE s.ativo = TRUE
+
+          AND UPPER(
+                TRIM(
+                    COALESCE(
+                        s.tipo_solicitacao,
+                        ''
+                    )
+                )
+              ) = 'LICITACAO'
+
+        ORDER BY
+            s.exercicio DESC,
+            s.numero DESC,
+            s.id DESC
+        """
+    )
+
+
+    if not solicitacoes:
+
+        st.info(
+            "Nenhuma solicitação para licitação encontrada."
+        )
+
+        return
+
+
+    mapa_solicitacoes = {}
+
+
+    for (
+        solicitacao_id,
+        codigo,
+        numero,
+        objeto,
+        status,
+        etapa_atual
+    ) in solicitacoes:
+
+        grupo_atual = sisget_grupo_atual_solicitacao(
+            etapa_atual
+        )
+
+
+        nome_grupo = (
+            grupo_atual[
+                "nome"
+            ]
+            if grupo_atual
+            else (
+                etapa_atual
+                or "Etapa não identificada"
+            )
+        )
+
+
+        identificacao = (
+            codigo
+            or numero
+            or solicitacao_id
+        )
+
+
+        rotulo = (
+            f"{identificacao}"
+            f" | {objeto or ''}"
+            f" | {nome_grupo}"
+        )
+
+
+        mapa_solicitacoes[
+            rotulo
+        ] = {
+            "id": solicitacao_id,
+            "codigo": codigo,
+            "numero": numero,
+            "objeto": objeto,
+            "status": status,
+            "etapa_atual": etapa_atual
+        }
+
+
+    solicitacao_nome = st.selectbox(
+        "Solicitação *",
+        list(
+            mapa_solicitacoes.keys()
+        ),
+        key="sisget_estorno_solicitacao"
+    )
+
+
+    solicitacao = mapa_solicitacoes[
+        solicitacao_nome
+    ]
+
+
+    solicitacao_id = solicitacao[
+        "id"
+    ]
+
+
+    etapa_atual = solicitacao[
+        "etapa_atual"
+    ]
+
+
+    grupo_atual = sisget_grupo_atual_solicitacao(
+        etapa_atual
+    )
+
+
+    # ========================================================
+    # ETAPA NÃO MAPEADA
+    # ========================================================
+
+    if not grupo_atual:
+
+        st.error(
+            "❌ A etapa atual desta solicitação não está mapeada "
+            "no fluxo de estorno."
+        )
+
+
+        st.code(
+            str(
+                etapa_atual
+            )
+        )
+
+
+        return
+
+
+    # ========================================================
+    # PRIMEIRO GRUPO
+    # ========================================================
+
+    grupo_anterior = sisget_grupo_anterior_solicitacao(
+        etapa_atual
+    )
+
+
+    # ========================================================
+    # RESUMO
+    # ========================================================
+
+    st.markdown(
+        "### 📄 Solicitação"
+    )
+
+
+    c1, c2, c3 = st.columns(
+        3
+    )
+
+
+    c1.text_input(
+        "Código",
+        value=str(
+            solicitacao[
+                "codigo"
+            ]
+            or solicitacao[
+                "numero"
+            ]
+            or ""
+        ),
+        disabled=True,
+        key=(
+            f"estorno_codigo_"
+            f"{solicitacao_id}"
+        )
+    )
+
+
+    c2.text_input(
+        "Status",
+        value=str(
+            solicitacao[
+                "status"
+            ]
+            or ""
+        ),
+        disabled=True,
+        key=(
+            f"estorno_status_"
+            f"{solicitacao_id}"
+        )
+    )
+
+
+    c3.text_input(
+        "Grupo Atual",
+        value=grupo_atual[
+            "nome"
+        ],
+        disabled=True,
+        key=(
+            f"estorno_grupo_"
+            f"{solicitacao_id}"
+        )
+    )
+
+
+    st.text_area(
+        "Objeto",
+        value=str(
+            solicitacao[
+                "objeto"
+            ]
+            or ""
+        ),
+        disabled=True,
+        height=80,
+        key=(
+            f"estorno_objeto_"
+            f"{solicitacao_id}"
+        )
+    )
+
+
+    # ========================================================
+    # PRIMEIRO GRUPO - ITENS
+    # ========================================================
+
+    if not grupo_anterior:
+
+        st.info(
+            "ℹ️ Esta solicitação já está no primeiro grupo do fluxo: "
+            "📦 Itens. Não existe grupo anterior para estornar."
+        )
+
+        return
+
+
+    # ========================================================
+    # DESTINO DO ESTORNO
+    # ========================================================
+
+    st.markdown(
+        "### ↩️ Destino do Estorno"
+    )
+
+
+    e1, e2 = st.columns(
+        2
+    )
+
+
+    e1.text_input(
+        "Grupo Atual",
+        value=grupo_atual[
+            "nome"
+        ],
+        disabled=True,
+        key=(
+            f"estorno_origem_"
+            f"{solicitacao_id}"
+        )
+    )
+
+
+    e2.text_input(
+        "Retornar Para",
+        value=grupo_anterior[
+            "nome"
+        ],
+        disabled=True,
+        key=(
+            f"estorno_destino_"
+            f"{solicitacao_id}"
+        )
+    )
+
+
+    st.info(
+        f"A solicitação será estornada de "
+        f"**{grupo_atual['nome']}** para "
+        f"**{grupo_anterior['nome']}**."
+    )
+
+
+    # ========================================================
+    # MOTIVO
+    # ========================================================
+
+    motivo = st.text_area(
+        "Motivo do Estorno *",
+        placeholder=(
+            "Informe claramente o motivo do retorno da solicitação "
+            "para o grupo anterior."
+        ),
+        height=120,
+        key=(
+            f"estorno_motivo_"
+            f"{solicitacao_id}"
+        )
+    )
+
+
+    confirmar = st.checkbox(
+        (
+            "Confirmo o estorno desta solicitação "
+            f"para {grupo_anterior['nome']}."
+        ),
+        key=(
+            f"estorno_confirmar_"
+            f"{solicitacao_id}"
+        )
+    )
+
+
+    # ========================================================
+    # BOTÃO
+    # ========================================================
+
+    estornar = st.button(
+        "↩️ Estornar Solicitação",
+        type="primary",
+        use_container_width=True,
+        key=(
+            f"botao_estornar_"
+            f"{solicitacao_id}"
+        )
+    )
+
+
+    if not estornar:
+
+        return
+
+
+    # ========================================================
+    # VALIDAÇÕES
+    # ========================================================
+
+    if not motivo.strip():
+
+        st.warning(
+            "⚠️ Informe o motivo do estorno."
+        )
+
+        return
+
+
+    if not confirmar:
+
+        st.warning(
+            "⚠️ Confirme o estorno antes de continuar."
+        )
+
+        return
+
+
+    # ========================================================
+    # CONFERIR ETAPA NOVAMENTE
+    # EVITA ESTORNAR SE OUTRO USUÁRIO ALTEROU A SOLICITAÇÃO
+    # ========================================================
+
+    registro_atual = _sisget_fetchone(
+        """
+        SELECT
+            etapa_atual,
+            status
+
+        FROM solicitacoes
+
+        WHERE id = ?
+        """,
+        (
+            solicitacao_id,
+        )
+    )
+
+
+    if not registro_atual:
+
+        st.error(
+            "❌ Solicitação não encontrada."
+        )
+
+        return
+
+
+    etapa_banco = registro_atual[
+        0
+    ]
+
+
+    if str(
+        etapa_banco
+        or ""
+    ).strip().upper() != str(
+        etapa_atual
+        or ""
+    ).strip().upper():
+
+        st.warning(
+            "⚠️ A etapa da solicitação foi alterada por outro "
+            "usuário. Atualize a tela e tente novamente."
+        )
+
+        return
+
+
+    # ========================================================
+    # ESTORNO
+    # ========================================================
+
+    etapa_destino = grupo_anterior[
+        "etapa_destino"
+    ]
+
+
+    observacao_historico = (
+        f"ESTORNO: "
+        f"{grupo_atual['nome']} -> "
+        f"{grupo_anterior['nome']}. "
+        f"Motivo: {motivo.strip()}"
+    )
+
+
+    try:
+
+        # ====================================================
+        # ATUALIZAR SOLICITAÇÃO
+        # ====================================================
+
+        cursor.execute(
+            """
+            UPDATE solicitacoes
+
+            SET
+                etapa_atual = ?,
+                status = 'EM_ANDAMENTO'
+
+            WHERE id = ?
+            """,
+            (
+                etapa_destino,
+                solicitacao_id
+            )
+        )
+
+
+        # ====================================================
+        # HISTÓRICO
+        # ====================================================
+
+        cursor.execute(
+            """
+            INSERT INTO solicitacoes_historico
+            (
+                solicitacao_id,
+                usuario_id,
+                etapa_origem,
+                etapa_destino,
+                acao,
+                observacao
+            )
+            VALUES
+            (
+                ?, ?, ?, ?, ?, ?
+            )
+            """,
+            (
+                solicitacao_id,
+                st.session_state.get(
+                    "usuario_id"
+                ),
+                etapa_atual,
+                etapa_destino,
+                "ESTORNO",
+                observacao_historico
+            )
+        )
+
+
+        conn.commit()
+
+
+    except Exception as erro:
+
+        try:
+
+            conn.rollback()
+
+        except Exception:
+
+            pass
+
+
+        st.error(
+            f"❌ Erro ao estornar solicitação: {erro}"
+        )
+
+
+        return
+
+
+    # ========================================================
+    # SUCESSO
+    # ========================================================
+
+    st.session_state[
+        "sisget_mensagem_estorno_solicitacao"
+    ] = (
+        f"✅ Solicitação estornada de "
+        f"{grupo_atual['nome']} para "
+        f"{grupo_anterior['nome']} com sucesso."
+    )
+
+
+    st.session_state[
+        "sisget_mostrar_estorno_solicitacao"
+    ] = False
+
+
+    st.rerun()
 
 def modulo_tipos_solicitacoes():
 
@@ -37531,60 +38241,155 @@ def modulo_tipos_solicitacoes():
 
 def modulo_documentos_solicitacoes():
 
+    # ========================================================
+    # MENSAGEM DE ESTORNO
+    # ========================================================
+
+    if "sisget_mensagem_estorno_solicitacao" in st.session_state:
+
+        st.success(
+            st.session_state.pop(
+                "sisget_mensagem_estorno_solicitacao"
+            )
+        )
+
+
+    if "sisget_mostrar_estorno_solicitacao" not in st.session_state:
+
+        st.session_state[
+            "sisget_mostrar_estorno_solicitacao"
+        ] = False
+
+
+    # ========================================================
+    # CABEÇALHO
+    # ========================================================
+
     st.subheader(
         "🧩 Documentos / Fluxo"
     )
 
-    opcao = st.selectbox(
-        "Cadastro *",
+
+    col_cadastro, col_estorno = st.columns(
         [
-            "Selecione...",
-            "📦 Itens",
-            "📄 DFD",
-            "📘 ETP",
-            "⚠️ Mapa de Riscos",
-            "💲 Cotações",
-            "🧾 Fichas Orçamentárias",
-            "💰 Financeiro",
-            "⚖️ Enquadramento",
-            "📑 Termo de Referência - TR"
-        ],
-        key="sisget_documentos_fluxo_solicitacoes"
+            4,
+            1
+        ]
     )
 
-    st.divider()
+
+    with col_cadastro:
+
+        opcao = st.selectbox(
+            "Cadastro *",
+            [
+                "Selecione...",
+                "📦 Itens",
+                "📄 DFD",
+                "📘 ETP",
+                "⚠️ Mapa de Riscos",
+                "💲 Cotações",
+                "🧾 Fichas Orçamentárias",
+                "💰 Financeiro",
+                "⚖️ Enquadramento",
+                "📑 Termo de Referência - TR"
+            ],
+            key="sisget_documentos_fluxo_solicitacoes"
+        )
+
+
+    with col_estorno:
+
+        st.write("")
+
+        st.write("")
+
+
+        if st.button(
+            "↩️ Estornar",
+            use_container_width=True,
+            key="sisget_botao_estornar_solicitacao"
+        ):
+
+            st.session_state[
+                "sisget_mostrar_estorno_solicitacao"
+            ] = not st.session_state[
+                "sisget_mostrar_estorno_solicitacao"
+            ]
+
+
+    # ========================================================
+    # PAINEL DE ESTORNO
+    # ========================================================
+
+    if st.session_state[
+        "sisget_mostrar_estorno_solicitacao"
+    ]:
+
+        st.divider()
+
+
+        solicitacao_estornar()
+
+
+        st.divider()
+
+
+    # ========================================================
+    # CADASTROS
+    # ========================================================
 
     if opcao == "Selecione...":
+
         st.info(
             "Selecione o cadastro."
         )
+
         return
 
+
     elif opcao == "📦 Itens":
+
         cadastro_itens_solicitacoes()
 
+
     elif opcao == "📄 DFD":
+
         cadastro_dfd_solicitacoes()
 
+
     elif opcao == "📘 ETP":
+
         cadastro_etp_solicitacoes()
 
+
     elif opcao == "⚠️ Mapa de Riscos":
+
         cadastro_riscos_solicitacoes()
 
+
     elif opcao == "💲 Cotações":
+
         cadastro_cotacoes_solicitacoes()
 
+
     elif opcao == "🧾 Fichas Orçamentárias":
+
         cadastro_fichas_solicitacoes()
 
+
     elif opcao == "💰 Financeiro":
+
         cadastro_financeiro_solicitacoes()
 
+
     elif opcao == "⚖️ Enquadramento":
+
         cadastro_enquadramento_solicitacoes()
 
+
     elif opcao == "📑 Termo de Referência - TR":
+
         cadastro_tr_solicitacoes()
 
 
@@ -37641,12 +38446,6 @@ def solicitacao_item_incluir():
     )
 
 
-    st.caption(
-        "Selecione uma solicitação de licitação ainda não cotada "
-        "e inclua os itens que farão parte da pesquisa de preços."
-    )
-
-
     # ========================================================
     # SOLICITAÇÕES DISPONÍVEIS
     # NÃO MOSTRA SOLICITAÇÃO QUE JÁ POSSUI COTAÇÃO
@@ -37697,8 +38496,7 @@ def solicitacao_item_incluir():
 
         st.info(
             "✅ Não existem solicitações de licitação disponíveis "
-            "para inclusão de itens. Solicitações que já possuem "
-            "cotação não aparecem nesta tela."
+            "para inclusão de itens."
         )
 
         return
@@ -37769,11 +38567,6 @@ def solicitacao_item_incluir():
     # ========================================================
     # RESUMO DA SOLICITAÇÃO
     # ========================================================
-
-    st.markdown(
-        "### 📄 Solicitação Selecionada"
-    )
-
 
     c1, c2, c3 = st.columns(
         3
@@ -37886,11 +38679,6 @@ def solicitacao_item_incluir():
     )
 
 
-    st.markdown(
-        "### 📋 Itens Já Incluídos"
-    )
-
-
     if itens_existentes:
 
         tabela_itens = []
@@ -37948,13 +38736,10 @@ def solicitacao_item_incluir():
             )
 
 
-        df_itens = pd.DataFrame(
-            tabela_itens
-        )
-
-
         st.dataframe(
-            df_itens,
+            pd.DataFrame(
+                tabela_itens
+            ),
             use_container_width=True,
             hide_index=True,
             column_config={
@@ -38153,22 +38938,11 @@ def solicitacao_item_incluir():
 
 
     # ========================================================
-    # NOVO ITEM
+    # DADOS DO ITEM
     # ========================================================
 
-    st.markdown("---")
-
-
-    st.markdown(
-        "### ➕ Novo Item"
-    )
-
-
     i1, i2 = st.columns(
-        [
-            1,
-            1
-        ]
+        2
     )
 
 
@@ -38225,7 +38999,7 @@ def solicitacao_item_incluir():
 
 
     # ========================================================
-    # VERIFICAR SE PRODUTO JÁ ESTÁ NA SOLICITAÇÃO
+    # PRODUTO REPETIDO
     # ========================================================
 
     produto_ja_incluido = _sisget_fetchone(
@@ -38255,9 +39029,7 @@ def solicitacao_item_incluir():
 
         st.warning(
             "⚠️ Este produto já está incluído nesta solicitação "
-            f"no item {produto_ja_incluido[1]}. "
-            "Se realmente precisar repetir o produto, marque a "
-            "opção de confirmação abaixo."
+            f"no item {produto_ja_incluido[1]}."
         )
 
 
@@ -38351,16 +39123,10 @@ def solicitacao_item_incluir():
     )
 
 
-    # ========================================================
-    # ESPECIFICAÇÃO
-    # ========================================================
-
     especificacao = st.text_area(
         "Especificação Complementar",
         placeholder=(
-            "Informe características adicionais que não estejam "
-            "no cadastro do produto, como apresentação, dimensão, "
-            "embalagem, capacidade, modelo de referência etc."
+            "Informe características adicionais do item."
         ),
         height=100,
         key=(
@@ -38369,49 +39135,6 @@ def solicitacao_item_incluir():
             f"{reset}"
         )
     )
-
-
-    # ========================================================
-    # RESUMO DO ITEM ANTES DE SALVAR
-    # ========================================================
-
-    with st.expander(
-        "🔎 Conferir item antes de salvar",
-        expanded=False
-    ):
-
-        st.write(
-            f"**Produto:** "
-            f"{produto_selecionado['codigo'] or ''}"
-            f" - "
-            f"{produto_selecionado['descricao'] or ''}"
-        )
-
-
-        st.write(
-            f"**Quantidade:** "
-            f"{float(quantidade):.6f}"
-        )
-
-
-        st.write(
-            f"**Valor Unitário:** "
-            f"R$ {float(valor_unitario):,.2f}"
-        )
-
-
-        st.write(
-            f"**Valor Total:** "
-            f"R$ {float(valor_total):,.2f}"
-        )
-
-
-        if especificacao.strip():
-
-            st.write(
-                f"**Especificação:** "
-                f"{especificacao.strip()}"
-            )
 
 
     # ========================================================
@@ -38432,10 +39155,6 @@ def solicitacao_item_incluir():
 
     if salvar:
 
-        # ====================================================
-        # VALIDAÇÕES
-        # ====================================================
-
         if quantidade <= 0:
 
             st.warning(
@@ -38452,19 +39171,11 @@ def solicitacao_item_incluir():
         ):
 
             st.warning(
-                "⚠️ Este produto já está incluído na solicitação. "
-                "Marque a opção de confirmação caso realmente "
-                "precise repetir o produto."
+                "⚠️ Este produto já está incluído na solicitação."
             )
 
             return
 
-
-        # ====================================================
-        # CONFERIR SE A SOLICITAÇÃO AINDA NÃO FOI COTADA
-        # EVITA SALVAR SE OUTRO USUÁRIO COTOU ENQUANTO A TELA
-        # ESTAVA ABERTA
-        # ====================================================
 
         ja_possui_cotacao = _sisget_fetchone(
             """
@@ -38494,13 +39205,8 @@ def solicitacao_item_incluir():
                 "sisget_item_solicitacao_reset"
             ] += 1
 
-
             st.rerun()
 
-
-        # ====================================================
-        # RECALCULAR NÚMERO E CÓDIGO NO MOMENTO DA GRAVAÇÃO
-        # ====================================================
 
         proximo_item_salvar = _sisget_fetchone(
             """
@@ -38546,10 +39252,6 @@ def solicitacao_item_incluir():
             )
         )
 
-
-        # ====================================================
-        # INSERT - ESTRUTURA ATUAL
-        # ====================================================
 
         if _sisget_salvar(
             """
@@ -38601,6 +39303,7 @@ def solicitacao_item_incluir():
 
 
             st.rerun()
+
 
 
 def solicitacao_item_localizar():
