@@ -1128,8 +1128,7 @@ def sisget_tela_principal(
     func_excluir=None,
     func_imprimir=None,
     func_estornar=None,
-    icone="📋",
-    botoes_extras=None
+    icone="📋"
 ):
 
     chave_tela = (
@@ -1140,8 +1139,9 @@ def sisget_tela_principal(
         f"sisget_id_{chave}"
     )
 
+
     # ========================================================
-    # ESTADO INICIAL
+    # INICIALIZAÇÃO
     # ========================================================
 
     if chave_tela not in st.session_state:
@@ -1150,15 +1150,27 @@ def sisget_tela_principal(
             chave_tela
         ] = "principal"
 
+
     if chave_id not in st.session_state:
 
         st.session_state[
             chave_id
         ] = None
 
+
     tela = st.session_state[
         chave_tela
     ]
+
+
+    # ========================================================
+    # TÍTULO
+    # ========================================================
+
+    st.title(
+        f"{icone} {titulo}"
+    )
+
 
     # ========================================================
     # TELA PRINCIPAL
@@ -1166,127 +1178,206 @@ def sisget_tela_principal(
 
     if tela == "principal":
 
-        st.title(
-            f"{icone} {titulo}"
-        )
-
         st.markdown("---")
 
+
         # ====================================================
-        # BOTÕES PADRÃO
+        # COM ESTORNO
         # ====================================================
 
-        botoes = [
-            (
-                "➕ Incluir",
-                "incluir"
-            ),
-            (
-                "🔎 Localizar",
-                "localizar"
+        if func_estornar:
+
+            col1, col2, col3, col4, col5 = st.columns(
+                5
             )
-        ]
 
-        # ====================================================
-        # BOTÕES EXTRAS
-        # ====================================================
 
-        if botoes_extras:
+            with col1:
 
-            for botao in botoes_extras:
+                if st.button(
+                    "➕ Incluir",
+                    key=f"sisget_incluir_{chave}",
+                    use_container_width=True,
+                    type="primary"
+                ):
 
-                botoes.append(
-                    (
-                        botao["titulo"],
-                        botao["tela"]
-                    )
-                )
+                    st.session_state[
+                        chave_id
+                    ] = None
 
-        # ====================================================
-        # EXCLUIR
-        # ====================================================
+                    st.session_state[
+                        chave_tela
+                    ] = "incluir"
 
-        if func_excluir:
+                    st.rerun()
 
-            botoes.append(
-                (
+
+            with col2:
+
+                if st.button(
+                    "🔎 Localizar",
+                    key=f"sisget_localizar_{chave}",
+                    use_container_width=True
+                ):
+
+                    st.session_state[
+                        chave_id
+                    ] = None
+
+                    st.session_state[
+                        chave_tela
+                    ] = "localizar"
+
+                    st.rerun()
+
+
+            with col3:
+
+                if st.button(
                     "🗑️ Excluir",
-                    "excluir"
-                )
-            )
+                    key=f"sisget_excluir_{chave}",
+                    use_container_width=True
+                ):
 
-        # ====================================================
-        # IMPRIMIR
-        # ====================================================
+                    st.session_state[
+                        chave_id
+                    ] = None
 
-        if func_imprimir:
+                    st.session_state[
+                        chave_tela
+                    ] = "excluir"
 
-            botoes.append(
-                (
+                    st.rerun()
+
+
+            with col4:
+
+                if st.button(
                     "🖨️ Imprimir",
-                    "imprimir"
-                )
-            )
+                    key=f"sisget_imprimir_{chave}",
+                    use_container_width=True
+                ):
+
+                    st.session_state[
+                        chave_id
+                    ] = None
+
+                    st.session_state[
+                        chave_tela
+                    ] = "imprimir"
+
+                    st.rerun()
+
+
+            with col5:
+
+                if st.button(
+                    "↩️ Estornar",
+                    key=f"sisget_estornar_{chave}",
+                    use_container_width=True
+                ):
+
+                    st.session_state[
+                        chave_id
+                    ] = None
+
+                    st.session_state[
+                        chave_tela
+                    ] = "estornar"
+
+                    st.rerun()
+
 
         # ====================================================
-        # EXIBIR BOTÕES
-        # 3 POR LINHA
+        # SEM ESTORNO
         # ====================================================
 
-        quantidade = len(
-            botoes
-        )
+        else:
 
-        indice = 0
-
-        while indice < quantidade:
-
-            linha = botoes[
-                indice:
-                indice + 3
-            ]
-
-            colunas = st.columns(
-                len(linha)
+            col1, col2, col3, col4 = st.columns(
+                4
             )
 
-            for posicao, (
-                titulo_botao,
-                tela_botao
-            ) in enumerate(linha):
 
-                with colunas[
-                    posicao
-                ]:
+            with col1:
 
-                    if st.button(
-                        titulo_botao,
-                        use_container_width=True,
-                        key=(
-                            f"sisget_"
-                            f"{chave}_"
-                            f"{tela_botao}"
-                        ),
-                        type=(
-                            "primary"
-                            if tela_botao == "incluir"
-                            else "secondary"
-                        )
-                    ):
+                if st.button(
+                    "➕ Incluir",
+                    key=f"sisget_incluir_{chave}",
+                    use_container_width=True,
+                    type="primary"
+                ):
 
-                        st.session_state[
-                            chave_id
-                        ] = None
+                    st.session_state[
+                        chave_id
+                    ] = None
 
-                        st.session_state[
-                            chave_tela
-                        ] = tela_botao
+                    st.session_state[
+                        chave_tela
+                    ] = "incluir"
 
-                        st.rerun()
+                    st.rerun()
 
-            indice += 3
+
+            with col2:
+
+                if st.button(
+                    "🔎 Localizar",
+                    key=f"sisget_localizar_{chave}",
+                    use_container_width=True
+                ):
+
+                    st.session_state[
+                        chave_id
+                    ] = None
+
+                    st.session_state[
+                        chave_tela
+                    ] = "localizar"
+
+                    st.rerun()
+
+
+            with col3:
+
+                if st.button(
+                    "🗑️ Excluir",
+                    key=f"sisget_excluir_{chave}",
+                    use_container_width=True
+                ):
+
+                    st.session_state[
+                        chave_id
+                    ] = None
+
+                    st.session_state[
+                        chave_tela
+                    ] = "excluir"
+
+                    st.rerun()
+
+
+            with col4:
+
+                if st.button(
+                    "🖨️ Imprimir",
+                    key=f"sisget_imprimir_{chave}",
+                    use_container_width=True
+                ):
+
+                    st.session_state[
+                        chave_id
+                    ] = None
+
+                    st.session_state[
+                        chave_tela
+                    ] = "imprimir"
+
+                    st.rerun()
+
 
         st.markdown("---")
+
 
     # ========================================================
     # INCLUIR
@@ -1302,7 +1393,9 @@ def sisget_tela_principal(
             chave=f"{chave}_incluir"
         )
 
+
         func_incluir()
+
 
     # ========================================================
     # LOCALIZAR
@@ -1318,11 +1411,14 @@ def sisget_tela_principal(
             chave=f"{chave}_localizar"
         )
 
+
         st.caption(
             "Dê duplo clique em um registro para alterar."
         )
 
+
         registro_id = func_localizar()
+
 
         if registro_id:
 
@@ -1336,6 +1432,7 @@ def sisget_tela_principal(
 
             st.rerun()
 
+
     # ========================================================
     # ALTERAR
     # ========================================================
@@ -1346,6 +1443,7 @@ def sisget_tela_principal(
             chave_id
         )
 
+
         if not registro_id:
 
             st.session_state[
@@ -1353,6 +1451,7 @@ def sisget_tela_principal(
             ] = "localizar"
 
             st.rerun()
+
 
         sisget_cabecalho_tela(
             "✏️ Alterar",
@@ -1362,9 +1461,11 @@ def sisget_tela_principal(
             chave=f"{chave}_alterar"
         )
 
+
         func_alterar(
             registro_id
         )
+
 
     # ========================================================
     # EXCLUIR
@@ -1380,15 +1481,18 @@ def sisget_tela_principal(
             chave=f"{chave}_excluir"
         )
 
+
         if func_excluir:
 
             func_excluir()
+
 
         else:
 
             st.info(
                 "Nenhuma rotina de exclusão configurada."
             )
+
 
     # ========================================================
     # IMPRIMIR
@@ -1404,9 +1508,11 @@ def sisget_tela_principal(
             chave=f"{chave}_imprimir"
         )
 
+
         if func_imprimir:
 
             func_imprimir()
+
 
         else:
 
@@ -1414,46 +1520,33 @@ def sisget_tela_principal(
                 "Nenhum relatório configurado."
             )
 
+
     # ========================================================
-    # TELAS EXTRAS
+    # ESTORNAR
     # ========================================================
 
-    elif botoes_extras:
+    elif tela == "estornar":
 
-        encontrou = False
+        sisget_cabecalho_tela(
+            "↩️ Estornar Solicitação",
+            voltar=lambda: sisget_voltar_principal(
+                chave
+            ),
+            chave=f"{chave}_estornar"
+        )
 
-        for botao in botoes_extras:
 
-            if tela == botao[
-                "tela"
-            ]:
+        if func_estornar:
 
-                encontrou = True
+            func_estornar()
 
-                sisget_cabecalho_tela(
-                    botao["titulo"],
-                    voltar=lambda: sisget_voltar_principal(
-                        chave
-                    ),
-                    chave=(
-                        f"{chave}_"
-                        f"{botao['tela']}"
-                    )
-                )
 
-                botao[
-                    "funcao"
-                ]()
+        else:
 
-                break
+            st.info(
+                "Nenhuma rotina de estorno configurada."
+            )
 
-        if not encontrou:
-
-            st.session_state[
-                chave_tela
-            ] = "principal"
-
-            st.rerun()
 
     # ========================================================
     # SEGURANÇA
@@ -1470,6 +1563,34 @@ def sisget_tela_principal(
         ] = None
 
         st.rerun()
+
+
+
+# ============================================================
+# ITENS DAS SOLICITAÇÕES
+# ============================================================
+
+
+def cadastro_itens_solicitacoes():
+
+    sisget_tela_principal(
+        titulo="Itens das Solicitações",
+        chave="solicitacoes_itens",
+        func_incluir=solicitacao_item_incluir,
+        func_localizar=solicitacao_item_localizar,
+        func_alterar=solicitacao_item_alterar,
+        func_excluir=solicitacao_item_excluir,
+        func_imprimir=solicitacao_item_imprimir,
+        func_estornar=solicitacao_estornar,
+        icone="📦"
+    )
+
+
+
+# ============================================================
+# ESTORNAR SOLICITAÇÃO
+# ============================================================
+
 
 def tela_inicio():
 
@@ -38182,11 +38303,6 @@ def solicitacao_estornar():
     )
 
 
-    st.session_state[
-        "sisget_mostrar_estorno_solicitacao"
-    ] = False
-
-
     st.rerun()
 
 def modulo_tipos_solicitacoes():
@@ -38398,20 +38514,6 @@ def modulo_documentos_solicitacoes():
 # ITENS - TELA PRINCIPAL
 # ============================================================
 
-
-def cadastro_itens_solicitacoes():
-
-    sisget_tela_principal(
-        titulo="Itens das Solicitações",
-        chave="solicitacoes_itens",
-        func_incluir=solicitacao_item_incluir,
-        func_localizar=solicitacao_item_localizar,
-        func_alterar=solicitacao_item_alterar,
-        func_excluir=solicitacao_item_excluir,
-        func_imprimir=solicitacao_item_imprimir,
-        func_estornar=solicitacao_estornar,
-        icone="📦"
-    )
 
 def solicitacao_item_incluir():
 
