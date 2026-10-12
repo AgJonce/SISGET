@@ -1127,6 +1127,7 @@ def sisget_tela_principal(
     func_alterar,
     func_excluir=None,
     func_imprimir=None,
+    func_estornar=None,
     icone="📋",
     botoes_extras=None
 ):
