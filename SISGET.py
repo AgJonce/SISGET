@@ -32729,6 +32729,7 @@ def produto_incluir():
 
                 tipo_produto,
                 tipo_item,
+                classificacao_item,
                 item_patrimonial,
 
                 unidade_compra_id,
@@ -32760,7 +32761,7 @@ def produto_incluir():
 
                 ?, ?,
 
-                ?, ?, ?,
+                ?, ?, ?, ?,
 
                 ?, ?,
 
@@ -32787,8 +32788,9 @@ def produto_incluir():
                 grupo_id,
                 subgrupo_id,
 
-                tipo_produto,
                 tipo_grupo_banco,
+                tipo_grupo_banco,
+                tipo_produto,
                 item_patrimonial,
 
                 mapa_compras[
