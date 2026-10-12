@@ -32049,396 +32049,407 @@ def produto_incluir():
         )
 
     # ========================================================
-    # FORMULÁRIO PRINCIPAL
+    # CAMPOS DA TELA
+    # Fora de st.form para atualização imediata das regras
     # ========================================================
 
-    with st.form(
-        f"form_produto_"
-        f"{reset}_"
-        f"{grupo_id}"
-    ):
+    st.markdown(
+        "### 📦 Identificação"
+    )
+
+    col1, col2 = st.columns(
+        [1, 4]
+    )
+
+    col1.text_input(
+        "Código",
+        value=codigo,
+        disabled=True
+    )
+
+    descricao = col2.text_input(
+        "Descrição do Produto *",
+        placeholder=(
+            "Ex.: Papel A4 branco 75 g/m²"
+        )
+    )
+
+    descricao_complementar = st.text_area(
+        "Descrição Complementar",
+        height=100,
+        placeholder=(
+            "Informações adicionais que complementam "
+            "a descrição principal."
+        )
+    )
+
+    col_id1, col_id2 = st.columns(
+        2
+    )
+
+    codigo_barras = col_id1.text_input(
+        "Código de Barras / EAN"
+    )
+
+    referencia = col_id2.text_input(
+        "Referência / Código do Fabricante"
+    )
+
+    col_id3, col_id4, col_id5 = st.columns(
+        3
+    )
+
+    marca = col_id3.text_input(
+        "Marca"
+    )
+
+    modelo = col_id4.text_input(
+        "Modelo"
+    )
+
+    fabricante = col_id5.text_input(
+        "Fabricante"
+    )
+
+    st.markdown(
+        "### 📁 Classificação"
+    )
+
+    col3, col4 = st.columns(
+        2
+    )
+
+    col3.text_input(
+        "Grupo",
+        value=(
+            f"{dados_grupo['codigo']} - "
+            f"{dados_grupo['descricao']}"
+        ),
+        disabled=True
+    )
+
+    subgrupo_nome = col4.selectbox(
+        "Subgrupo *",
+        list(
+            mapa_subgrupos.keys()
+        ),
+        key=(
+            f"produto_subgrupo_"
+            f"{reset}_"
+            f"{grupo_id}"
+        )
+    )
+
+    col_tipo1, col_tipo2 = st.columns(
+        2
+    )
+
+    tipo_item = col_tipo1.text_input(
+        "Tipo do Item",
+        value=tipo_grupo,
+        disabled=True
+    )
+
+    tipo_produto = col_tipo2.selectbox(
+        "Classificação do Item *",
+        opcoes_tipo_produto,
+        key=(
+            f"produto_tipo_produto_"
+            f"{reset}_"
+            f"{grupo_id}"
+        )
+    )
+
+    st.markdown(
+        "### 🏛️ Classificação Pública"
+    )
+
+    col_pub1, col_pub2 = st.columns(
+        2
+    )
+
+    ncm = col_pub1.text_input(
+        "NCM"
+    )
+
+    catmat_catser = col_pub2.text_input(
+        "CATMAT / CATSER"
+    )
+
+    codigo_tribunal = st.text_input(
+        "Classificação Tribunal de Contas"
+    )
+
+    st.markdown(
+        "### 📏 Unidades"
+    )
+
+    col5, col6 = st.columns(
+        2
+    )
+
+    unidade_compra_nome = col5.selectbox(
+        "Unidade de Compra *",
+        list(
+            mapa_compras.keys()
+        )
+    )
+
+    unidade_mov_nome = col6.selectbox(
+        "Unidade de Movimentação *",
+        list(
+            mapa_movimentos.keys()
+        )
+    )
+
+    permite_fracionamento = st.checkbox(
+        "Permite Fracionamento",
+        value=False
+    )
+
+    st.markdown(
+        "### 📊 Controle de Estoque"
+    )
+
+    col7, col8, col9, col10 = st.columns(
+        4
+    )
+
+    controla_estoque = col7.checkbox(
+        "Controla Estoque",
+        value=True,
+        key=f"produto_controla_estoque_{reset}"
+    )
+
+    controla_lote = col8.checkbox(
+        "Controla Lote",
+        value=False,
+        key=f"produto_controla_lote_{reset}"
+    )
+
+    controla_vencimento = col9.checkbox(
+        "Controla Vencimento",
+        value=False,
+        key=f"produto_controla_vencimento_{reset}"
+    )
+
+    controla_numero_serie = col10.checkbox(
+        "Controla Nº de Série",
+        value=False,
+        key=f"produto_controla_numero_serie_{reset}"
+    )
+
+    if controla_vencimento:
+
+        controla_lote = True
+
+        st.info(
+            "📅 Item com controle de vencimento "
+            "também terá controle de lote."
+        )
+
+    col_est1, col_est2, col_est3 = st.columns(
+        3
+    )
+
+    estoque_minimo = col_est1.number_input(
+        "Estoque Mínimo",
+        min_value=0.0,
+        value=0.0,
+        format="%.6f"
+    )
+
+    estoque_maximo = col_est2.number_input(
+        "Estoque Máximo",
+        min_value=0.0,
+        value=0.0,
+        format="%.6f"
+    )
+
+    ponto_reposicao = col_est3.number_input(
+        "Ponto de Reposição",
+        min_value=0.0,
+        value=0.0,
+        format="%.6f"
+    )
+
+    col_venc1, col_venc2 = st.columns(
+        2
+    )
+
+    vencimento_dias = col_venc1.number_input(
+        "Prazo de Vencimento (dias)",
+        min_value=0,
+        value=0,
+        step=1
+    )
+
+    alerta_vencimento_dias = col_venc2.number_input(
+        "Avisar Vencimento com (dias)",
+        min_value=0,
+        value=30,
+        step=1
+    )
+
+    numero_lote = None
+
+    if controla_vencimento:
 
         st.markdown(
-            "### 📦 Identificação"
+            "### 📦 Controle de Lote e Vencimento"
         )
 
-        col1, col2 = st.columns(
-            [1, 4]
+        numero_lote = st.text_input(
+            "Número do Lote *",
+            max_chars=100,
+            placeholder="Ex.: LOT2026-001",
+            key=f"produto_numero_lote_{reset}"
         )
 
-        col1.text_input(
-            "Código",
-            value=codigo,
-            disabled=True
+        data_vencimento_padrao = st.date_input(
+            "Data de Vencimento",
+            value=datetime.now().date(),
+            key=f"produto_data_vencimento_{reset}"
         )
 
-        descricao = col2.text_input(
-            "Descrição do Produto *",
-            placeholder=(
-                "Ex.: Papel A4 branco 75 g/m²"
-            )
+    else:
+
+        data_vencimento_padrao = None
+
+    st.markdown(
+        "### 📍 Armazenamento"
+    )
+
+    localizacao_padrao = st.text_input(
+        "Localização Padrão no Almoxarifado",
+        placeholder=(
+            "Ex.: Almoxarifado Central / Prateleira A / Nível 2"
+        )
+    )
+
+    # ====================================================
+    # CAMPOS ESPECÍFICOS PARA MEDICAMENTOS
+    # ====================================================
+
+    principio_ativo = ""
+    concentracao = ""
+    apresentacao = ""
+    registro_anvisa = ""
+
+    if tipo_produto == "Medicamentos":
+
+        st.markdown(
+            "### 💊 Dados de Medicamento"
         )
 
-        descricao_complementar = st.text_area(
-            "Descrição Complementar",
-            height=100,
-            placeholder=(
-                "Informações adicionais que complementam "
-                "a descrição principal."
-            )
+        principio_ativo = st.text_input(
+            "Princípio Ativo *"
         )
 
-        col_id1, col_id2 = st.columns(
+        col_med1, col_med2 = st.columns(
             2
         )
 
-        codigo_barras = col_id1.text_input(
-            "Código de Barras / EAN"
+        concentracao = col_med1.text_input(
+            "Concentração *"
         )
 
-        referencia = col_id2.text_input(
-            "Referência / Código do Fabricante"
+        apresentacao = col_med2.text_input(
+            "Apresentação *"
         )
 
-        col_id3, col_id4, col_id5 = st.columns(
+        registro_anvisa = st.text_input(
+            "Registro ANVISA"
+        )
+
+    # ====================================================
+    # CAMPOS ESPECÍFICOS PATRIMONIAIS
+    # ====================================================
+
+    vida_util_anos = 0
+    garantia_meses = 0
+    valor_minimo_incorporacao = 0.0
+
+    if tipo_grupo == "Patrimonial":
+
+        st.markdown(
+            "### 🏷️ Dados Patrimoniais"
+        )
+
+        col_pat1, col_pat2, col_pat3 = st.columns(
             3
         )
 
-        marca = col_id3.text_input(
-            "Marca"
-        )
-
-        modelo = col_id4.text_input(
-            "Modelo"
-        )
-
-        fabricante = col_id5.text_input(
-            "Fabricante"
-        )
-
-        st.markdown(
-            "### 📁 Classificação"
-        )
-
-        col3, col4 = st.columns(
-            2
-        )
-
-        col3.text_input(
-            "Grupo",
-            value=(
-                f"{dados_grupo['codigo']} - "
-                f"{dados_grupo['descricao']}"
-            ),
-            disabled=True
-        )
-
-        subgrupo_nome = col4.selectbox(
-            "Subgrupo *",
-            list(
-                mapa_subgrupos.keys()
-            )
-        )
-
-        col_tipo1, col_tipo2 = st.columns(
-            2
-        )
-
-        tipo_item = col_tipo1.text_input(
-            "Tipo do Item",
-            value=tipo_grupo,
-            disabled=True
-        )
-
-        tipo_produto = col_tipo2.selectbox(
-            "Classificação do Item *",
-            opcoes_tipo_produto
-        )
-
-        st.markdown(
-            "### 🏛️ Classificação Pública"
-        )
-
-        col_pub1, col_pub2 = st.columns(
-            2
-        )
-
-        ncm = col_pub1.text_input(
-            "NCM"
-        )
-
-        catmat_catser = col_pub2.text_input(
-            "CATMAT / CATSER"
-        )
-
-        codigo_tribunal = st.text_input(
-            "Classificação Tribunal de Contas"
-        )
-
-        st.markdown(
-            "### 📏 Unidades"
-        )
-
-        col5, col6 = st.columns(
-            2
-        )
-
-        unidade_compra_nome = col5.selectbox(
-            "Unidade de Compra *",
-            list(
-                mapa_compras.keys()
-            )
-        )
-
-        unidade_mov_nome = col6.selectbox(
-            "Unidade de Movimentação *",
-            list(
-                mapa_movimentos.keys()
-            )
-        )
-
-        permite_fracionamento = st.checkbox(
-            "Permite Fracionamento",
-            value=False
-        )
-
-        st.markdown(
-            "### 📊 Controle de Estoque"
-        )
-
-        col7, col8, col9, col10 = st.columns(
-            4
-        )
-
-        controla_estoque = col7.checkbox(
-            "Controla Estoque",
-            value=True
-        )
-
-        controla_lote = col8.checkbox(
-            "Controla Lote",
-            value=False
-        )
-
-        controla_vencimento = col9.checkbox(
-            "Controla Vencimento",
-            value=False
-        )
-
-        controla_numero_serie = col10.checkbox(
-            "Controla Nº de Série",
-            value=False
-        )
-
-        if controla_vencimento:
-
-            controla_lote = True
-
-            st.info(
-                "📅 Item com controle de vencimento "
-                "também terá controle de lote."
-            )
-
-        col_est1, col_est2, col_est3 = st.columns(
-            3
-        )
-
-        estoque_minimo = col_est1.number_input(
-            "Estoque Mínimo",
-            min_value=0.0,
-            value=0.0,
-            format="%.6f"
-        )
-
-        estoque_maximo = col_est2.number_input(
-            "Estoque Máximo",
-            min_value=0.0,
-            value=0.0,
-            format="%.6f"
-        )
-
-        ponto_reposicao = col_est3.number_input(
-            "Ponto de Reposição",
-            min_value=0.0,
-            value=0.0,
-            format="%.6f"
-        )
-
-        col_venc1, col_venc2 = st.columns(
-            2
-        )
-
-        vencimento_dias = col_venc1.number_input(
-            "Prazo de Vencimento (dias)",
+        vida_util_anos = col_pat1.number_input(
+            "Vida Útil (anos)",
             min_value=0,
             value=0,
             step=1
         )
 
-        alerta_vencimento_dias = col_venc2.number_input(
-            "Avisar Vencimento com (dias)",
+        garantia_meses = col_pat2.number_input(
+            "Garantia (meses)",
             min_value=0,
-            value=30,
+            value=0,
             step=1
         )
 
-        numero_lote = None
-
-        if controla_vencimento:
-
-            st.markdown(
-                "### 📦 Controle de Lote e Vencimento"
-            )
-
-            numero_lote = st.text_input(
-                "Número do Lote *",
-                max_chars=100,
-                placeholder="Ex.: LOT2026-001"
-            )
-
-            data_vencimento_padrao = st.date_input(
-                "Data de Vencimento",
-                value=datetime.now().date()
-            )
-
-        else:
-
-            data_vencimento_padrao = None
-
-        st.markdown(
-            "### 📍 Armazenamento"
+        valor_minimo_incorporacao = col_pat3.number_input(
+            "Valor Mínimo para Incorporação",
+            min_value=0.0,
+            value=0.0,
+            format="%.2f"
         )
 
-        localizacao_padrao = st.text_input(
-            "Localização Padrão no Almoxarifado",
-            placeholder=(
-                "Ex.: Almoxarifado Central / Prateleira A / Nível 2"
-            )
+    st.markdown(
+        "### 💰 Contas / Naturezas Orçamentárias"
+    )
+
+    conta_orcamentaria_padrao = st.text_input(
+        "Conta / Natureza Orçamentária Padrão"
+    )
+
+    col_conta1, col_conta2 = st.columns(
+        2
+    )
+
+    conta_orcamentaria_entrada = col_conta1.text_input(
+        "Conta / Natureza Orçamentária - Entrada"
+    )
+
+    conta_orcamentaria_saida = col_conta2.text_input(
+        "Conta / Natureza Orçamentária - Saída"
+    )
+
+    st.markdown(
+        "### 📝 Especificação Técnica"
+    )
+
+    especificacao = st.text_area(
+        "Especificação Técnica",
+        height=160,
+        placeholder=(
+            "Características técnicas, composição, "
+            "dimensões, capacidade, qualidade, padrão, "
+            "garantia e demais requisitos."
         )
+    )
 
+    observacoes = st.text_area(
+        "Observações Gerais",
+        height=100
+    )
 
-        # ====================================================
-        # DADOS DE MEDICAMENTO
-        # APARECE SOMENTE PARA CLASSIFICAÇÃO "Medicamentos"
-        # ====================================================
-
-        principio_ativo = ""
-        concentracao = ""
-        apresentacao = ""
-        registro_anvisa = ""
-
-        if tipo_produto == "Medicamentos":
-
-            st.markdown(
-                "### 💊 Dados de Medicamento"
-            )
-
-            principio_ativo = st.text_input(
-                "Princípio Ativo *"
-            )
-
-            col_med1, col_med2 = st.columns(
-                2
-            )
-
-            concentracao = col_med1.text_input(
-                "Concentração *",
-                placeholder="Ex.: 500 mg"
-            )
-
-            apresentacao = col_med2.text_input(
-                "Apresentação *",
-                placeholder="Ex.: Comprimido, cápsula, frasco"
-            )
-
-            registro_anvisa = st.text_input(
-                "Registro ANVISA",
-                placeholder="Número do registro, quando aplicável"
-            )
-
-        # ====================================================
-        # CAMPOS ESPECÍFICOS PATRIMONIAIS
-        # ====================================================
-
-        vida_util_anos = 0
-        garantia_meses = 0
-        valor_minimo_incorporacao = 0.0
-
-        if tipo_grupo == "Patrimonial":
-
-            st.markdown(
-                "### 🏷️ Dados Patrimoniais"
-            )
-
-            col_pat1, col_pat2, col_pat3 = st.columns(
-                3
-            )
-
-            vida_util_anos = col_pat1.number_input(
-                "Vida Útil (anos)",
-                min_value=0,
-                value=0,
-                step=1
-            )
-
-            garantia_meses = col_pat2.number_input(
-                "Garantia (meses)",
-                min_value=0,
-                value=0,
-                step=1
-            )
-
-            valor_minimo_incorporacao = col_pat3.number_input(
-                "Valor Mínimo para Incorporação",
-                min_value=0.0,
-                value=0.0,
-                format="%.2f"
-            )
-
-        st.markdown(
-            "### 💰 Contas / Naturezas Orçamentárias"
+    salvar = st.button(
+        "💾 Salvar Produto",
+        type="primary",
+        use_container_width=True,
+        key=(
+            f"produto_salvar_"
+            f"{reset}"
         )
+    )
 
-        conta_orcamentaria_padrao = st.text_input(
-            "Conta / Natureza Orçamentária Padrão"
-        )
-
-        col_conta1, col_conta2 = st.columns(
-            2
-        )
-
-        conta_orcamentaria_entrada = col_conta1.text_input(
-            "Conta / Natureza Orçamentária - Entrada"
-        )
-
-        conta_orcamentaria_saida = col_conta2.text_input(
-            "Conta / Natureza Orçamentária - Saída"
-        )
-
-        st.markdown(
-            "### 📝 Especificação Técnica"
-        )
-
-        especificacao = st.text_area(
-            "Especificação Técnica",
-            height=160,
-            placeholder=(
-                "Características técnicas, composição, "
-                "dimensões, capacidade, qualidade, padrão, "
-                "garantia e demais requisitos."
-            )
-        )
-
-        observacoes = st.text_area(
-            "Observações Gerais",
-            height=100
-        )
-
-        salvar = st.form_submit_button(
-            "💾 Salvar Produto",
-            type="primary",
-            use_container_width=True
-        )
 
     # ========================================================
     # MENSAGEM
