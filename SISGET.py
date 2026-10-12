@@ -39482,164 +39482,928 @@ def cadastro_cotacoes_solicitacoes():
 
 def cotacao_incluir():
 
+    # ========================================================
+    # RESET
+    # ========================================================
+
     if "sisget_cotacao_reset" not in st.session_state:
-        st.session_state["sisget_cotacao_reset"] = 0
+
+        st.session_state[
+            "sisget_cotacao_reset"
+        ] = 0
 
     reset = st.session_state[
         "sisget_cotacao_reset"
     ]
 
+    # ========================================================
+    # MENSAGEM
+    # ========================================================
+
+    if "sisget_mensagem_cotacao" in st.session_state:
+
+        st.success(
+            st.session_state.pop(
+                "sisget_mensagem_cotacao"
+            )
+        )
+
+    # ========================================================
+    # SOLICITAÇÃO
+    # ========================================================
+
     solicitacao_id = sisget_selecionar_solicitacao(
         "Solicitação *",
-        f"cotacao_solicitacao_{reset}"
+        f"cotacao_solicitacao_{reset}",
+        "LICITACAO"
     )
 
     if not solicitacao_id:
+
         return
+
+    # ========================================================
+    # DADOS DA SOLICITAÇÃO
+    # ========================================================
+
+    solicitacao = _sisget_fetchone(
+        """
+        SELECT
+            numero,
+            objeto,
+            data_solicitacao,
+            prioridade,
+            status
+        FROM solicitacoes
+        WHERE id = ?
+        """,
+        (
+            solicitacao_id,
+        )
+    )
+
+    if not solicitacao:
+
+        st.error(
+            "❌ Solicitação não encontrada."
+        )
+
+        return
+
+    (
+        numero_solicitacao,
+        objeto_solicitacao,
+        data_solicitacao,
+        prioridade_solicitacao,
+        status_solicitacao
+    ) = solicitacao
+
+    try:
+
+        data_formatada = (
+            data_solicitacao.strftime(
+                "%d/%m/%Y"
+            )
+        )
+
+    except Exception:
+
+        data_formatada = str(
+            data_solicitacao
+            or ""
+        )
+
+    numero_formatado = str(
+        numero_solicitacao
+        or solicitacao_id
+    ).zfill(
+        6
+    )
+
+    # ========================================================
+    # ITENS DA SOLICITAÇÃO
+    # ========================================================
 
     itens = _sisget_fetch(
         """
         SELECT
             si.id,
+            si.numero_item,
+            si.codigo,
             p.codigo,
-            p.descricao,
-            si.quantidade_solicitada
+            COALESCE(
+                p.produto,
+                p.descricao
+            ),
+            si.quantidade,
+            si.valor_estimado_unitario,
+            si.valor_estimado_total
         FROM solicitacoes_itens si
         INNER JOIN produtos p
             ON p.id = si.produto_id
         WHERE si.solicitacao_id = ?
-          AND si.ativo = TRUE
-        ORDER BY si.id
+        ORDER BY
+            si.numero_item,
+            si.id
         """,
-        (solicitacao_id,)
+        (
+            solicitacao_id,
+        )
     )
+
+    if not itens:
+
+        st.warning(
+            "⚠️ A solicitação selecionada não possui itens."
+        )
+
+        return
+
+    # ========================================================
+    # FORNECEDORES CADASTRADOS
+    # ========================================================
 
     fornecedores = _sisget_fetch(
         """
         SELECT
             id,
             codigo,
-            razao_social
+            cpf_cnpj,
+            razao_social,
+            nome_fantasia,
+            telefone,
+            whatsapp,
+            email,
+            cidade,
+            uf,
+            situacao_cadastral
         FROM fornecedores
         WHERE ativo = TRUE
-        ORDER BY razao_social
+        ORDER BY
+            razao_social,
+            codigo
         """
     )
 
-    if not itens:
-        st.warning(
-            "⚠️ Solicitação sem itens."
-        )
-        return
-
     if not fornecedores:
+
         st.warning(
-            "⚠️ Cadastre fornecedores."
+            "⚠️ Nenhum fornecedor ativo cadastrado. "
+            "Cadastre um fornecedor antes de incluir a cotação."
         )
+
         return
 
-    mapa_itens = {
-        (
-            f"{codigo} - {descricao}"
-            f" | Qtd: {float(qtd):g}"
-        ): item_id
-        for item_id, codigo, descricao, qtd in itens
-    }
+    # ========================================================
+    # MAPA DE ITENS
+    # ========================================================
 
-    mapa_fornecedores = {
-        f"{codigo} - {razao}": fornecedor_id
-        for fornecedor_id, codigo, razao in fornecedores
-    }
+    mapa_itens = {}
 
-    codigo = sisget_proximo_codigo(
-        "cotacoes",
-        tamanho=6
+    for (
+        item_id,
+        numero_item,
+        codigo_item,
+        codigo_produto,
+        descricao_produto,
+        quantidade,
+        valor_estimado_unitario,
+        valor_estimado_total
+    ) in itens:
+
+        rotulo_item = (
+            f"Item {numero_item or '-'} | "
+            f"{codigo_produto or codigo_item or ''} - "
+            f"{descricao_produto or ''} | "
+            f"Qtd: {float(quantidade or 0):g}"
+        )
+
+        mapa_itens[
+            rotulo_item
+        ] = {
+            "id": item_id,
+            "numero_item": numero_item,
+            "codigo_item": codigo_item,
+            "codigo_produto": codigo_produto,
+            "descricao": descricao_produto,
+            "quantidade": float(
+                quantidade
+                or 0
+            ),
+            "valor_estimado_unitario": float(
+                valor_estimado_unitario
+                or 0
+            ),
+            "valor_estimado_total": float(
+                valor_estimado_total
+                or 0
+            )
+        }
+
+    # ========================================================
+    # MAPA DE FORNECEDORES
+    # ========================================================
+
+    mapa_fornecedores = {}
+
+    for (
+        fornecedor_id,
+        codigo_fornecedor,
+        cpf_cnpj,
+        razao_social,
+        nome_fantasia,
+        telefone,
+        whatsapp,
+        email,
+        cidade,
+        uf,
+        situacao_cadastral
+    ) in fornecedores:
+
+        rotulo_fornecedor = (
+            f"{codigo_fornecedor or fornecedor_id} - "
+            f"{razao_social or nome_fantasia or 'Fornecedor'}"
+        )
+
+        if cpf_cnpj:
+
+            rotulo_fornecedor += (
+                f" | {cpf_cnpj}"
+            )
+
+        mapa_fornecedores[
+            rotulo_fornecedor
+        ] = {
+            "id": fornecedor_id,
+            "codigo": codigo_fornecedor,
+            "cpf_cnpj": cpf_cnpj,
+            "razao_social": razao_social,
+            "nome_fantasia": nome_fantasia,
+            "telefone": telefone,
+            "whatsapp": whatsapp,
+            "email": email,
+            "cidade": cidade,
+            "uf": uf,
+            "situacao_cadastral": situacao_cadastral
+        }
+
+    # ========================================================
+    # INFORMAÇÕES DA SOLICITAÇÃO
+    # ========================================================
+
+    st.markdown(
+        "### 📄 Informações da Solicitação"
     )
 
-    with st.form(
-        f"form_cotacao_incluir_{reset}_{solicitacao_id}"
-    ):
-        st.text_input(
-            "Código",
-            value=codigo,
-            disabled=True
+    col_sol1, col_sol2, col_sol3 = st.columns(
+        3
+    )
+
+    col_sol1.metric(
+        "Solicitação",
+        numero_formatado
+    )
+
+    col_sol2.metric(
+        "Data",
+        data_formatada
+    )
+
+    col_sol3.metric(
+        "Itens",
+        len(
+            itens
+        )
+    )
+
+    st.text_area(
+        "Objeto",
+        value=(
+            objeto_solicitacao
+            or ""
+        ),
+        height=90,
+        disabled=True,
+        key=(
+            f"cotacao_objeto_"
+            f"{solicitacao_id}_"
+            f"{reset}"
+        )
+    )
+
+    col_sol4, col_sol5 = st.columns(
+        2
+    )
+
+    col_sol4.text_input(
+        "Prioridade",
+        value=(
+            prioridade_solicitacao
+            or ""
+        ),
+        disabled=True,
+        key=(
+            f"cotacao_prioridade_"
+            f"{solicitacao_id}_"
+            f"{reset}"
+        )
+    )
+
+    col_sol5.text_input(
+        "Status",
+        value=(
+            status_solicitacao
+            or ""
+        ),
+        disabled=True,
+        key=(
+            f"cotacao_status_"
+            f"{solicitacao_id}_"
+            f"{reset}"
+        )
+    )
+
+    st.markdown("---")
+
+    # ========================================================
+    # ITEM
+    # ========================================================
+
+    st.markdown(
+        "### 📦 Item da Cotação"
+    )
+
+    item_nome = st.selectbox(
+        "Item *",
+        list(
+            mapa_itens.keys()
+        ),
+        key=(
+            f"cotacao_item_"
+            f"{solicitacao_id}_"
+            f"{reset}"
+        )
+    )
+
+    dados_item = mapa_itens[
+        item_nome
+    ]
+
+    quantidade = float(
+        dados_item[
+            "quantidade"
+        ]
+        or 0
+    )
+
+    col_item1, col_item2, col_item3 = st.columns(
+        3
+    )
+
+    col_item1.metric(
+        "Quantidade",
+        f"{quantidade:g}"
+    )
+
+    valor_estimado_unitario = float(
+        dados_item[
+            "valor_estimado_unitario"
+        ]
+        or 0
+    )
+
+    valor_estimado_total = float(
+        dados_item[
+            "valor_estimado_total"
+        ]
+        or 0
+    )
+
+    valor_estimado_unitario_fmt = (
+        f"R$ {valor_estimado_unitario:,.2f}"
+        .replace(",", "X")
+        .replace(".", ",")
+        .replace("X", ".")
+    )
+
+    valor_estimado_total_fmt = (
+        f"R$ {valor_estimado_total:,.2f}"
+        .replace(",", "X")
+        .replace(".", ",")
+        .replace("X", ".")
+    )
+
+    col_item2.metric(
+        "Estimativa Unitária",
+        valor_estimado_unitario_fmt
+    )
+
+    col_item3.metric(
+        "Estimativa Total",
+        valor_estimado_total_fmt
+    )
+
+    # ========================================================
+    # FORNECEDOR
+    # ========================================================
+
+    st.markdown(
+        "### 🏢 Fornecedor"
+    )
+
+    fornecedor_nome = st.selectbox(
+        "Fornecedor Cadastrado *",
+        list(
+            mapa_fornecedores.keys()
+        ),
+        key=(
+            f"cotacao_fornecedor_"
+            f"{solicitacao_id}_"
+            f"{reset}"
+        )
+    )
+
+    dados_fornecedor = mapa_fornecedores[
+        fornecedor_nome
+    ]
+
+    col_forn1, col_forn2 = st.columns(
+        2
+    )
+
+    col_forn1.text_input(
+        "CPF / CNPJ",
+        value=(
+            dados_fornecedor[
+                "cpf_cnpj"
+            ]
+            or ""
+        ),
+        disabled=True,
+        key=(
+            f"cotacao_cnpj_"
+            f"{solicitacao_id}_"
+            f"{reset}"
+        )
+    )
+
+    col_forn2.text_input(
+        "Razão Social",
+        value=(
+            dados_fornecedor[
+                "razao_social"
+            ]
+            or ""
+        ),
+        disabled=True,
+        key=(
+            f"cotacao_razao_"
+            f"{solicitacao_id}_"
+            f"{reset}"
+        )
+    )
+
+    col_forn3, col_forn4, col_forn5 = st.columns(
+        3
+    )
+
+    contato_fornecedor = (
+        dados_fornecedor[
+            "whatsapp"
+        ]
+        or
+        dados_fornecedor[
+            "telefone"
+        ]
+        or ""
+    )
+
+    col_forn3.text_input(
+        "Contato",
+        value=contato_fornecedor,
+        disabled=True,
+        key=(
+            f"cotacao_contato_"
+            f"{solicitacao_id}_"
+            f"{reset}"
+        )
+    )
+
+    col_forn4.text_input(
+        "E-mail",
+        value=(
+            dados_fornecedor[
+                "email"
+            ]
+            or ""
+        ),
+        disabled=True,
+        key=(
+            f"cotacao_email_"
+            f"{solicitacao_id}_"
+            f"{reset}"
+        )
+    )
+
+    local_fornecedor = " / ".join(
+        [
+            valor
+            for valor in [
+                dados_fornecedor[
+                    "cidade"
+                ],
+                dados_fornecedor[
+                    "uf"
+                ]
+            ]
+            if valor
+        ]
+    )
+
+    col_forn5.text_input(
+        "Cidade / UF",
+        value=local_fornecedor,
+        disabled=True,
+        key=(
+            f"cotacao_local_"
+            f"{solicitacao_id}_"
+            f"{reset}"
+        )
+    )
+
+    situacao_cadastral = (
+        dados_fornecedor[
+            "situacao_cadastral"
+        ]
+        or ""
+    )
+
+    if situacao_cadastral:
+
+        st.caption(
+            f"Situação cadastral do fornecedor: "
+            f"{situacao_cadastral}"
         )
 
-        item_nome = st.selectbox(
-            "Item *",
-            list(mapa_itens.keys())
-        )
+    # ========================================================
+    # DADOS DA COTAÇÃO
+    # ========================================================
 
-        fornecedor_nome = st.selectbox(
-            "Fornecedor *",
-            list(mapa_fornecedores.keys())
-        )
+    st.markdown(
+        "### 💲 Dados da Cotação"
+    )
 
-        fonte = st.selectbox(
-            "Fonte da Pesquisa *",
-            [
-                "Cotação com fornecedor",
-                "Painel de preços",
-                "Contratação anterior",
-                "Ata / ARP",
-                "Banco de preços",
-                "Outra fonte"
+    fonte = st.selectbox(
+        "Fonte da Pesquisa *",
+        [
+            "Cotação com fornecedor",
+            "Painel de preços",
+            "Contratação anterior",
+            "Ata / ARP",
+            "Banco de preços",
+            "Outra fonte"
+        ],
+        key=(
+            f"cotacao_fonte_"
+            f"{solicitacao_id}_"
+            f"{reset}"
+        )
+    )
+
+    col_valor1, col_valor2 = st.columns(
+        2
+    )
+
+    valor_unitario = col_valor1.number_input(
+        "Valor Unitário *",
+        min_value=0.0,
+        value=0.0,
+        step=0.01,
+        format="%.2f",
+        key=(
+            f"cotacao_valor_unitario_"
+            f"{solicitacao_id}_"
+            f"{reset}"
+        )
+    )
+
+    valor_total = (
+        quantidade
+        *
+        float(
+            valor_unitario
+        )
+    )
+
+    valor_total_fmt = (
+        f"R$ {valor_total:,.2f}"
+        .replace(",", "X")
+        .replace(".", ",")
+        .replace("X", ".")
+    )
+
+    col_valor2.metric(
+        "Valor Total da Cotação",
+        valor_total_fmt
+    )
+
+    observacao = st.text_area(
+        "Observação",
+        height=100,
+        key=(
+            f"cotacao_observacao_"
+            f"{solicitacao_id}_"
+            f"{reset}"
+        )
+    )
+
+    documento_url = st.text_input(
+        "Documento / URL",
+        placeholder=(
+            "Informe o link ou referência do documento, "
+            "quando houver."
+        ),
+        key=(
+            f"cotacao_documento_"
+            f"{solicitacao_id}_"
+            f"{reset}"
+        )
+    )
+
+    # ========================================================
+    # COTAÇÕES JÁ CADASTRADAS PARA O ITEM
+    # ========================================================
+
+    cotacoes_item = _sisget_fetch(
+        """
+        SELECT
+            c.id,
+            f.razao_social,
+            c.fonte_pesquisa,
+            c.valor_unitario,
+            c.valor_total
+        FROM cotacoes c
+        LEFT JOIN fornecedores f
+            ON f.id = c.fornecedor_id
+        WHERE c.solicitacao_id = ?
+          AND c.solicitacao_item_id = ?
+        ORDER BY
+            c.valor_unitario,
+            c.id
+        """,
+        (
+            solicitacao_id,
+            dados_item[
+                "id"
             ]
         )
+    )
 
-        valor_unitario = st.number_input(
-            "Valor Unitário *",
-            min_value=0.0,
-            value=0.0,
-            format="%.2f"
+    if cotacoes_item:
+
+        st.markdown(
+            "### 📊 Cotações já cadastradas para este item"
         )
 
-        observacao = st.text_area(
-            "Observação"
+        tabela_cotacoes = []
+
+        for (
+            cotacao_id,
+            fornecedor_razao,
+            fonte_banco,
+            valor_unitario_banco,
+            valor_total_banco
+        ) in cotacoes_item:
+
+            tabela_cotacoes.append(
+                {
+                    "ID": cotacao_id,
+                    "Fornecedor": (
+                        fornecedor_razao
+                        or fonte_banco
+                        or "-"
+                    ),
+                    "Fonte": (
+                        fonte_banco
+                        or ""
+                    ),
+                    "Valor Unitário": float(
+                        valor_unitario_banco
+                        or 0
+                    ),
+                    "Valor Total": float(
+                        valor_total_banco
+                        or 0
+                    )
+                }
+            )
+
+        st.dataframe(
+            tabela_cotacoes,
+            use_container_width=True,
+            hide_index=True
         )
 
-        documento_url = st.text_input(
-            "Documento / URL"
-        )
+        valores_validos = [
+            float(
+                registro[3]
+                or 0
+            )
+            for registro in cotacoes_item
+            if float(
+                registro[3]
+                or 0
+            ) > 0
+        ]
 
-        salvar = st.form_submit_button(
-            "💾 Salvar Cotação",
-            type="primary",
-            use_container_width=True
+        if valores_validos:
+
+            menor_valor = min(
+                valores_validos
+            )
+
+            media_valores = (
+                sum(
+                    valores_validos
+                )
+                /
+                len(
+                    valores_validos
+                )
+            )
+
+            col_res1, col_res2, col_res3 = st.columns(
+                3
+            )
+
+            menor_valor_fmt = (
+                f"R$ {menor_valor:,.2f}"
+                .replace(",", "X")
+                .replace(".", ",")
+                .replace("X", ".")
+            )
+
+            media_valores_fmt = (
+                f"R$ {media_valores:,.2f}"
+                .replace(",", "X")
+                .replace(".", ",")
+                .replace("X", ".")
+            )
+
+            col_res1.metric(
+                "Cotações",
+                len(
+                    valores_validos
+                )
+            )
+
+            col_res2.metric(
+                "Menor Valor",
+                menor_valor_fmt
+            )
+
+            col_res3.metric(
+                "Média",
+                media_valores_fmt
+            )
+
+    # ========================================================
+    # SALVAR
+    # ========================================================
+
+    salvar = st.button(
+        "💾 Salvar Cotação",
+        type="primary",
+        use_container_width=True,
+        key=(
+            f"cotacao_salvar_"
+            f"{solicitacao_id}_"
+            f"{reset}"
         )
+    )
 
     if salvar:
-        item_id = mapa_itens[item_nome]
 
-        qtd_registro = _sisget_fetchone(
+        # ====================================================
+        # VALIDAÇÕES
+        # ====================================================
+
+        if float(
+            valor_unitario
+        ) <= 0:
+
+            st.warning(
+                "⚠️ Informe um Valor Unitário maior que zero."
+            )
+
+            return
+
+        fornecedor_id = dados_fornecedor[
+            "id"
+        ]
+
+        item_id = dados_item[
+            "id"
+        ]
+
+        fornecedor_valido = _sisget_fetchone(
             """
-            SELECT quantidade_solicitada
+            SELECT
+                id
+            FROM fornecedores
+            WHERE id = ?
+              AND ativo = TRUE
+            """,
+            (
+                fornecedor_id,
+            )
+        )
+
+        if not fornecedor_valido:
+
+            st.error(
+                "❌ O fornecedor selecionado não está "
+                "mais ativo ou disponível."
+            )
+
+            return
+
+        item_valido = _sisget_fetchone(
+            """
+            SELECT
+                id,
+                quantidade
             FROM solicitacoes_itens
             WHERE id = ?
+              AND solicitacao_id = ?
             """,
-            (item_id,)
+            (
+                item_id,
+                solicitacao_id
+            )
         )
 
-        quantidade = float(
-            qtd_registro[0] or 0
+        if not item_valido:
+
+            st.error(
+                "❌ O item selecionado não pertence "
+                "mais à solicitação."
+            )
+
+            return
+
+        quantidade_salvar = float(
+            item_valido[1]
+            or 0
         )
 
-        valor_total = (
-            quantidade
+        valor_total_salvar = (
+            quantidade_salvar
             *
-            float(valor_unitario)
+            float(
+                valor_unitario
+            )
         )
 
-        codigo = sisget_proximo_codigo(
-            "cotacoes",
-            tamanho=6
+        # ====================================================
+        # EVITAR DUPLICIDADE EXATA
+        # ====================================================
+
+        cotacao_existente = _sisget_fetchone(
+            """
+            SELECT
+                id
+            FROM cotacoes
+            WHERE solicitacao_id = ?
+              AND solicitacao_item_id = ?
+              AND fornecedor_id = ?
+            LIMIT 1
+            """,
+            (
+                solicitacao_id,
+                item_id,
+                fornecedor_id
+            )
         )
 
-        if _sisget_salvar(
+        if cotacao_existente:
+
+            st.warning(
+                "⚠️ Já existe uma cotação deste fornecedor "
+                "para este item. Use Alterar para atualizar "
+                "o valor existente."
+            )
+
+            return
+
+        # ====================================================
+        # GRAVAR
+        # ====================================================
+
+        sucesso = _sisget_salvar(
             """
             INSERT INTO cotacoes
             (
-                codigo,
                 solicitacao_id,
                 solicitacao_item_id,
                 fornecedor_id,
@@ -39650,24 +40414,44 @@ def cotacao_incluir():
                 documento_url
             )
             VALUES
-            (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (
+                ?, ?, ?, ?, ?, ?, ?, ?
+            )
             """,
             (
-                codigo,
                 solicitacao_id,
                 item_id,
-                mapa_fornecedores[fornecedor_nome],
+                fornecedor_id,
                 fonte,
-                float(valor_unitario),
-                valor_total,
-                observacao.strip() or None,
-                documento_url.strip() or None
+                float(
+                    valor_unitario
+                ),
+                valor_total_salvar,
+                observacao.strip()
+                or None,
+                documento_url.strip()
+                or None
             )
-        ):
+        )
+
+        if sucesso:
+
+            st.session_state[
+                "sisget_mensagem_cotacao"
+            ] = (
+                "✅ Cotação cadastrada com sucesso. "
+                f"Fornecedor: "
+                f"{dados_fornecedor['razao_social'] or '-'} | "
+                f"Valor Unitário: "
+                f"R$ {float(valor_unitario):,.2f}"
+            )
+
             st.session_state[
                 "sisget_cotacao_reset"
             ] += 1
+
             st.rerun()
+
 
 
 def cotacao_localizar():
