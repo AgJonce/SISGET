@@ -37608,24 +37608,497 @@ def cadastro_itens_solicitacoes():
 
 def solicitacao_item_incluir():
 
+    import pandas as pd
+
+
+    # ========================================================
+    # RESET / MENSAGEM
+    # ========================================================
+
     if "sisget_item_solicitacao_reset" not in st.session_state:
+
         st.session_state[
             "sisget_item_solicitacao_reset"
         ] = 0
+
 
     reset = st.session_state[
         "sisget_item_solicitacao_reset"
     ]
 
-    solicitacao_id = sisget_selecionar_solicitacao(
-        "Solicitação para Licitação *",
-        f"cotacao_solicitacao_{reset}",
-        "LICITACAO",
-        excluir_com_cotacao=True
+
+    if "sisget_mensagem_item_solicitacao" in st.session_state:
+
+        st.success(
+            st.session_state.pop(
+                "sisget_mensagem_item_solicitacao"
+            )
+        )
+
+
+    st.subheader(
+        "📦 Incluir Item na Solicitação"
     )
 
-    if not solicitacao_id:
+
+    st.caption(
+        "Selecione uma solicitação de licitação ainda não cotada "
+        "e inclua os itens que farão parte da pesquisa de preços."
+    )
+
+
+    # ========================================================
+    # SOLICITAÇÕES DISPONÍVEIS
+    # NÃO MOSTRA SOLICITAÇÃO QUE JÁ POSSUI COTAÇÃO
+    # ========================================================
+
+    solicitacoes = _sisget_fetch(
+        """
+        SELECT
+            s.id,
+            s.codigo,
+            s.numero,
+            s.objeto,
+            s.status,
+            s.etapa_atual,
+            s.data_solicitacao
+
+        FROM solicitacoes s
+
+        WHERE s.ativo = TRUE
+
+          AND UPPER(
+                TRIM(
+                    COALESCE(
+                        s.tipo_solicitacao,
+                        ''
+                    )
+                )
+              ) = 'LICITACAO'
+
+          AND NOT EXISTS
+          (
+              SELECT 1
+
+              FROM cotacoes c
+
+              WHERE c.solicitacao_id = s.id
+          )
+
+        ORDER BY
+            s.exercicio DESC,
+            s.numero DESC,
+            s.id DESC
+        """
+    )
+
+
+    if not solicitacoes:
+
+        st.info(
+            "✅ Não existem solicitações de licitação disponíveis "
+            "para inclusão de itens. Solicitações que já possuem "
+            "cotação não aparecem nesta tela."
+        )
+
         return
+
+
+    mapa_solicitacoes = {}
+
+
+    for (
+        solicitacao_id,
+        codigo_solicitacao,
+        numero_solicitacao,
+        objeto_solicitacao,
+        status_solicitacao,
+        etapa_solicitacao,
+        data_solicitacao
+    ) in solicitacoes:
+
+        identificacao = (
+            codigo_solicitacao
+            or numero_solicitacao
+            or solicitacao_id
+        )
+
+
+        rotulo = (
+            f"{identificacao}"
+            f" | {objeto_solicitacao or ''}"
+            f" | {status_solicitacao or ''}"
+        )
+
+
+        mapa_solicitacoes[
+            rotulo
+        ] = {
+            "id": solicitacao_id,
+            "codigo": codigo_solicitacao,
+            "numero": numero_solicitacao,
+            "objeto": objeto_solicitacao,
+            "status": status_solicitacao,
+            "etapa": etapa_solicitacao,
+            "data": data_solicitacao
+        }
+
+
+    solicitacao_nome = st.selectbox(
+        "Solicitação para Licitação *",
+        list(
+            mapa_solicitacoes.keys()
+        ),
+        key=(
+            f"item_solicitacao_"
+            f"{reset}"
+        )
+    )
+
+
+    dados_solicitacao = mapa_solicitacoes[
+        solicitacao_nome
+    ]
+
+
+    solicitacao_id = dados_solicitacao[
+        "id"
+    ]
+
+
+    # ========================================================
+    # RESUMO DA SOLICITAÇÃO
+    # ========================================================
+
+    st.markdown(
+        "### 📄 Solicitação Selecionada"
+    )
+
+
+    c1, c2, c3 = st.columns(
+        3
+    )
+
+
+    c1.text_input(
+        "Número",
+        value=str(
+            dados_solicitacao[
+                "numero"
+            ]
+            or dados_solicitacao[
+                "codigo"
+            ]
+            or ""
+        ),
+        disabled=True,
+        key=(
+            f"item_sol_numero_"
+            f"{solicitacao_id}_"
+            f"{reset}"
+        )
+    )
+
+
+    c2.text_input(
+        "Status",
+        value=str(
+            dados_solicitacao[
+                "status"
+            ]
+            or ""
+        ),
+        disabled=True,
+        key=(
+            f"item_sol_status_"
+            f"{solicitacao_id}_"
+            f"{reset}"
+        )
+    )
+
+
+    c3.text_input(
+        "Etapa Atual",
+        value=str(
+            dados_solicitacao[
+                "etapa"
+            ]
+            or ""
+        ),
+        disabled=True,
+        key=(
+            f"item_sol_etapa_"
+            f"{solicitacao_id}_"
+            f"{reset}"
+        )
+    )
+
+
+    st.text_area(
+        "Objeto",
+        value=str(
+            dados_solicitacao[
+                "objeto"
+            ]
+            or ""
+        ),
+        disabled=True,
+        height=80,
+        key=(
+            f"item_sol_objeto_"
+            f"{solicitacao_id}_"
+            f"{reset}"
+        )
+    )
+
+
+    # ========================================================
+    # ITENS JÁ INCLUÍDOS
+    # ========================================================
+
+    itens_existentes = _sisget_fetch(
+        """
+        SELECT
+            si.id,
+            si.numero_item,
+            si.codigo,
+            p.codigo,
+            p.descricao,
+            si.quantidade,
+            si.valor_estimado_unitario,
+            si.valor_estimado_total,
+            si.especificacao_complementar
+
+        FROM solicitacoes_itens si
+
+        INNER JOIN produtos p
+            ON p.id = si.produto_id
+
+        WHERE si.solicitacao_id = ?
+
+        ORDER BY
+            si.numero_item,
+            si.id
+        """,
+        (
+            solicitacao_id,
+        )
+    )
+
+
+    st.markdown(
+        "### 📋 Itens Já Incluídos"
+    )
+
+
+    if itens_existentes:
+
+        tabela_itens = []
+
+
+        for item in itens_existentes:
+
+            tabela_itens.append(
+                {
+                    "Item": item[
+                        1
+                    ],
+
+                    "Código": (
+                        item[
+                            3
+                        ]
+                        or item[
+                            2
+                        ]
+                        or ""
+                    ),
+
+                    "Produto": item[
+                        4
+                    ]
+                    or "",
+
+                    "Quantidade": float(
+                        item[
+                            5
+                        ]
+                        or 0
+                    ),
+
+                    "Valor Unitário": float(
+                        item[
+                            6
+                        ]
+                        or 0
+                    ),
+
+                    "Valor Total": float(
+                        item[
+                            7
+                        ]
+                        or 0
+                    ),
+
+                    "Especificação": item[
+                        8
+                    ]
+                    or ""
+                }
+            )
+
+
+        df_itens = pd.DataFrame(
+            tabela_itens
+        )
+
+
+        st.dataframe(
+            df_itens,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Item":
+                    st.column_config.NumberColumn(
+                        "Item",
+                        format="%d",
+                        width="small"
+                    ),
+
+                "Código":
+                    st.column_config.TextColumn(
+                        "Código",
+                        width="small"
+                    ),
+
+                "Produto":
+                    st.column_config.TextColumn(
+                        "Produto",
+                        width="large"
+                    ),
+
+                "Quantidade":
+                    st.column_config.NumberColumn(
+                        "Quantidade",
+                        format="%.6f",
+                        width="medium"
+                    ),
+
+                "Valor Unitário":
+                    st.column_config.NumberColumn(
+                        "Valor Unitário",
+                        format="R$ %.2f",
+                        width="medium"
+                    ),
+
+                "Valor Total":
+                    st.column_config.NumberColumn(
+                        "Valor Total",
+                        format="R$ %.2f",
+                        width="medium"
+                    ),
+
+                "Especificação":
+                    st.column_config.TextColumn(
+                        "Especificação",
+                        width="large"
+                    )
+            }
+        )
+
+
+        total_atual = sum(
+            float(
+                item[
+                    7
+                ]
+                or 0
+            )
+            for item in itens_existentes
+        )
+
+
+        r1, r2 = st.columns(
+            2
+        )
+
+
+        r1.metric(
+            "Quantidade de Itens",
+            len(
+                itens_existentes
+            )
+        )
+
+
+        r2.metric(
+            "Valor Estimado Atual",
+            (
+                f"R$ {total_atual:,.2f}"
+                .replace(
+                    ",",
+                    "X"
+                )
+                .replace(
+                    ".",
+                    ","
+                )
+                .replace(
+                    "X",
+                    "."
+                )
+            )
+        )
+
+
+    else:
+
+        st.info(
+            "ℹ️ Esta solicitação ainda não possui itens."
+        )
+
+
+    # ========================================================
+    # PRÓXIMO NÚMERO DO ITEM
+    # ========================================================
+
+    proximo_item = _sisget_fetchone(
+        """
+        SELECT
+            COALESCE(
+                MAX(
+                    numero_item
+                ),
+                0
+            ) + 1
+
+        FROM solicitacoes_itens
+
+        WHERE solicitacao_id = ?
+        """,
+        (
+            solicitacao_id,
+        )
+    )
+
+
+    numero_item = int(
+        proximo_item[
+            0
+        ]
+        or 1
+    )
+
+
+    codigo = sisget_proximo_codigo(
+        "solicitacoes_itens",
+        tamanho=6
+    )
+
+
+    # ========================================================
+    # PRODUTOS
+    # ========================================================
 
     produtos = _sisget_fetch(
         """
@@ -37633,109 +38106,500 @@ def solicitacao_item_incluir():
             id,
             codigo,
             descricao
+
         FROM produtos
+
         WHERE ativo = TRUE
-        ORDER BY codigo
+
+        ORDER BY
+            codigo,
+            descricao
         """
     )
 
+
     if not produtos:
+
         st.warning(
             "⚠️ Nenhum produto ativo cadastrado."
         )
+
         return
 
-    mapa_produtos = {
-        f"{codigo} - {descricao}": id_
-        for id_, codigo, descricao in produtos
-    }
 
-    codigo = sisget_proximo_codigo(
-        "solicitacoes_itens",
-        tamanho=6
+    mapa_produtos = {}
+
+
+    for (
+        produto_id,
+        codigo_produto,
+        descricao_produto
+    ) in produtos:
+
+        rotulo_produto = (
+            f"{codigo_produto or produto_id}"
+            f" - "
+            f"{descricao_produto or ''}"
+        )
+
+
+        mapa_produtos[
+            rotulo_produto
+        ] = {
+            "id": produto_id,
+            "codigo": codigo_produto,
+            "descricao": descricao_produto
+        }
+
+
+    # ========================================================
+    # NOVO ITEM
+    # ========================================================
+
+    st.markdown("---")
+
+
+    st.markdown(
+        "### ➕ Novo Item"
     )
 
-    with st.form(
-        f"form_solicitacao_item_{reset}_{solicitacao_id}"
+
+    i1, i2 = st.columns(
+        [
+            1,
+            1
+        ]
+    )
+
+
+    i1.text_input(
+        "Código",
+        value=str(
+            codigo
+            or ""
+        ),
+        disabled=True,
+        key=(
+            f"item_codigo_"
+            f"{solicitacao_id}_"
+            f"{reset}"
+        )
+    )
+
+
+    i2.text_input(
+        "Número do Item",
+        value=str(
+            numero_item
+        ),
+        disabled=True,
+        key=(
+            f"item_numero_"
+            f"{solicitacao_id}_"
+            f"{reset}"
+        )
+    )
+
+
+    produto_nome = st.selectbox(
+        "Produto *",
+        list(
+            mapa_produtos.keys()
+        ),
+        key=(
+            f"item_produto_"
+            f"{solicitacao_id}_"
+            f"{reset}"
+        )
+    )
+
+
+    produto_selecionado = mapa_produtos[
+        produto_nome
+    ]
+
+
+    produto_id = produto_selecionado[
+        "id"
+    ]
+
+
+    # ========================================================
+    # VERIFICAR SE PRODUTO JÁ ESTÁ NA SOLICITAÇÃO
+    # ========================================================
+
+    produto_ja_incluido = _sisget_fetchone(
+        """
+        SELECT
+            si.id,
+            si.numero_item
+
+        FROM solicitacoes_itens si
+
+        WHERE si.solicitacao_id = ?
+          AND si.produto_id = ?
+
+        ORDER BY
+            si.id
+
+        LIMIT 1
+        """,
+        (
+            solicitacao_id,
+            produto_id
+        )
+    )
+
+
+    if produto_ja_incluido:
+
+        st.warning(
+            "⚠️ Este produto já está incluído nesta solicitação "
+            f"no item {produto_ja_incluido[1]}. "
+            "Se realmente precisar repetir o produto, marque a "
+            "opção de confirmação abaixo."
+        )
+
+
+        permitir_repetir = st.checkbox(
+            "Permitir incluir o mesmo produto novamente",
+            key=(
+                f"item_repetir_"
+                f"{solicitacao_id}_"
+                f"{produto_id}_"
+                f"{reset}"
+            )
+        )
+
+
+    else:
+
+        permitir_repetir = True
+
+
+    # ========================================================
+    # QUANTIDADE / VALORES
+    # ========================================================
+
+    v1, v2, v3 = st.columns(
+        3
+    )
+
+
+    quantidade = v1.number_input(
+        "Quantidade *",
+        min_value=0.000001,
+        value=1.0,
+        step=1.0,
+        format="%.6f",
+        key=(
+            f"item_quantidade_"
+            f"{solicitacao_id}_"
+            f"{reset}"
+        )
+    )
+
+
+    valor_unitario = v2.number_input(
+        "Valor Estimado Unitário",
+        min_value=0.0,
+        value=0.0,
+        step=0.01,
+        format="%.2f",
+        key=(
+            f"item_valor_unitario_"
+            f"{solicitacao_id}_"
+            f"{reset}"
+        )
+    )
+
+
+    valor_total = (
+        float(
+            quantidade
+        )
+        *
+        float(
+            valor_unitario
+        )
+    )
+
+
+    v3.text_input(
+        "Valor Estimado Total",
+        value=(
+            f"R$ {valor_total:,.2f}"
+            .replace(
+                ",",
+                "X"
+            )
+            .replace(
+                ".",
+                ","
+            )
+            .replace(
+                "X",
+                "."
+            )
+        ),
+        disabled=True,
+        key=(
+            f"item_valor_total_"
+            f"{solicitacao_id}_"
+            f"{reset}"
+        )
+    )
+
+
+    # ========================================================
+    # ESPECIFICAÇÃO
+    # ========================================================
+
+    especificacao = st.text_area(
+        "Especificação Complementar",
+        placeholder=(
+            "Informe características adicionais que não estejam "
+            "no cadastro do produto, como apresentação, dimensão, "
+            "embalagem, capacidade, modelo de referência etc."
+        ),
+        height=100,
+        key=(
+            f"item_especificacao_"
+            f"{solicitacao_id}_"
+            f"{reset}"
+        )
+    )
+
+
+    # ========================================================
+    # RESUMO DO ITEM ANTES DE SALVAR
+    # ========================================================
+
+    with st.expander(
+        "🔎 Conferir item antes de salvar",
+        expanded=False
     ):
-        st.text_input(
-            "Código",
-            value=codigo,
-            disabled=True
+
+        st.write(
+            f"**Produto:** "
+            f"{produto_selecionado['codigo'] or ''}"
+            f" - "
+            f"{produto_selecionado['descricao'] or ''}"
         )
 
-        produto_nome = st.selectbox(
-            "Produto *",
-            list(mapa_produtos.keys())
+
+        st.write(
+            f"**Quantidade:** "
+            f"{float(quantidade):.6f}"
         )
 
-        quantidade = st.number_input(
-            "Quantidade *",
-            min_value=0.000001,
-            value=1.0,
-            format="%.6f"
+
+        st.write(
+            f"**Valor Unitário:** "
+            f"R$ {float(valor_unitario):,.2f}"
         )
 
-        valor_unitario = st.number_input(
-            "Valor Estimado Unitário",
-            min_value=0.0,
-            value=0.0,
-            format="%.2f"
+
+        st.write(
+            f"**Valor Total:** "
+            f"R$ {float(valor_total):,.2f}"
         )
 
-        observacao = st.text_area(
-            "Observação"
-        )
 
-        salvar = st.form_submit_button(
-            "💾 Salvar Item",
-            type="primary",
-            use_container_width=True
+        if especificacao.strip():
+
+            st.write(
+                f"**Especificação:** "
+                f"{especificacao.strip()}"
+            )
+
+
+    # ========================================================
+    # SALVAR
+    # ========================================================
+
+    salvar = st.button(
+        "💾 Salvar Item",
+        type="primary",
+        use_container_width=True,
+        key=(
+            f"salvar_item_solicitacao_"
+            f"{solicitacao_id}_"
+            f"{reset}"
         )
+    )
+
 
     if salvar:
-        codigo = sisget_proximo_codigo(
+
+        # ====================================================
+        # VALIDAÇÕES
+        # ====================================================
+
+        if quantidade <= 0:
+
+            st.warning(
+                "⚠️ Informe uma quantidade maior que zero."
+            )
+
+            return
+
+
+        if (
+            produto_ja_incluido
+            and
+            not permitir_repetir
+        ):
+
+            st.warning(
+                "⚠️ Este produto já está incluído na solicitação. "
+                "Marque a opção de confirmação caso realmente "
+                "precise repetir o produto."
+            )
+
+            return
+
+
+        # ====================================================
+        # CONFERIR SE A SOLICITAÇÃO AINDA NÃO FOI COTADA
+        # EVITA SALVAR SE OUTRO USUÁRIO COTOU ENQUANTO A TELA
+        # ESTAVA ABERTA
+        # ====================================================
+
+        ja_possui_cotacao = _sisget_fetchone(
+            """
+            SELECT
+                id
+
+            FROM cotacoes
+
+            WHERE solicitacao_id = ?
+
+            LIMIT 1
+            """,
+            (
+                solicitacao_id,
+            )
+        )
+
+
+        if ja_possui_cotacao:
+
+            st.error(
+                "❌ Esta solicitação já possui cotação. "
+                "Não é mais permitido incluir novos itens."
+            )
+
+            st.session_state[
+                "sisget_item_solicitacao_reset"
+            ] += 1
+
+
+            st.rerun()
+
+
+        # ====================================================
+        # RECALCULAR NÚMERO E CÓDIGO NO MOMENTO DA GRAVAÇÃO
+        # ====================================================
+
+        proximo_item_salvar = _sisget_fetchone(
+            """
+            SELECT
+                COALESCE(
+                    MAX(
+                        numero_item
+                    ),
+                    0
+                ) + 1
+
+            FROM solicitacoes_itens
+
+            WHERE solicitacao_id = ?
+            """,
+            (
+                solicitacao_id,
+            )
+        )
+
+
+        numero_item_salvar = int(
+            proximo_item_salvar[
+                0
+            ]
+            or 1
+        )
+
+
+        codigo_salvar = sisget_proximo_codigo(
             "solicitacoes_itens",
             tamanho=6
         )
 
-        valor_total = (
-            float(quantidade)
+
+        valor_total_salvar = (
+            float(
+                quantidade
+            )
             *
-            float(valor_unitario)
+            float(
+                valor_unitario
+            )
         )
+
+
+        # ====================================================
+        # INSERT - ESTRUTURA ATUAL
+        # ====================================================
 
         if _sisget_salvar(
             """
             INSERT INTO solicitacoes_itens
             (
-                codigo,
                 solicitacao_id,
                 produto_id,
-                quantidade_solicitada,
+                numero_item,
+                quantidade,
+                especificacao_complementar,
                 valor_estimado_unitario,
                 valor_estimado_total,
-                observacao,
-                ativo
+                codigo
             )
             VALUES
             (
-                ?, ?, ?, ?, ?, ?, ?, TRUE
+                ?, ?, ?, ?, ?, ?, ?, ?
             )
             """,
             (
-                codigo,
                 solicitacao_id,
-                mapa_produtos[produto_nome],
-                float(quantidade),
-                float(valor_unitario),
-                valor_total,
-                observacao.strip() or None
+                produto_id,
+                numero_item_salvar,
+                float(
+                    quantidade
+                ),
+                especificacao.strip()
+                or None,
+                float(
+                    valor_unitario
+                ),
+                valor_total_salvar,
+                codigo_salvar
             )
         ):
+
+            st.session_state[
+                "sisget_mensagem_item_solicitacao"
+            ] = (
+                f"✅ Item {numero_item_salvar} - "
+                f"{produto_selecionado['descricao'] or ''} "
+                "incluído com sucesso."
+            )
+
+
             st.session_state[
                 "sisget_item_solicitacao_reset"
             ] += 1
+
+
             st.rerun()
 
 
