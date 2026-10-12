@@ -38614,35 +38614,17 @@ def cadastro_riscos_solicitacoes():
 
 def risco_incluir():
 
-    # ========================================================
-    # RESET
-    # ========================================================
-
     if "sisget_risco_reset" not in st.session_state:
+        st.session_state["sisget_risco_reset"] = 0
 
-        st.session_state[
-            "sisget_risco_reset"
-        ] = 0
-
-    reset = st.session_state[
-        "sisget_risco_reset"
-    ]
-
-    # ========================================================
-    # MENSAGEM
-    # ========================================================
+    reset = st.session_state["sisget_risco_reset"]
 
     if "sisget_mensagem_risco" in st.session_state:
-
         st.success(
             st.session_state.pop(
                 "sisget_mensagem_risco"
             )
         )
-
-    # ========================================================
-    # SOLICITAÇÃO
-    # ========================================================
 
     solicitacao_id = sisget_selecionar_solicitacao(
         "Solicitação *",
@@ -38651,22 +38633,16 @@ def risco_incluir():
     )
 
     if not solicitacao_id:
-
-        st.warning(
-            "⚠️ Selecione uma solicitação."
-        )
-
         return
-
-    # ========================================================
-    # DADOS DA SOLICITAÇÃO
-    # ========================================================
 
     solicitacao = _sisget_fetchone(
         """
         SELECT
-            codigo,
-            objeto
+            numero,
+            titulo,
+            data_solicitacao,
+            prioridade,
+            status
         FROM solicitacoes
         WHERE id = ?
         """,
@@ -38675,287 +38651,469 @@ def risco_incluir():
         )
     )
 
-    if solicitacao:
+    if not solicitacao:
+        st.error(
+            "❌ Solicitação não encontrada."
+        )
+        return
 
-        st.info(
-            f"📄 Solicitação: "
-            f"{solicitacao[0] or '-'} | "
-            f"{solicitacao[1] or '-'}"
+    (
+        numero_solicitacao,
+        objeto_solicitacao,
+        data_solicitacao,
+        prioridade_solicitacao,
+        status_solicitacao
+    ) = solicitacao
+
+    total = _sisget_fetchone(
+        """
+        SELECT
+            COALESCE(
+                SUM(valor_estimado_total),
+                0
+            )
+        FROM solicitacoes_itens
+        WHERE solicitacao_id = ?
+        """,
+        (
+            solicitacao_id,
+        )
+    )
+
+    valor_total = float(
+        total[0] or 0
+    ) if total else 0.0
+
+    valor_formatado = (
+        f"R$ {valor_total:,.2f}"
+        .replace(",", "X")
+        .replace(".", ",")
+        .replace("X", ".")
+    )
+
+    try:
+        data_formatada = data_solicitacao.strftime(
+            "%d/%m/%Y"
+        )
+    except Exception:
+        data_formatada = str(
+            data_solicitacao or ""
         )
 
-    # ========================================================
-    # FORMULÁRIO
-    # ========================================================
+    numero_formatado = str(
+        numero_solicitacao or solicitacao_id
+    ).zfill(6)
 
-    with st.form(
-        f"form_risco_incluir_"
-        f"{reset}_"
-        f"{solicitacao_id}",
-        clear_on_submit=False
+    st.markdown(
+        "### 📄 Informações da Solicitação"
+    )
+
+    col_info1, col_info2, col_info3 = st.columns(
+        3
+    )
+
+    col_info1.metric(
+        "Solicitação",
+        numero_formatado
+    )
+
+    col_info2.metric(
+        "Data",
+        data_formatada
+    )
+
+    col_info3.metric(
+        "Valor Estimado",
+        valor_formatado
+    )
+
+    st.text_area(
+        "Objeto",
+        value=(
+            objeto_solicitacao or ""
+        ),
+        height=100,
+        disabled=True,
+        key=(
+            f"risco_objeto_"
+            f"{solicitacao_id}_"
+            f"{reset}"
+        )
+    )
+
+    col_info4, col_info5 = st.columns(
+        2
+    )
+
+    col_info4.text_input(
+        "Prioridade",
+        value=(
+            prioridade_solicitacao or ""
+        ),
+        disabled=True,
+        key=(
+            f"risco_prioridade_"
+            f"{solicitacao_id}_"
+            f"{reset}"
+        )
+    )
+
+    col_info5.text_input(
+        "Status",
+        value=(
+            status_solicitacao or ""
+        ),
+        disabled=True,
+        key=(
+            f"risco_status_"
+            f"{solicitacao_id}_"
+            f"{reset}"
+        )
+    )
+
+    quantidade_riscos = _sisget_fetchone(
+        """
+        SELECT
+            COUNT(*)
+        FROM solicitacoes_riscos
+        WHERE solicitacao_id = ?
+        """,
+        (
+            solicitacao_id,
+        )
+    )
+
+    total_riscos = (
+        int(
+            quantidade_riscos[0] or 0
+        )
+        if quantidade_riscos
+        else 0
+    )
+
+    if total_riscos > 0:
+        st.warning(
+            "⚠️ Esta solicitação já possui "
+            "Mapa de Riscos. "
+            f"Riscos cadastrados: {total_riscos}. "
+            "Você pode adicionar novos riscos ao mapa."
+        )
+
+    st.markdown("---")
+
+    st.markdown(
+        "### ⚠️ Identificação do Risco"
+    )
+
+    categoria = st.selectbox(
+        "Categoria *",
+        [
+            "Técnico",
+            "Financeiro",
+            "Orçamentário",
+            "Jurídico",
+            "Operacional",
+            "Prazo",
+            "Fornecedor",
+            "Mercado",
+            "Fiscal",
+            "Ambiental",
+            "Logístico",
+            "Outro"
+        ],
+        key=(
+            f"risco_categoria_"
+            f"{solicitacao_id}_"
+            f"{reset}"
+        )
+    )
+
+    evento = st.text_area(
+        "Evento de Risco *",
+        height=100,
+        placeholder=(
+            "Ex.: Atraso na entrega do objeto."
+        ),
+        key=(
+            f"risco_evento_"
+            f"{solicitacao_id}_"
+            f"{reset}"
+        )
+    )
+
+    col_text1, col_text2 = st.columns(
+        2
+    )
+
+    causa = col_text1.text_area(
+        "Causa *",
+        height=120,
+        placeholder=(
+            "Ex.: Falta de estoque do fornecedor."
+        ),
+        key=(
+            f"risco_causa_"
+            f"{solicitacao_id}_"
+            f"{reset}"
+        )
+    )
+
+    consequencia = col_text2.text_area(
+        "Consequência *",
+        height=120,
+        placeholder=(
+            "Ex.: Comprometimento do atendimento."
+        ),
+        key=(
+            f"risco_consequencia_"
+            f"{solicitacao_id}_"
+            f"{reset}"
+        )
+    )
+
+    st.markdown(
+        "### 📊 Avaliação do Risco"
+    )
+
+    mapa_probabilidade = {
+        "1 - Rara": 1,
+        "2 - Improvável": 2,
+        "3 - Possível": 3,
+        "4 - Provável": 4,
+        "5 - Quase certa": 5
+    }
+
+    mapa_impacto = {
+        "1 - Muito baixo": 1,
+        "2 - Baixo": 2,
+        "3 - Moderado": 3,
+        "4 - Alto": 4,
+        "5 - Muito alto": 5
+    }
+
+    col1, col2 = st.columns(
+        2
+    )
+
+    probabilidade_nome = col1.selectbox(
+        "Probabilidade *",
+        list(
+            mapa_probabilidade.keys()
+        ),
+        index=2,
+        key=(
+            f"risco_probabilidade_"
+            f"{solicitacao_id}_"
+            f"{reset}"
+        )
+    )
+
+    impacto_nome = col2.selectbox(
+        "Impacto *",
+        list(
+            mapa_impacto.keys()
+        ),
+        index=2,
+        key=(
+            f"risco_impacto_"
+            f"{solicitacao_id}_"
+            f"{reset}"
+        )
+    )
+
+    probabilidade = mapa_probabilidade[
+        probabilidade_nome
+    ]
+
+    impacto = mapa_impacto[
+        impacto_nome
+    ]
+
+    nivel = (
+        int(
+            probabilidade
+        )
+        *
+        int(
+            impacto
+        )
+    )
+
+    if nivel <= 4:
+        classificacao = "Baixo"
+    elif nivel <= 9:
+        classificacao = "Moderado"
+    elif nivel <= 16:
+        classificacao = "Alto"
+    else:
+        classificacao = "Crítico"
+
+    col_nivel1, col_nivel2 = st.columns(
+        2
+    )
+
+    col_nivel1.metric(
+        "Nível Calculado",
+        nivel
+    )
+
+    col_nivel2.metric(
+        "Classificação",
+        classificacao
+    )
+
+    continuar_risco_elevado = True
+
+    if classificacao in (
+        "Alto",
+        "Crítico"
     ):
 
-        # ====================================================
-        # CATEGORIA
-        # ====================================================
-
-        categoria = st.selectbox(
-            "Categoria *",
-            [
-                "Técnico",
-                "Financeiro",
-                "Orçamentário",
-                "Jurídico",
-                "Operacional",
-                "Prazo",
-                "Fornecedor",
-                "Mercado",
-                "Fiscal",
-                "Ambiental",
-                "Logístico",
-                "Outro"
-            ]
-        )
-
-        # ====================================================
-        # EVENTO
-        # ====================================================
-
-        evento = st.text_area(
-            "Evento de Risco *",
-            height=100,
-            placeholder=(
-                "Ex.: Atraso na entrega do objeto."
+        if classificacao == "Crítico":
+            st.error(
+                "🚨 ATENÇÃO: Este risco foi classificado "
+                "como CRÍTICO. "
+                "Deseja continuar com o cadastro?"
             )
-        )
-
-        # ====================================================
-        # CAUSA / CONSEQUÊNCIA
-        # ====================================================
-
-        col_text1, col_text2 = st.columns(
-            2
-        )
-
-        causa = col_text1.text_area(
-            "Causa *",
-            height=120,
-            placeholder=(
-                "Ex.: Falta de estoque do fornecedor."
-            )
-        )
-
-        consequencia = col_text2.text_area(
-            "Consequência *",
-            height=120,
-            placeholder=(
-                "Ex.: Comprometimento do atendimento."
-            )
-        )
-
-        # ====================================================
-        # PROBABILIDADE / IMPACTO
-        # ====================================================
-
-        st.markdown(
-            "### 📊 Avaliação do Risco"
-        )
-
-        mapa_probabilidade = {
-            "1 - Rara": 1,
-            "2 - Improvável": 2,
-            "3 - Possível": 3,
-            "4 - Provável": 4,
-            "5 - Quase certa": 5
-        }
-
-        mapa_impacto = {
-            "1 - Muito baixo": 1,
-            "2 - Baixo": 2,
-            "3 - Moderado": 3,
-            "4 - Alto": 4,
-            "5 - Muito alto": 5
-        }
-
-        col1, col2 = st.columns(
-            2
-        )
-
-        probabilidade_nome = col1.selectbox(
-            "Probabilidade *",
-            list(
-                mapa_probabilidade.keys()
-            ),
-            index=2
-        )
-
-        impacto_nome = col2.selectbox(
-            "Impacto *",
-            list(
-                mapa_impacto.keys()
-            ),
-            index=2
-        )
-
-        probabilidade = mapa_probabilidade[
-            probabilidade_nome
-        ]
-
-        impacto = mapa_impacto[
-            impacto_nome
-        ]
-
-        nivel = (
-            int(
-                probabilidade
-            )
-            *
-            int(
-                impacto
-            )
-        )
-
-        # ====================================================
-        # CLASSIFICAÇÃO DO RISCO
-        # ====================================================
-
-        if nivel <= 4:
-
-            classificacao = "Baixo"
-
-        elif nivel <= 9:
-
-            classificacao = "Moderado"
-
-        elif nivel <= 16:
-
-            classificacao = "Alto"
-
         else:
+            st.warning(
+                "⚠️ ATENÇÃO: Este risco foi classificado "
+                "como ALTO. "
+                "Deseja continuar com o cadastro?"
+            )
 
-            classificacao = "Crítico"
-
-        col_nivel1, col_nivel2 = st.columns(
-            2
-        )
-
-        col_nivel1.metric(
-            "Nível Calculado",
-            nivel
-        )
-
-        col_nivel2.metric(
-            "Classificação",
-            classificacao
-        )
-
-        # ====================================================
-        # RESPOSTA
-        # ====================================================
-
-        resposta = st.selectbox(
-            "Resposta ao Risco *",
+        continuar_risco_elevado = st.radio(
+            "Deseja continuar?",
             [
-                "Mitigar",
-                "Evitar",
-                "Transferir",
-                "Aceitar"
-            ]
-        )
-
-        # ====================================================
-        # AÇÕES
-        # ====================================================
-
-        preventiva = st.text_area(
-            "Ação Preventiva / Mitigadora",
-            height=100,
-            placeholder=(
-                "Informe as medidas para reduzir "
-                "a probabilidade ou o impacto."
+                "Não",
+                "Sim"
+            ],
+            index=0,
+            horizontal=True,
+            key=(
+                f"risco_confirmar_elevado_"
+                f"{solicitacao_id}_"
+                f"{reset}_"
+                f"{nivel}"
             )
+        ) == "Sim"
+
+    st.markdown(
+        "### 🛡️ Tratamento do Risco"
+    )
+
+    resposta = st.selectbox(
+        "Resposta ao Risco *",
+        [
+            "Mitigar",
+            "Evitar",
+            "Transferir",
+            "Aceitar"
+        ],
+        key=(
+            f"risco_resposta_"
+            f"{solicitacao_id}_"
+            f"{reset}"
         )
+    )
 
-        contingencia = st.text_area(
-            "Plano de Contingência",
-            height=100,
-            placeholder=(
-                "Informe o que deverá ser feito "
-                "caso o risco se concretize."
-            )
+    preventiva = st.text_area(
+        "Ação Preventiva / Mitigadora",
+        height=100,
+        placeholder=(
+            "Informe as medidas para reduzir "
+            "a probabilidade ou o impacto."
+        ),
+        key=(
+            f"risco_preventiva_"
+            f"{solicitacao_id}_"
+            f"{reset}"
         )
+    )
 
-        responsavel = st.text_input(
-            "Responsável pelo Monitoramento"
+    contingencia = st.text_area(
+        "Plano de Contingência",
+        height=100,
+        placeholder=(
+            "Informe o que deverá ser feito "
+            "caso o risco se concretize."
+        ),
+        key=(
+            f"risco_contingencia_"
+            f"{solicitacao_id}_"
+            f"{reset}"
         )
+    )
 
-        # ====================================================
-        # SALVAR
-        # ====================================================
-
-        salvar = st.form_submit_button(
-            "💾 Salvar Risco",
-            type="primary",
-            use_container_width=True
+    responsavel = st.text_input(
+        "Responsável pelo Monitoramento",
+        key=(
+            f"risco_responsavel_"
+            f"{solicitacao_id}_"
+            f"{reset}"
         )
+    )
 
-    # ========================================================
-    # GRAVAÇÃO
-    # ========================================================
+    salvar = st.button(
+        "💾 Salvar Risco",
+        type="primary",
+        use_container_width=True,
+        key=(
+            f"risco_salvar_"
+            f"{solicitacao_id}_"
+            f"{reset}"
+        )
+    )
 
     if salvar:
 
-        # ====================================================
-        # VALIDAÇÕES
-        # ====================================================
-
         if not evento.strip():
-
             st.warning(
                 "⚠️ Informe o Evento de Risco."
             )
-
             return
 
         if not causa.strip():
-
             st.warning(
                 "⚠️ Informe a Causa do risco."
             )
-
             return
 
         if not consequencia.strip():
-
             st.warning(
                 "⚠️ Informe a Consequência do risco."
             )
-
             return
+
+        if classificacao in (
+            "Alto",
+            "Crítico"
+        ):
+            if not continuar_risco_elevado:
+                st.warning(
+                    "⚠️ Confirme que deseja continuar "
+                    "com o cadastro do risco "
+                    f"{classificacao.upper()}."
+                )
+                return
 
         if resposta in (
             "Mitigar",
             "Evitar"
         ):
-
             if not preventiva.strip():
-
                 st.warning(
                     "⚠️ Informe a Ação Preventiva "
                     "ou Mitigadora."
                 )
-
                 return
-
-        # ====================================================
-        # CONFIRMAR SOLICITAÇÃO
-        # ====================================================
 
         solicitacao_valida = _sisget_fetchone(
             """
-            SELECT id
+            SELECT
+                id
             FROM solicitacoes
             WHERE id = ?
-              AND ativo = TRUE
             """,
             (
                 solicitacao_id,
@@ -38963,17 +39121,11 @@ def risco_incluir():
         )
 
         if not solicitacao_valida:
-
             st.error(
                 "❌ A solicitação selecionada "
                 "não está mais disponível."
             )
-
             return
-
-        # ====================================================
-        # SALVAR RISCO
-        # ====================================================
 
         sucesso = _sisget_salvar(
             """
@@ -39024,16 +39176,13 @@ def risco_incluir():
             )
         )
 
-        # ====================================================
-        # SUCESSO
-        # ====================================================
-
         if sucesso:
-
             st.session_state[
                 "sisget_mensagem_risco"
             ] = (
-                "✅ Risco cadastrado com sucesso."
+                "✅ Risco cadastrado com sucesso. "
+                f"Nível: {nivel} | "
+                f"Classificação: {classificacao}."
             )
 
             st.session_state[
