@@ -38397,6 +38397,7 @@ def modulo_documentos_solicitacoes():
 # ITENS - TELA PRINCIPAL
 # ============================================================
 
+
 def cadastro_itens_solicitacoes():
 
     sisget_tela_principal(
@@ -38412,9 +38413,6 @@ def cadastro_itens_solicitacoes():
 
 
 def solicitacao_item_incluir():
-
-    import pandas as pd
-
 
     # ========================================================
     # RESET / MENSAGEM
@@ -38439,11 +38437,6 @@ def solicitacao_item_incluir():
                 "sisget_mensagem_item_solicitacao"
             )
         )
-
-
-    st.subheader(
-        "📦 Incluir Item na Solicitação"
-    )
 
 
     # ========================================================
@@ -38643,204 +38636,6 @@ def solicitacao_item_incluir():
             f"{reset}"
         )
     )
-
-
-    # ========================================================
-    # ITENS JÁ INCLUÍDOS
-    # ========================================================
-
-    itens_existentes = _sisget_fetch(
-        """
-        SELECT
-            si.id,
-            si.numero_item,
-            si.codigo,
-            p.codigo,
-            p.descricao,
-            si.quantidade,
-            si.valor_estimado_unitario,
-            si.valor_estimado_total,
-            si.especificacao_complementar
-
-        FROM solicitacoes_itens si
-
-        INNER JOIN produtos p
-            ON p.id = si.produto_id
-
-        WHERE si.solicitacao_id = ?
-
-        ORDER BY
-            si.numero_item,
-            si.id
-        """,
-        (
-            solicitacao_id,
-        )
-    )
-
-
-    if itens_existentes:
-
-        tabela_itens = []
-
-
-        for item in itens_existentes:
-
-            tabela_itens.append(
-                {
-                    "Item": item[
-                        1
-                    ],
-
-                    "Código": (
-                        item[
-                            3
-                        ]
-                        or item[
-                            2
-                        ]
-                        or ""
-                    ),
-
-                    "Produto": item[
-                        4
-                    ]
-                    or "",
-
-                    "Quantidade": float(
-                        item[
-                            5
-                        ]
-                        or 0
-                    ),
-
-                    "Valor Unitário": float(
-                        item[
-                            6
-                        ]
-                        or 0
-                    ),
-
-                    "Valor Total": float(
-                        item[
-                            7
-                        ]
-                        or 0
-                    ),
-
-                    "Especificação": item[
-                        8
-                    ]
-                    or ""
-                }
-            )
-
-
-        st.dataframe(
-            pd.DataFrame(
-                tabela_itens
-            ),
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                "Item":
-                    st.column_config.NumberColumn(
-                        "Item",
-                        format="%d",
-                        width="small"
-                    ),
-
-                "Código":
-                    st.column_config.TextColumn(
-                        "Código",
-                        width="small"
-                    ),
-
-                "Produto":
-                    st.column_config.TextColumn(
-                        "Produto",
-                        width="large"
-                    ),
-
-                "Quantidade":
-                    st.column_config.NumberColumn(
-                        "Quantidade",
-                        format="%.6f",
-                        width="medium"
-                    ),
-
-                "Valor Unitário":
-                    st.column_config.NumberColumn(
-                        "Valor Unitário",
-                        format="R$ %.2f",
-                        width="medium"
-                    ),
-
-                "Valor Total":
-                    st.column_config.NumberColumn(
-                        "Valor Total",
-                        format="R$ %.2f",
-                        width="medium"
-                    ),
-
-                "Especificação":
-                    st.column_config.TextColumn(
-                        "Especificação",
-                        width="large"
-                    )
-            }
-        )
-
-
-        total_atual = sum(
-            float(
-                item[
-                    7
-                ]
-                or 0
-            )
-            for item in itens_existentes
-        )
-
-
-        r1, r2 = st.columns(
-            2
-        )
-
-
-        r1.metric(
-            "Quantidade de Itens",
-            len(
-                itens_existentes
-            )
-        )
-
-
-        r2.metric(
-            "Valor Estimado Atual",
-            (
-                f"R$ {total_atual:,.2f}"
-                .replace(
-                    ",",
-                    "X"
-                )
-                .replace(
-                    ".",
-                    ","
-                )
-                .replace(
-                    "X",
-                    "."
-                )
-            )
-        )
-
-
-    else:
-
-        st.info(
-            "ℹ️ Esta solicitação ainda não possui itens."
-        )
 
 
     # ========================================================
@@ -39303,7 +39098,6 @@ def solicitacao_item_incluir():
 
 
             st.rerun()
-
 
 
 def solicitacao_item_localizar():
