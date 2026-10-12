@@ -39674,6 +39674,7 @@ def _cotacao_buscar_precos_gov(
 
     import requests
 
+
     codigo_limpo = "".join(
         caractere
         for caractere in str(
@@ -39683,52 +39684,234 @@ def _cotacao_buscar_precos_gov(
         if caractere.isdigit()
     )
 
+
     if not codigo_limpo:
+
+        st.warning(
+            "⚠️ Informe um código CATMAT/CATSER válido."
+        )
 
         return []
 
+
+    codigo_numero = int(
+        codigo_limpo
+    )
+
+
+    # ========================================================
+    # DEFINIR ENDPOINTS
+    # ========================================================
+
     if tipo_catalogo == "Serviço":
 
-        url = (
+        url_catalogo = (
+            "https://dadosabertos.compras.gov.br/"
+            "modulo-servico/"
+            "6_consultarItemServico"
+        )
+
+        parametros_catalogo = {
+            "pagina": 1,
+            "tamanhoPagina": 10,
+            "codigoServico": codigo_numero
+        }
+
+
+        url_precos = (
             "https://dadosabertos.compras.gov.br/"
             "modulo-pesquisa-preco/"
             "3_consultarServico"
         )
 
+
     else:
 
-        url = (
+        url_catalogo = (
+            "https://dadosabertos.compras.gov.br/"
+            "modulo-material/"
+            "4_consultarItemMaterial"
+        )
+
+        parametros_catalogo = {
+            "pagina": 1,
+            "tamanhoPagina": 10,
+            "codigoItem": codigo_numero
+        }
+
+
+        url_precos = (
             "https://dadosabertos.compras.gov.br/"
             "modulo-pesquisa-preco/"
             "1_consultarMaterial"
         )
 
-    parametros = {
+
+    headers = {
+        "accept": "*/*",
+        "User-Agent": "SISGET/1.0"
+    }
+
+
+    # ========================================================
+    # VALIDAR CATMAT / CATSER NO CATÁLOGO
+    # ========================================================
+
+    try:
+
+        resposta_catalogo = requests.get(
+            url_catalogo,
+            params=parametros_catalogo,
+            headers=headers,
+            timeout=30
+        )
+
+
+        if resposta_catalogo.status_code == 404:
+
+            st.warning(
+                "⚠️ O código informado não foi encontrado "
+                "no catálogo atual do Compras.gov.br."
+            )
+
+            return []
+
+
+        resposta_catalogo.raise_for_status()
+
+
+        dados_catalogo = resposta_catalogo.json()
+
+
+        registros_catalogo = (
+            dados_catalogo.get(
+                "resultado",
+                []
+            )
+            or []
+        )
+
+
+        if not registros_catalogo:
+
+            st.warning(
+                "⚠️ O código informado não foi localizado "
+                "no catálogo do Compras.gov.br."
+            )
+
+            return []
+
+
+        # ====================================================
+        # MOSTRAR ITEM ENCONTRADO
+        # ====================================================
+
+        item_catalogo = registros_catalogo[
+            0
+        ]
+
+
+        if tipo_catalogo == "Serviço":
+
+            descricao_catalogo = (
+                item_catalogo.get(
+                    "nomeServico"
+                )
+                or ""
+            )
+
+        else:
+
+            descricao_catalogo = (
+                item_catalogo.get(
+                    "descricaoItem"
+                )
+                or ""
+            )
+
+
+        if descricao_catalogo:
+
+            st.success(
+                f"✅ Código localizado no catálogo: "
+                f"{codigo_limpo} - {descricao_catalogo}"
+            )
+
+
+    except requests.exceptions.Timeout:
+
+        st.error(
+            "❌ O Compras.gov.br demorou muito "
+            "para responder ao validar o catálogo."
+        )
+
+        return []
+
+
+    except requests.exceptions.RequestException as erro:
+
+        st.error(
+            "❌ Erro ao consultar o catálogo "
+            f"do Compras.gov.br: {erro}"
+        )
+
+        return []
+
+
+    except Exception as erro:
+
+        st.error(
+            f"❌ Erro ao validar CATMAT/CATSER: {erro}"
+        )
+
+        return []
+
+
+    # ========================================================
+    # PESQUISAR PREÇOS
+    # ========================================================
+
+    parametros_precos = {
         "pagina": 1,
         "tamanhoPagina": int(
             tamanho_pagina
         ),
-        "codigoItemCatalogo": int(
-            codigo_limpo
-        )
+        "codigoItemCatalogo": codigo_numero
     }
+
 
     try:
 
         resposta = requests.get(
-            url,
-            params=parametros,
-            headers={
-                "accept": "*/*"
-            },
-            timeout=30
+            url_precos,
+            params=parametros_precos,
+            headers=headers,
+            timeout=40
         )
+
+
+        # ====================================================
+        # O COMPRAS.GOV PODE RETORNAR 404 QUANDO NÃO HÁ PREÇO
+        # ====================================================
+
+        if resposta.status_code == 404:
+
+            st.warning(
+                "⚠️ O item existe no catálogo, mas não foram "
+                "encontrados preços praticados para este "
+                "CATMAT/CATSER no banco de preços."
+            )
+
+            return []
+
 
         resposta.raise_for_status()
 
+
         dados = resposta.json()
 
-        return (
+
+        resultados = (
             dados.get(
                 "resultado",
                 []
@@ -39736,11 +39919,50 @@ def _cotacao_buscar_precos_gov(
             or []
         )
 
+
+        if not resultados:
+
+            st.info(
+                "ℹ️ O item foi localizado no catálogo, "
+                "mas não possui preços praticados disponíveis."
+            )
+
+            return []
+
+
+        st.success(
+            f"✅ {len(resultados)} preço(s) encontrado(s) "
+            "no Compras.gov.br."
+        )
+
+
+        return resultados
+
+
+    except requests.exceptions.Timeout:
+
+        st.error(
+            "❌ A consulta de preços do Compras.gov.br "
+            "excedeu o tempo limite."
+        )
+
+        return []
+
+
+    except requests.exceptions.RequestException as erro:
+
+        st.error(
+            "❌ Não foi possível consultar os preços "
+            f"do Compras.gov.br: {erro}"
+        )
+
+        return []
+
+
     except Exception as erro:
 
         st.error(
-            "❌ Não foi possível consultar "
-            f"o Compras.gov.br: {erro}"
+            f"❌ Erro ao processar retorno do Compras.gov.br: {erro}"
         )
 
         return []
