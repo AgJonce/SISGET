@@ -38639,7 +38639,7 @@ def risco_incluir():
         """
         SELECT
             numero,
-            titulo,
+            objeto,
             data_solicitacao,
             prioridade,
             status
