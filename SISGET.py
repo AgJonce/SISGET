@@ -40659,6 +40659,146 @@ def _cotacao_deduplicar_resultados(resultados):
 # INCLUIR
 # ============================================================
 
+# ============================================================
+# SISGET
+# COTAÇÃO - CORREÇÃO COMPLETA
+#
+# REGRA:
+# Solicitação que já possui registro em cotacoes
+# NÃO aparece novamente para inclusão.
+#
+# Coloque a primeira def antes da cotacao_incluir().
+# Substitua sua cotacao_incluir() atual pela segunda def inteira.
+# ============================================================
+
+
+def sisget_selecionar_solicitacao_para_cotacao(
+    label,
+    key
+):
+
+    # ========================================================
+    # BUSCAR SOMENTE SOLICITAÇÕES QUE AINDA NÃO POSSUEM COTAÇÃO
+    # ========================================================
+
+    dados = _sisget_fetch(
+        """
+        SELECT
+            s.id,
+            s.codigo,
+            s.numero,
+            s.objeto,
+            s.tipo_solicitacao,
+            s.status,
+            s.etapa_atual
+
+        FROM solicitacoes s
+
+        WHERE s.ativo = TRUE
+
+          AND UPPER(
+                TRIM(
+                    COALESCE(
+                        s.tipo_solicitacao,
+                        ''
+                    )
+                )
+              ) = 'LICITACAO'
+
+          AND NOT EXISTS
+          (
+              SELECT 1
+
+              FROM cotacoes c
+
+              WHERE c.solicitacao_id = s.id
+          )
+
+        ORDER BY
+            s.exercicio DESC,
+            s.numero DESC,
+            s.id DESC
+        """
+    )
+
+
+    # ========================================================
+    # NENHUMA DISPONÍVEL
+    # ========================================================
+
+    if not dados:
+
+        st.info(
+            "✅ Não existem solicitações pendentes de cotação. "
+            "As solicitações que já possuem cotação não aparecem "
+            "novamente nesta tela."
+        )
+
+        return None
+
+
+    # ========================================================
+    # MONTAR LISTA
+    # ========================================================
+
+    mapa = {}
+
+
+    for (
+        solicitacao_id,
+        codigo,
+        numero,
+        objeto,
+        tipo,
+        status,
+        etapa
+    ) in dados:
+
+        identificacao = (
+            codigo
+            or numero
+            or solicitacao_id
+        )
+
+
+        nome = (
+            f"{identificacao}"
+            f" | {tipo or ''}"
+            f" | {objeto or ''}"
+            f" | {status or ''}"
+            f" | {etapa or ''}"
+        )
+
+
+        mapa[
+            nome
+        ] = solicitacao_id
+
+
+    # ========================================================
+    # SELECTBOX
+    # ========================================================
+
+    nome_selecionado = st.selectbox(
+        label,
+        list(
+            mapa.keys()
+        ),
+        key=key
+    )
+
+
+    return mapa[
+        nome_selecionado
+    ]
+
+
+# ============================================================
+# COTAÇÃO - INCLUIR
+# COMPLETA E JÁ USANDO O SELETOR QUE EXCLUI SOLICITAÇÕES COTADAS
+# ============================================================
+
+
 def cotacao_incluir():
     import pandas as pd
     import statistics
@@ -40674,10 +40814,9 @@ def cotacao_incluir():
 
     st.subheader("💲 Incluir Cotação / Pesquisa de Preços")
 
-    solicitacao_id = sisget_selecionar_solicitacao(
+    solicitacao_id = sisget_selecionar_solicitacao_para_cotacao(
         "Solicitação para Licitação *",
-        f"cotacao_solicitacao_{reset}",
-        "LICITACAO"
+        f"cotacao_solicitacao_{reset}"
     )
 
     if not solicitacao_id:
@@ -42038,10 +42177,6 @@ def cotacao_incluir():
             st.session_state["sisget_cotacao_reset"] += 1
             st.rerun()
 
-
-# ============================================================
-# LOCALIZAR
-# ============================================================
 
 def cotacao_localizar():
     df = _sisget_dataframe(
