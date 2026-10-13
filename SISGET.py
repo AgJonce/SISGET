@@ -38371,13 +38371,6 @@ def modulo_documentos_solicitacoes():
         )
 
 
-    if "sisget_mostrar_estorno_solicitacao" not in st.session_state:
-
-        st.session_state[
-            "sisget_mostrar_estorno_solicitacao"
-        ] = False
-
-
     # ========================================================
     # CABEÇALHO
     # ========================================================
@@ -38387,69 +38380,25 @@ def modulo_documentos_solicitacoes():
     )
 
 
-    col_cadastro, col_estorno = st.columns(
+    opcao = st.selectbox(
+        "Cadastro *",
         [
-            4,
-            1
-        ]
+            "Selecione...",
+            "📦 Itens",
+            "📄 DFD",
+            "📘 ETP",
+            "⚠️ Mapa de Riscos",
+            "💲 Cotações",
+            "🧾 Fichas Orçamentárias",
+            "💰 Financeiro",
+            "⚖️ Enquadramento",
+            "📑 Termo de Referência - TR"
+        ],
+        key="sisget_documentos_fluxo_solicitacoes"
     )
 
 
-    with col_cadastro:
-
-        opcao = st.selectbox(
-            "Cadastro *",
-            [
-                "Selecione...",
-                "📦 Itens",
-                "📄 DFD",
-                "📘 ETP",
-                "⚠️ Mapa de Riscos",
-                "💲 Cotações",
-                "🧾 Fichas Orçamentárias",
-                "💰 Financeiro",
-                "⚖️ Enquadramento",
-                "📑 Termo de Referência - TR"
-            ],
-            key="sisget_documentos_fluxo_solicitacoes"
-        )
-
-
-    with col_estorno:
-
-        st.write("")
-
-        st.write("")
-
-
-        if st.button(
-            "↩️ Estornar",
-            use_container_width=True,
-            key="sisget_botao_estornar_solicitacao"
-        ):
-
-            st.session_state[
-                "sisget_mostrar_estorno_solicitacao"
-            ] = not st.session_state[
-                "sisget_mostrar_estorno_solicitacao"
-            ]
-
-
-    # ========================================================
-    # PAINEL DE ESTORNO
-    # ========================================================
-
-    if st.session_state[
-        "sisget_mostrar_estorno_solicitacao"
-    ]:
-
-        st.divider()
-
-
-        solicitacao_estornar()
-
-
-        st.divider()
+    st.divider()
 
 
     # ========================================================
@@ -38509,10 +38458,6 @@ def modulo_documentos_solicitacoes():
 
         cadastro_tr_solicitacoes()
 
-
-# ============================================================
-# ITENS - TELA PRINCIPAL
-# ============================================================
 
 
 def solicitacao_item_incluir():
