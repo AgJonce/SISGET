@@ -39270,7 +39270,9 @@ def cadastro_dfd_solicitacoes():
         func_excluir=dfd_excluir,
         func_imprimir=dfd_imprimir,
         func_estornar=solicitacao_estornar,
-        func_assinar=assinatura_solicitacao_incluir,
+        func_assinar=lambda: assinatura_solicitacao_incluir(
+            "DFD"
+        ),
         icone="📄"
     )
 
