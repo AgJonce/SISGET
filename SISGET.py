@@ -34578,6 +34578,56 @@ def sisget_solicitacao_incluir_base(
     )
 
     # ========================================================
+    # APROVAÇÃO DA SOLICITAÇÃO PARA LICITAÇÃO
+    #
+    # IMPORTANTE:
+    # OS ITENS CONTINUAM SENDO INCLUÍDOS AQUI, ANTES DE SALVAR.
+    # A PERGUNTA ABAIXO DEFINE APENAS SE A SOLICITAÇÃO
+    # JÁ SEGUE PARA A ETAPA ITENS OU SE FICA AGUARDANDO
+    # APROVAÇÃO NO MENU "🔄 Fluxo da Solicitação".
+    # ========================================================
+
+    aprovar_agora = None
+
+    if tipo_solicitacao == "LICITACAO":
+
+        st.markdown("---")
+
+        st.markdown(
+            "### ✅ Aprovação da Solicitação"
+        )
+
+        aprovar_agora = st.radio(
+            "Deseja aprovar esta Solicitação para Licitação ao salvar? *",
+            [
+                "Sim",
+                "Não"
+            ],
+            horizontal=True,
+            index=0,
+            key=(
+                f"sisget_sol_aprovar_"
+                f"{tipo_solicitacao}_"
+                f"{reset}"
+            )
+        )
+
+        if aprovar_agora == "Sim":
+
+            st.info(
+                "✅ A solicitação será salva com todos os itens "
+                "e seguirá para a etapa 📦 Itens."
+            )
+
+        else:
+
+            st.info(
+                "ℹ️ A solicitação será salva com todos os itens, "
+                "mas ficará aguardando aprovação no menu "
+                "🔄 Fluxo da Solicitação."
+            )
+
+    # ========================================================
     # BOTÃO SALVAR
     # ========================================================
 
@@ -34832,6 +34882,45 @@ def sisget_solicitacao_incluir_base(
         )
 
         # ====================================================
+        # STATUS / ETAPA DA SOLICITAÇÃO
+        # ====================================================
+
+        status_salvar = "RASCUNHO"
+        etapa_salvar = etapa_inicial
+
+        acao_historico = "SOLICITACAO_CRIADA"
+        observacao_historico = (
+            "Solicitação criada."
+        )
+
+        if tipo_solicitacao == "LICITACAO":
+
+            if aprovar_agora == "Sim":
+
+                status_salvar = "EM_ANDAMENTO"
+                etapa_salvar = "ITENS"
+
+                acao_historico = "SOLICITACAO_APROVADA"
+
+                observacao_historico = (
+                    "Solicitação para Licitação criada, "
+                    "itens incluídos e solicitação aprovada. "
+                    "Encaminhada para a etapa Itens."
+                )
+
+            else:
+
+                status_salvar = "AGUARDANDO_APROVACAO"
+                etapa_salvar = "SOLICITACAO"
+
+                acao_historico = "SOLICITACAO_CRIADA"
+
+                observacao_historico = (
+                    "Solicitação para Licitação criada com os itens, "
+                    "aguardando aprovação no Fluxo da Solicitação."
+                )
+
+        # ====================================================
         # GRAVAÇÃO ATÔMICA
         # ====================================================
 
@@ -34940,9 +35029,9 @@ def sisget_solicitacao_incluir_base(
 
                     data_necessidade,
 
-                    "RASCUNHO",
+                    status_salvar,
 
-                    etapa_inicial
+                    etapa_salvar
                 )
             )
 
@@ -35083,6 +35172,38 @@ def sisget_solicitacao_incluir_base(
                 numero_codigo_item += 1
 
             # =================================================
+            # HISTÓRICO DA SOLICITAÇÃO
+            # =================================================
+
+            cursor.execute(
+                """
+                INSERT INTO solicitacoes_historico
+                (
+                    solicitacao_id,
+                    usuario_id,
+                    etapa_origem,
+                    etapa_destino,
+                    acao,
+                    observacao
+                )
+                VALUES
+                (
+                    ?, ?, ?, ?, ?, ?
+                )
+                """,
+                (
+                    solicitacao_id,
+                    st.session_state.get(
+                        "usuario_id"
+                    ),
+                    "SOLICITACAO",
+                    etapa_salvar,
+                    acao_historico,
+                    observacao_historico
+                )
+            )
+
+            # =================================================
             # COMMIT
             # =================================================
 
@@ -35113,12 +35234,35 @@ def sisget_solicitacao_incluir_base(
         # SUCESSO
         # ====================================================
 
+        if (
+            tipo_solicitacao == "LICITACAO"
+            and
+            aprovar_agora == "Sim"
+        ):
+
+            mensagem_sucesso = (
+                f"✅ Solicitação {codigo} salva com sucesso, "
+                f"com {len(itens)} item(ns), e aprovada para a etapa 📦 Itens."
+            )
+
+        elif tipo_solicitacao == "LICITACAO":
+
+            mensagem_sucesso = (
+                f"✅ Solicitação {codigo} salva com sucesso, "
+                f"com {len(itens)} item(ns). "
+                f"Ela está aguardando aprovação no menu "
+                f"🔄 Fluxo da Solicitação."
+            )
+
+        else:
+
+            mensagem_sucesso = (
+                f"✅ Solicitação {codigo} salva com sucesso!"
+            )
+
         st.session_state[
             chave_mensagem
-        ] = (
-            f"✅ Solicitação {codigo} "
-            f"salva com sucesso!"
-        )
+        ] = mensagem_sucesso
 
         # ====================================================
         # LIMPAR ITENS
@@ -35142,6 +35286,7 @@ def sisget_solicitacao_incluir_base(
         # ====================================================
 
         st.rerun()
+
 
 
 def solicitacao_interna_incluir():
