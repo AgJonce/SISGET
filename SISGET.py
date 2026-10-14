@@ -43668,22 +43668,18 @@ def risco_incluir():
 
 
     # ========================================================
-    # SAIR DA TELA INCLUIR
+    # PERMANECER NA TELA INCLUIR
     #
-    # VOLTA PARA A TELA PRINCIPAL DO MAPA DE RISCOS.
-    # NÃO AVANÇA A ETAPA.
+    # APÓS SALVAR:
+    # - limpa a lista temporária;
+    # - exibe a mensagem de sucesso;
+    # - permanece na opção ➕ Incluir;
+    # - permite montar um novo lote de riscos para a mesma
+    #   solicitação ou selecionar outra solicitação;
+    # - NÃO avança a etapa.
+    #
     # PARA IR A COTAÇÕES, DEVE USAR ✍️ ASSINAR.
     # ========================================================
-
-    st.session_state[
-        "sisget_tela_solicitacoes_riscos"
-    ] = "principal"
-
-
-    st.session_state[
-        "sisget_id_solicitacoes_riscos"
-    ] = None
-
 
     st.rerun()
 
