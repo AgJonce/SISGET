@@ -46133,105 +46133,493 @@ def cadastro_assinaturas_solicitacoes():
     )
 
 
-def assinatura_solicitacao_incluir():
+def assinatura_solicitacao_incluir(
+    etapa_origem
+):
 
     import hashlib
+    from datetime import datetime
 
-    if "sisget_assinatura_reset" not in st.session_state:
-        st.session_state[
-            "sisget_assinatura_reset"
-        ] = 0
 
-    reset = st.session_state[
-        "sisget_assinatura_reset"
-    ]
+    # ========================================================
+    # ETAPA ATUAL
+    # ========================================================
 
-    solicitacao_id = sisget_selecionar_solicitacao(
-        "Solicitação *",
-        f"assinatura_solicitacao_{reset}"
-    )
+    etapa_origem = str(
+        etapa_origem
+        or ""
+    ).strip().upper()
 
-    if not solicitacao_id:
+
+    # ========================================================
+    # FLUXO OFICIAL
+    # ========================================================
+
+    fluxo = {
+        "ITENS": "DFD",
+        "DFD": "ETP",
+        "ETP": "RISCOS",
+        "RISCOS": "COTACOES",
+        "COTACOES": "FICHAS",
+        "FICHAS": "FINANCEIRO",
+        "FINANCEIRO": "ENQUADRAMENTO",
+        "ENQUADRAMENTO": "TR",
+        "TR": "CONCLUIDO"
+    }
+
+
+    # ========================================================
+    # NOMES DAS ETAPAS
+    # ========================================================
+
+    nomes_etapas = {
+        "ITENS": "📦 Itens",
+        "DFD": "📄 DFD",
+        "ETP": "📘 ETP",
+        "RISCOS": "⚠️ Mapa de Riscos",
+        "COTACOES": "💲 Cotações",
+        "FICHAS": "🧾 Fichas Orçamentárias",
+        "FINANCEIRO": "💰 Financeiro",
+        "ENQUADRAMENTO": "⚖️ Enquadramento",
+        "TR": "📑 Termo de Referência - TR",
+        "CONCLUIDO": "✅ Concluído"
+    }
+
+
+    # ========================================================
+    # VALIDAR ETAPA
+    # ========================================================
+
+    if etapa_origem not in fluxo:
+
+        st.error(
+            "❌ Etapa inválida para assinatura."
+        )
+
         return
 
-    codigo = sisget_proximo_codigo(
+
+    etapa_destino = fluxo[
+        etapa_origem
+    ]
+
+
+    nome_origem = nomes_etapas.get(
+        etapa_origem,
+        etapa_origem
+    )
+
+
+    nome_destino = nomes_etapas.get(
+        etapa_destino,
+        etapa_destino
+    )
+
+
+    # ========================================================
+    # RESET
+    # ========================================================
+
+    chave_reset = (
+        f"sisget_assinatura_"
+        f"{etapa_origem.lower()}_reset"
+    )
+
+
+    if chave_reset not in st.session_state:
+
+        st.session_state[
+            chave_reset
+        ] = 0
+
+
+    reset = st.session_state[
+        chave_reset
+    ]
+
+
+    # ========================================================
+    # MENSAGEM DE SUCESSO
+    # ========================================================
+
+    chave_mensagem = (
+        f"sisget_mensagem_assinatura_"
+        f"{etapa_origem.lower()}"
+    )
+
+
+    if chave_mensagem in st.session_state:
+
+        st.success(
+            st.session_state.pop(
+                chave_mensagem
+            )
+        )
+
+
+    # ========================================================
+    # INFORMAÇÃO
+    # ========================================================
+
+    st.info(
+        f"Ao assinar em **{nome_origem}**, "
+        f"a solicitação seguirá para **{nome_destino}**."
+    )
+
+
+    # ========================================================
+    # SOLICITAÇÃO
+    #
+    # MOSTRA SOMENTE SOLICITAÇÕES DA ETAPA ATUAL
+    # ========================================================
+
+    solicitacao_id = sisget_selecionar_solicitacao(
+        label="Solicitação *",
+        key=(
+            f"assinatura_solicitacao_"
+            f"{etapa_origem.lower()}_"
+            f"{reset}"
+        ),
+        tipo_solicitacao="LICITACAO",
+        etapa_atual=etapa_origem,
+        somente_ativas=True
+    )
+
+
+    if not solicitacao_id:
+
+        return
+
+
+    # ========================================================
+    # DADOS DA SOLICITAÇÃO
+    # ========================================================
+
+    solicitacao = _sisget_fetchone(
+        """
+        SELECT
+            codigo,
+            numero,
+            objeto,
+            etapa_atual
+
+        FROM solicitacoes
+
+        WHERE id = ?
+          AND ativo = TRUE
+        """,
+        (
+            solicitacao_id,
+        )
+    )
+
+
+    if not solicitacao:
+
+        st.error(
+            "❌ Solicitação não encontrada."
+        )
+
+        return
+
+
+    (
+        codigo_solicitacao,
+        numero_solicitacao,
+        objeto_solicitacao,
+        etapa_banco
+    ) = solicitacao
+
+
+    # ========================================================
+    # CONFERIR ETAPA
+    # ========================================================
+
+    etapa_banco = str(
+        etapa_banco
+        or ""
+    ).strip().upper()
+
+
+    if etapa_banco != etapa_origem:
+
+        st.warning(
+            f"⚠️ Esta solicitação não está mais em {nome_origem}."
+        )
+
+        return
+
+
+    # ========================================================
+    # RESUMO
+    # ========================================================
+
+    st.markdown(
+        "### 📋 Solicitação"
+    )
+
+
+    c1, c2, c3 = st.columns(
+        3
+    )
+
+
+    c1.text_input(
+        "Solicitação",
+        value=str(
+            codigo_solicitacao
+            or numero_solicitacao
+            or ""
+        ),
+        disabled=True,
+        key=(
+            f"assinatura_codigo_"
+            f"{etapa_origem}_"
+            f"{solicitacao_id}_"
+            f"{reset}"
+        )
+    )
+
+
+    c2.text_input(
+        "Etapa Atual",
+        value=nome_origem,
+        disabled=True,
+        key=(
+            f"assinatura_origem_"
+            f"{etapa_origem}_"
+            f"{solicitacao_id}_"
+            f"{reset}"
+        )
+    )
+
+
+    c3.text_input(
+        "Próxima Etapa",
+        value=nome_destino,
+        disabled=True,
+        key=(
+            f"assinatura_destino_"
+            f"{etapa_origem}_"
+            f"{solicitacao_id}_"
+            f"{reset}"
+        )
+    )
+
+
+    st.text_area(
+        "Objeto",
+        value=str(
+            objeto_solicitacao
+            or ""
+        ),
+        disabled=True,
+        height=90,
+        key=(
+            f"assinatura_objeto_"
+            f"{etapa_origem}_"
+            f"{solicitacao_id}_"
+            f"{reset}"
+        )
+    )
+
+
+    # ========================================================
+    # CÓDIGO DA ASSINATURA
+    # ========================================================
+
+    codigo_assinatura = sisget_proximo_codigo(
         "solicitacoes_assinaturas",
         tamanho=8
     )
 
+
+    # ========================================================
+    # FORMULÁRIO
+    # ========================================================
+
     with st.form(
-        f"form_assinatura_{reset}_{solicitacao_id}"
+        f"form_assinatura_"
+        f"{etapa_origem}_"
+        f"{solicitacao_id}_"
+        f"{reset}"
     ):
+
         st.text_input(
-            "Código",
-            value=codigo,
+            "Código da Assinatura",
+            value=str(
+                codigo_assinatura
+                or ""
+            ),
             disabled=True
         )
 
-        etapa = st.selectbox(
-            "Etapa *",
-            [
-                "APROVACAO",
-                "DFD",
-                "ETP",
-                "RISCOS",
-                "COMPRAS",
-                "CONTABILIDADE",
-                "FINANCEIRO",
-                "ORDENADOR",
-                "LICITACAO",
-                "TR"
-            ]
+
+        st.text_input(
+            "Etapa",
+            value=nome_origem,
+            disabled=True
         )
 
-        decisao = st.selectbox(
-            "Decisão *",
-            [
-                "ASSINADO",
-                "APROVADO",
-                "VALIDADO",
-                "AUTORIZADO",
-                "DEVOLVIDO",
-                "REJEITADO"
-            ]
+
+        st.text_input(
+            "Decisão",
+            value="ASSINADO",
+            disabled=True
         )
+
 
         observacao = st.text_area(
-            "Observação"
+            "Observação",
+            height=120
         )
 
+
+        confirmar = st.checkbox(
+            (
+                f"Confirmo a assinatura de {nome_origem} "
+                f"e o envio para {nome_destino}."
+            )
+        )
+
+
         assinar = st.form_submit_button(
-            "✍️ Assinar / Registrar",
+            "✍️ Assinar e Avançar",
             type="primary",
             use_container_width=True
         )
 
-    if assinar:
 
-        usuario_id = st.session_state.get(
-            "usuario_id"
+    if not assinar:
+
+        return
+
+
+    # ========================================================
+    # VALIDAÇÕES
+    # ========================================================
+
+    if not confirmar:
+
+        st.warning(
+            "⚠️ Confirme a assinatura."
         )
 
-        instante = datetime.now().isoformat()
+        return
 
-        conteudo = (
-            f"{solicitacao_id}|"
-            f"{usuario_id}|"
-            f"{etapa}|"
-            f"{decisao}|"
-            f"{instante}"
+
+    usuario_id = st.session_state.get(
+        "usuario_id"
+    )
+
+
+    if not usuario_id:
+
+        st.error(
+            "❌ Usuário não identificado."
         )
 
-        hash_assinatura = hashlib.sha256(
-            conteudo.encode("utf-8")
-        ).hexdigest()
+        return
 
-        codigo = sisget_proximo_codigo(
-            "solicitacoes_assinaturas",
-            tamanho=8
+
+    # ========================================================
+    # CONFERIR ETAPA NOVAMENTE
+    # ========================================================
+
+    registro_atual = _sisget_fetchone(
+        """
+        SELECT
+            etapa_atual
+
+        FROM solicitacoes
+
+        WHERE id = ?
+          AND ativo = TRUE
+        """,
+        (
+            solicitacao_id,
+        )
+    )
+
+
+    if not registro_atual:
+
+        st.error(
+            "❌ Solicitação não encontrada."
         )
 
-        if _sisget_salvar(
+        return
+
+
+    etapa_atual_banco = str(
+        registro_atual[
+            0
+        ]
+        or ""
+    ).strip().upper()
+
+
+    if etapa_atual_banco != etapa_origem:
+
+        st.warning(
+            "⚠️ A etapa da solicitação foi alterada por outro usuário."
+        )
+
+        st.session_state[
+            chave_reset
+        ] += 1
+
+        st.rerun()
+
+
+    # ========================================================
+    # DATA / HORA
+    # ========================================================
+
+    instante = datetime.now()
+
+
+    # ========================================================
+    # HASH DA ASSINATURA
+    # ========================================================
+
+    conteudo_hash = (
+        f"{solicitacao_id}|"
+        f"{usuario_id}|"
+        f"{etapa_origem}|"
+        f"ASSINADO|"
+        f"{instante.isoformat()}"
+    )
+
+
+    hash_assinatura = hashlib.sha256(
+        conteudo_hash.encode(
+            "utf-8"
+        )
+    ).hexdigest()
+
+
+    # ========================================================
+    # CÓDIGO NOVAMENTE NO MOMENTO DA GRAVAÇÃO
+    # ========================================================
+
+    codigo_assinatura = sisget_proximo_codigo(
+        "solicitacoes_assinaturas",
+        tamanho=8
+    )
+
+
+    # ========================================================
+    # TRANSAÇÃO
+    # ========================================================
+
+    try:
+
+        # ====================================================
+        # ASSINATURA
+        # ====================================================
+
+        cursor.execute(
             """
             INSERT INTO solicitacoes_assinaturas
             (
@@ -46246,25 +46634,173 @@ def assinatura_solicitacao_incluir():
             )
             VALUES
             (
-                ?, ?, ?, ?, ?, ?, ?,
-                CURRENT_TIMESTAMP
+                ?, ?, ?, ?, ?, ?, ?, ?
             )
             """,
             (
-                codigo,
+                codigo_assinatura,
                 solicitacao_id,
                 usuario_id,
-                etapa,
-                decisao,
-                observacao.strip() or None,
-                hash_assinatura
+                etapa_origem,
+                "ASSINADO",
+                observacao.strip()
+                or None,
+                hash_assinatura,
+                instante
             )
-        ):
-            st.session_state[
-                "sisget_assinatura_reset"
-            ] += 1
-            st.rerun()
+        )
 
+
+        # ====================================================
+        # AVANÇAR ETAPA
+        # ====================================================
+
+        if etapa_destino == "CONCLUIDO":
+
+            cursor.execute(
+                """
+                UPDATE solicitacoes
+
+                SET
+                    etapa_atual = 'CONCLUIDO',
+                    status = 'CONCLUIDO'
+
+                WHERE id = ?
+
+                  AND UPPER(
+                        TRIM(
+                            COALESCE(
+                                etapa_atual,
+                                ''
+                            )
+                        )
+                      ) = ?
+                """,
+                (
+                    solicitacao_id,
+                    etapa_origem
+                )
+            )
+
+
+        else:
+
+            cursor.execute(
+                """
+                UPDATE solicitacoes
+
+                SET
+                    etapa_atual = ?,
+                    status = 'EM_ANDAMENTO'
+
+                WHERE id = ?
+
+                  AND UPPER(
+                        TRIM(
+                            COALESCE(
+                                etapa_atual,
+                                ''
+                            )
+                        )
+                      ) = ?
+                """,
+                (
+                    etapa_destino,
+                    solicitacao_id,
+                    etapa_origem
+                )
+            )
+
+
+        # ====================================================
+        # GARANTIR QUE AVANÇOU
+        # ====================================================
+
+        if cursor.rowcount != 1:
+
+            raise Exception(
+                "A solicitação mudou de etapa durante a assinatura."
+            )
+
+
+        # ====================================================
+        # HISTÓRICO
+        # ====================================================
+
+        cursor.execute(
+            """
+            INSERT INTO solicitacoes_historico
+            (
+                solicitacao_id,
+                usuario_id,
+                etapa_origem,
+                etapa_destino,
+                acao,
+                observacao
+            )
+            VALUES
+            (
+                ?, ?, ?, ?, ?, ?
+            )
+            """,
+            (
+                solicitacao_id,
+                usuario_id,
+                etapa_origem,
+                etapa_destino,
+                "ASSINATURA",
+                (
+                    observacao.strip()
+                    or
+                    (
+                        f"{nome_origem} assinado. "
+                        f"Solicitação encaminhada para "
+                        f"{nome_destino}."
+                    )
+                )
+            )
+        )
+
+
+        conn.commit()
+
+
+    except Exception as erro:
+
+        try:
+
+            conn.rollback()
+
+        except Exception:
+
+            pass
+
+
+        st.error(
+            f"❌ Erro ao registrar assinatura: {erro}"
+        )
+
+        return
+
+
+    # ========================================================
+    # SUCESSO
+    # ========================================================
+
+    st.session_state[
+        chave_mensagem
+    ] = (
+        f"✅ {nome_origem} assinado com sucesso. "
+        f"A solicitação foi encaminhada para {nome_destino}."
+    )
+
+
+    st.session_state[
+        chave_reset
+    ] += 1
+
+
+    st.rerun()
 
 def assinatura_solicitacao_localizar():
 
