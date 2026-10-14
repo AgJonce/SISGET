@@ -47531,10 +47531,15 @@ def cotacao_incluir():
     # AUXILIAR INTERNO - VINCULAR TODAS AS SOLICITAÇÕES
     # ========================================================
 
+
 def sisget_selecionar_solicitacoes_para_cotacao(
     label,
     key
 ):
+
+    # ========================================================
+    # SOLICITAÇÕES DISPONÍVEIS
+    # ========================================================
 
     dados = _sisget_fetch(
         """
@@ -47573,7 +47578,9 @@ def sisget_selecionar_solicitacoes_para_cotacao(
           AND NOT EXISTS
           (
               SELECT 1
+
               FROM cotacoes_solicitacoes cs
+
               WHERE cs.solicitacao_id = s.id
           )
 
@@ -47584,6 +47591,7 @@ def sisget_selecionar_solicitacoes_para_cotacao(
         """
     )
 
+
     if not dados:
 
         st.info(
@@ -47592,6 +47600,10 @@ def sisget_selecionar_solicitacoes_para_cotacao(
 
         return []
 
+
+    # ========================================================
+    # MAPA
+    # ========================================================
 
     mapa = {}
 
@@ -47613,34 +47625,168 @@ def sisget_selecionar_solicitacoes_para_cotacao(
             or solicitacao_id
         )
 
+
         rotulo = (
             f"{identificacao}"
             f" | {objeto or ''}"
-            f" | {status or ''}"
-            f" | {etapa_atual or ''}"
         )
+
 
         mapa[
             rotulo
-        ] = solicitacao_id
+        ] = {
+            "id": solicitacao_id,
+            "entidade_id": entidade_id,
+            "exercicio_id": exercicio_id
+        }
 
 
-    selecionadas = st.multiselect(
+    # ========================================================
+    # SOLICITAÇÃO PRINCIPAL
+    #
+    # SEMPRE EXISTE PELO MENOS UMA.
+    # ========================================================
+
+    principal_nome = st.selectbox(
         label,
         list(
             mapa.keys()
         ),
-        key=key
+        key=(
+            f"{key}_principal"
+        )
     )
 
 
-    return [
-        mapa[
-            nome
-        ]
-        for nome in selecionadas
+    principal = mapa[
+        principal_nome
     ]
 
+
+    solicitacao_ids = [
+        principal[
+            "id"
+        ]
+    ]
+
+
+    # ========================================================
+    # ADICIONAR OUTRAS SOLICITAÇÕES
+    # ========================================================
+
+    adicionar_outras = st.checkbox(
+        "➕ Adicionar outras solicitações nesta mesma cotação",
+        value=False,
+        key=(
+            f"{key}_adicionar_outras"
+        )
+    )
+
+
+    if adicionar_outras:
+
+        opcoes_outras = []
+
+
+        for nome, dados_solicitacao in mapa.items():
+
+            if (
+                dados_solicitacao[
+                    "id"
+                ]
+                ==
+                principal[
+                    "id"
+                ]
+            ):
+
+                continue
+
+
+            # Só mostra solicitações da mesma entidade e exercício
+            # da solicitação principal.
+
+            if (
+                dados_solicitacao[
+                    "entidade_id"
+                ]
+                !=
+                principal[
+                    "entidade_id"
+                ]
+            ):
+
+                continue
+
+
+            if (
+                dados_solicitacao[
+                    "exercicio_id"
+                ]
+                !=
+                principal[
+                    "exercicio_id"
+                ]
+            ):
+
+                continue
+
+
+            opcoes_outras.append(
+                nome
+            )
+
+
+        if opcoes_outras:
+
+            outras = st.multiselect(
+                "Outras Solicitações",
+                opcoes_outras,
+                key=(
+                    f"{key}_outras"
+                )
+            )
+
+
+            for nome in outras:
+
+                solicitacao_ids.append(
+                    mapa[
+                        nome
+                    ][
+                        "id"
+                    ]
+                )
+
+        else:
+
+            st.info(
+                "ℹ️ Não existem outras solicitações disponíveis "
+                "da mesma entidade e exercício."
+            )
+
+
+    # ========================================================
+    # RESUMO DA SELEÇÃO
+    # ========================================================
+
+    if len(
+        solicitacao_ids
+    ) == 1:
+
+        st.info(
+            "📌 Esta cotação será gerada para 1 solicitação."
+        )
+
+    else:
+
+        st.success(
+            f"📌 Esta cotação reunirá "
+            f"{len(solicitacao_ids)} solicitações."
+        )
+
+
+    return solicitacao_ids
 
 def cotacao_incluir():
 
@@ -47680,7 +47826,7 @@ def cotacao_incluir():
     # ========================================================
 
     solicitacao_ids = sisget_selecionar_solicitacoes_para_cotacao(
-        "Solicitações para Licitação *",
+        "Solicitação principal *",
         f"cotacao_solicitacoes_{reset}"
     )
 
@@ -47688,7 +47834,7 @@ def cotacao_incluir():
     if not solicitacao_ids:
 
         st.info(
-            "ℹ️ Selecione pelo menos uma solicitação."
+            "ℹ️ Selecione uma solicitação para iniciar a cotação."
         )
 
         return
