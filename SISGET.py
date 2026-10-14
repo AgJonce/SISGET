@@ -1294,14 +1294,11 @@ def cadastro_itens_solicitacoes():
         func_excluir=solicitacao_item_excluir,
         func_imprimir=solicitacao_item_imprimir,
         func_estornar=solicitacao_estornar,
-        func_assinar=assinatura_solicitacao_incluir,
+        func_assinar=lambda: assinatura_solicitacao_incluir(
+            "ITENS"
+        ),
         icone="📦"
     )
-
-
-# ============================================================
-# ESTORNAR SOLICITAÇÃO
-# ============================================================
 
 
 def tela_inicio():
