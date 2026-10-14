@@ -37150,69 +37150,178 @@ def planejamento_dashboard():
 
 def sisget_mapa_solicitacoes(
     tipo_solicitacao=None,
-    somente_ativas=True,
-    excluir_com_cotacao=False
+    etapa_atual=None,
+    somente_ativas=True
 ):
 
     sql = """
         SELECT
-            s.id,
-            s.codigo,
-            s.objeto,
-            s.tipo_solicitacao,
-            s.status,
-            s.etapa_atual
+            id,
+            codigo,
+            numero,
+            objeto,
+            tipo_solicitacao,
+            etapa_atual
 
-        FROM solicitacoes s
+        FROM solicitacoes
 
         WHERE 1 = 1
     """
 
+
     parametros = []
 
+
+    # ========================================================
+    # SOMENTE ATIVAS
+    # ========================================================
 
     if somente_ativas:
 
         sql += """
-            AND s.ativo = TRUE
+            AND ativo = TRUE
         """
 
 
-    if tipo_solicitacao:
+    # ========================================================
+    # TIPO DE SOLICITAÇÃO
+    # ========================================================
 
-        sql += """
-            AND s.tipo_solicitacao = ?
-        """
+    if tipo_solicitacao is not None:
 
-        parametros.append(
+        tipo_normalizado = str(
             tipo_solicitacao
-        )
+        ).strip().upper()
 
 
-    # ========================================================
-    # NÃO MOSTRAR SOLICITAÇÃO QUE JÁ POSSUI COTAÇÃO
-    # ========================================================
+        if tipo_normalizado:
 
-    if excluir_com_cotacao:
+            sql += """
+                AND UPPER(
+                        TRIM(
+                            COALESCE(
+                                tipo_solicitacao,
+                                ''
+                            )
+                        )
+                    ) = ?
+            """
 
-        sql += """
-            AND NOT EXISTS
-            (
-                SELECT 1
 
-                FROM cotacoes c
-
-                WHERE c.solicitacao_id = s.id
+            parametros.append(
+                tipo_normalizado
             )
-        """
 
+
+    # ========================================================
+    # ETAPA
+    #
+    # ACEITA:
+    # etapa_atual="DFD"
+    #
+    # OU:
+    # etapa_atual=["DFD", "ETP"]
+    # ========================================================
+
+    if etapa_atual is not None:
+
+        if isinstance(
+            etapa_atual,
+            (
+                list,
+                tuple,
+                set
+            )
+        ):
+
+            etapas = []
+
+
+            for etapa in etapa_atual:
+
+                etapa_normalizada = str(
+                    etapa
+                    or ""
+                ).strip().upper()
+
+
+                if (
+                    etapa_normalizada
+                    and
+                    etapa_normalizada not in etapas
+                ):
+
+                    etapas.append(
+                        etapa_normalizada
+                    )
+
+
+            if etapas:
+
+                marcadores = ", ".join(
+                    "?"
+                    for _ in etapas
+                )
+
+
+                sql += f"""
+                    AND UPPER(
+                            TRIM(
+                                COALESCE(
+                                    etapa_atual,
+                                    ''
+                                )
+                            )
+                        ) IN ({marcadores})
+                """
+
+
+                parametros.extend(
+                    etapas
+                )
+
+
+        else:
+
+            etapa_normalizada = str(
+                etapa_atual
+            ).strip().upper()
+
+
+            if etapa_normalizada:
+
+                sql += """
+                    AND UPPER(
+                            TRIM(
+                                COALESCE(
+                                    etapa_atual,
+                                    ''
+                                )
+                            )
+                        ) = ?
+                """
+
+
+                parametros.append(
+                    etapa_normalizada
+                )
+
+
+    # ========================================================
+    # ORDENAÇÃO
+    # ========================================================
 
     sql += """
         ORDER BY
-            s.exercicio DESC,
-            s.numero DESC
+            exercicio DESC,
+            numero DESC,
+            id DESC
     """
 
+
+    # ========================================================
+    # CONSULTA
+    # ========================================================
 
     dados = _sisget_fetch(
         sql,
@@ -37225,63 +37334,149 @@ def sisget_mapa_solicitacoes(
     mapa = {}
 
 
+    # ========================================================
+    # MONTAR MAPA
+    #
+    # IMPORTANTE:
+    # STATUS E ETAPA NÃO APARECEM NO SELECTBOX.
+    # O FILTRO DA ETAPA CONTINUA SENDO APLICADO NO SQL.
+    # ========================================================
+
     for (
-        id_,
+        solicitacao_id,
         codigo,
+        numero,
         objeto,
         tipo,
-        status,
         etapa
     ) in dados:
 
-        nome = (
-            f"{codigo or id_}"
-            f" | {tipo or ''}"
-            f" | {objeto or ''}"
-            f" | {status or ''}"
-            f" | {etapa or ''}"
+        identificacao = (
+            codigo
+            or numero
+            or solicitacao_id
         )
+
+
+        nome = (
+            f"{identificacao}"
+            f" | {objeto or ''}"
+        )
+
+
+        # ====================================================
+        # EVITAR COLISÃO DE TEXTO
+        # ====================================================
+
+        if nome in mapa:
+
+            nome = (
+                f"{nome}"
+                f" | ID {solicitacao_id}"
+            )
 
 
         mapa[
             nome
-        ] = id_
+        ] = solicitacao_id
 
 
     return mapa
-
 def sisget_selecionar_solicitacao(
     label,
     key,
     tipo_solicitacao=None,
-    excluir_com_cotacao=False
+    etapa_atual=None,
+    somente_ativas=True
 ):
 
     mapa = sisget_mapa_solicitacoes(
         tipo_solicitacao=tipo_solicitacao,
-        excluir_com_cotacao=excluir_com_cotacao
+        etapa_atual=etapa_atual,
+        somente_ativas=somente_ativas
     )
 
 
+    # ========================================================
+    # NENHUMA SOLICITAÇÃO DISPONÍVEL
+    # ========================================================
+
     if not mapa:
 
-        if excluir_com_cotacao:
+        if etapa_atual is not None:
 
-            st.warning(
-                "⚠️ Nenhuma solicitação disponível para cotação. "
-                "As solicitações que já possuem cotação não são "
-                "exibidas novamente."
-            )
+            if isinstance(
+                etapa_atual,
+                (
+                    list,
+                    tuple,
+                    set
+                )
+            ):
+
+                etapas_mensagem = []
+
+
+                for etapa in etapa_atual:
+
+                    etapa_texto = str(
+                        etapa
+                        or ""
+                    ).strip()
+
+
+                    if (
+                        etapa_texto
+                        and
+                        etapa_texto not in etapas_mensagem
+                    ):
+
+                        etapas_mensagem.append(
+                            etapa_texto
+                        )
+
+
+                nome_etapa = " / ".join(
+                    etapas_mensagem
+                )
+
+
+            else:
+
+                nome_etapa = str(
+                    etapa_atual
+                    or ""
+                ).strip()
+
+
+            if nome_etapa:
+
+                st.info(
+                    f"ℹ️ Nenhuma solicitação disponível "
+                    f"na etapa {nome_etapa}."
+                )
+
+
+            else:
+
+                st.info(
+                    "ℹ️ Nenhuma solicitação disponível."
+                )
+
 
         else:
 
-            st.warning(
-                "⚠️ Nenhuma solicitação disponível."
+            st.info(
+                "ℹ️ Nenhuma solicitação disponível."
             )
 
 
         return None
 
+
+    # ========================================================
+    # SELECTBOX
+    # ========================================================
 
     nome = st.selectbox(
         label,
@@ -37292,9 +37487,14 @@ def sisget_selecionar_solicitacao(
     )
 
 
+    # ========================================================
+    # RETORNO DO ID
+    # ========================================================
+
     return mapa[
         nome
     ]
+
 def sisget_grupos_fluxo_solicitacao():
 
     return [
