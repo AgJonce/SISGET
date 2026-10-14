@@ -39110,9 +39110,7 @@ def cadastro_dfd_solicitacoes():
         func_excluir=dfd_excluir,
         func_imprimir=dfd_imprimir,
         func_estornar=solicitacao_estornar,
-        func_assinar=lambda: assinatura_solicitacao_incluir(
-            "DFD"
-        ),
+        func_assinar=assinatura_dfd,
         icone="📄"
     )
 
@@ -39247,6 +39245,10 @@ def sisget_selecionar_solicitacao_para_dfd(
 
 def dfd_incluir():
 
+    # ========================================================
+    # RESET / MENSAGEM
+    # ========================================================
+
     if "sisget_dfd_reset" not in st.session_state:
 
         st.session_state[
@@ -39268,178 +39270,172 @@ def dfd_incluir():
         )
 
 
-    solicitacao_id = sisget_selecionar_solicitacao_para_dfd(
-        "Solicitação para Licitação *",
-        f"dfd_solicitacao_{reset}"
-    )
+    # ========================================================
+    # SOLICITAÇÕES DISPONÍVEIS
+    #
+    # SOMENTE:
+    # - LICITAÇÃO
+    # - ETAPA DFD
+    # - SEM DFD JÁ CADASTRADO
+    # ========================================================
 
-
-    if not solicitacao_id:
-
-        return
-
-
-    dados_solicitacao = _sisget_fetchone(
+    solicitacoes = _sisget_fetch(
         """
         SELECT
-            codigo,
-            numero,
-            objeto,
-            justificativa,
-            status,
-            etapa_atual
+            s.id,
+            s.codigo,
+            s.numero,
+            s.objeto,
+            s.etapa_atual,
+            s.data_solicitacao
 
-        FROM solicitacoes
+        FROM solicitacoes s
 
-        WHERE id = ?
-          AND ativo = TRUE
-        """,
-        (
-            solicitacao_id,
-        )
+        WHERE s.ativo = TRUE
+
+          AND UPPER(
+                TRIM(
+                    COALESCE(
+                        s.tipo_solicitacao,
+                        ''
+                    )
+                )
+              ) = 'LICITACAO'
+
+          AND UPPER(
+                TRIM(
+                    COALESCE(
+                        s.etapa_atual,
+                        ''
+                    )
+                )
+              ) = 'DFD'
+
+          AND NOT EXISTS
+          (
+              SELECT 1
+
+              FROM solicitacoes_dfd d
+
+              WHERE d.solicitacao_id = s.id
+          )
+
+        ORDER BY
+            s.exercicio DESC,
+            s.numero DESC,
+            s.id DESC
+        """
     )
 
 
-    if not dados_solicitacao:
+    if not solicitacoes:
 
-        st.error(
-            "❌ Solicitação não encontrada."
+        st.info(
+            "ℹ️ Não existem solicitações aguardando inclusão de DFD."
         )
 
         return
 
 
-    (
+    mapa_solicitacoes = {}
+
+
+    for (
+        solicitacao_id,
         codigo_solicitacao,
         numero_solicitacao,
         objeto_solicitacao,
-        justificativa_solicitacao,
-        status_solicitacao,
-        etapa_solicitacao
-    ) = dados_solicitacao
+        etapa_solicitacao,
+        data_solicitacao
+    ) in solicitacoes:
 
-
-    dados_itens = _sisget_fetchone(
-        """
-        SELECT
-            COUNT(*),
-            COALESCE(
-                SUM(
-                    valor_estimado_total
-                ),
-                0
-            )
-
-        FROM solicitacoes_itens
-
-        WHERE solicitacao_id = ?
-        """,
-        (
-            solicitacao_id,
-        )
-    )
-
-
-    quantidade_itens = int(
-        dados_itens[
-            0
-        ]
-        or 0
-    )
-
-
-    valor_estimado_itens = float(
-        dados_itens[
-            1
-        ]
-        or 0
-    )
-
-
-    if quantidade_itens <= 0:
-
-        st.warning(
-            "⚠️ A solicitação precisa possuir pelo menos um item "
-            "antes da elaboração do DFD."
-        )
-
-        return
-
-
-    existe = _sisget_fetchone(
-        """
-        SELECT
-            id
-
-        FROM solicitacoes_dfd
-
-        WHERE solicitacao_id = ?
-
-        LIMIT 1
-        """,
-        (
-            solicitacao_id,
-        )
-    )
-
-
-    if existe:
-
-        st.warning(
-            "⚠️ Esta solicitação já possui DFD. "
-            "Use Localizar para alterar o documento existente."
-        )
-
-        return
-
-
-    st.markdown(
-        "### 📋 Dados da Solicitação"
-    )
-
-
-    r1, r2, r3 = st.columns(
-        3
-    )
-
-
-    r1.text_input(
-        "Solicitação",
-        value=str(
+        identificacao = (
             codigo_solicitacao
             or numero_solicitacao
-            or ""
+            or solicitacao_id
+        )
+
+
+        rotulo = (
+            f"{identificacao}"
+            f" | {objeto_solicitacao or ''}"
+        )
+
+
+        mapa_solicitacoes[
+            rotulo
+        ] = {
+            "id": solicitacao_id,
+            "codigo": codigo_solicitacao,
+            "numero": numero_solicitacao,
+            "objeto": objeto_solicitacao,
+            "etapa": etapa_solicitacao,
+            "data": data_solicitacao
+        }
+
+
+    solicitacao_nome = st.selectbox(
+        "Solicitação para Licitação *",
+        list(
+            mapa_solicitacoes.keys()
         ),
-        disabled=True,
         key=(
-            f"dfd_codigo_solicitacao_"
-            f"{solicitacao_id}_"
+            f"dfd_solicitacao_"
             f"{reset}"
         )
     )
 
 
-    r2.text_input(
-        "Status",
+    dados_solicitacao = mapa_solicitacoes[
+        solicitacao_nome
+    ]
+
+
+    solicitacao_id = dados_solicitacao[
+        "id"
+    ]
+
+
+    # ========================================================
+    # RESUMO
+    # ========================================================
+
+    st.markdown(
+        "### 📋 Solicitação"
+    )
+
+
+    c1, c2 = st.columns(
+        2
+    )
+
+
+    c1.text_input(
+        "Número",
         value=str(
-            status_solicitacao
+            dados_solicitacao[
+                "numero"
+            ]
+            or dados_solicitacao[
+                "codigo"
+            ]
             or ""
         ),
         disabled=True,
         key=(
-            f"dfd_status_solicitacao_"
+            f"dfd_numero_"
             f"{solicitacao_id}_"
             f"{reset}"
         )
     )
 
 
-    r3.text_input(
-        "Etapa",
+    c2.text_input(
+        "Etapa Atual",
         value="📄 DFD",
         disabled=True,
         key=(
-            f"dfd_etapa_solicitacao_"
+            f"dfd_etapa_"
             f"{solicitacao_id}_"
             f"{reset}"
         )
@@ -39449,52 +39445,24 @@ def dfd_incluir():
     st.text_area(
         "Objeto",
         value=str(
-            objeto_solicitacao
+            dados_solicitacao[
+                "objeto"
+            ]
             or ""
         ),
         disabled=True,
         height=80,
         key=(
-            f"dfd_objeto_solicitacao_"
+            f"dfd_objeto_"
             f"{solicitacao_id}_"
             f"{reset}"
         )
     )
 
 
-    m1, m2 = st.columns(
-        2
-    )
-
-
-    m1.metric(
-        "Itens da Solicitação",
-        quantidade_itens
-    )
-
-
-    m2.metric(
-        "Valor Estimado dos Itens",
-        (
-            f"R$ {valor_estimado_itens:,.2f}"
-            .replace(
-                ",",
-                "X"
-            )
-            .replace(
-                ".",
-                ","
-            )
-            .replace(
-                "X",
-                "."
-            )
-        )
-    )
-
-
-    st.markdown("---")
-
+    # ========================================================
+    # CÓDIGO
+    # ========================================================
 
     codigo = sisget_proximo_codigo(
         "solicitacoes_dfd",
@@ -39502,8 +39470,14 @@ def dfd_incluir():
     )
 
 
+    # ========================================================
+    # FORMULÁRIO
+    # ========================================================
+
     with st.form(
-        f"form_dfd_incluir_{reset}_{solicitacao_id}"
+        f"form_dfd_incluir_"
+        f"{reset}_"
+        f"{solicitacao_id}"
     ):
 
         st.text_input(
@@ -39518,10 +39492,6 @@ def dfd_incluir():
 
         necessidade = st.text_area(
             "Descrição da Necessidade *",
-            value=str(
-                justificativa_solicitacao
-                or ""
-            ),
             height=120
         )
 
@@ -39534,10 +39504,6 @@ def dfd_incluir():
 
         quantidade = st.text_area(
             "Quantidade Preliminar / Justificativa *",
-            placeholder=(
-                "Descreva como a quantidade foi estimada, "
-                "considerando os itens da solicitação."
-            ),
             height=100
         )
 
@@ -39549,10 +39515,6 @@ def dfd_incluir():
 
         alinhamento = st.text_area(
             "Alinhamento com o Planejamento",
-            placeholder=(
-                "Informe o vínculo da demanda com o planejamento, "
-                "PCA ou outro instrumento aplicável."
-            ),
             height=100
         )
 
@@ -39563,13 +39525,8 @@ def dfd_incluir():
         )
 
 
-        confirmar = st.checkbox(
-            "Confirmo a conclusão do DFD e o envio da solicitação para 📘 ETP."
-        )
-
-
         salvar = st.form_submit_button(
-            "💾 Salvar e Concluir DFD",
+            "💾 Salvar DFD",
             type="primary",
             use_container_width=True
         )
@@ -39579,6 +39536,10 @@ def dfd_incluir():
 
         return
 
+
+    # ========================================================
+    # VALIDAÇÕES
+    # ========================================================
 
     if not necessidade.strip():
 
@@ -39607,14 +39568,9 @@ def dfd_incluir():
         return
 
 
-    if not confirmar:
-
-        st.warning(
-            "⚠️ Confirme a conclusão do DFD antes de continuar."
-        )
-
-        return
-
+    # ========================================================
+    # CONFERIR ETAPA NOVAMENTE
+    # ========================================================
 
     etapa_atual = _sisget_fetchone(
         """
@@ -39652,8 +39608,7 @@ def dfd_incluir():
     if etapa_banco != "DFD":
 
         st.error(
-            "❌ Esta solicitação não está mais na etapa 📄 DFD. "
-            "Atualize a tela antes de continuar."
+            "❌ Esta solicitação não está mais na etapa DFD."
         )
 
         st.session_state[
@@ -39663,7 +39618,11 @@ def dfd_incluir():
         st.rerun()
 
 
-    existe_agora = _sisget_fetchone(
+    # ========================================================
+    # CONFERIR DFD DUPLICADO
+    # ========================================================
+
+    existe = _sisget_fetchone(
         """
         SELECT
             id
@@ -39680,18 +39639,22 @@ def dfd_incluir():
     )
 
 
-    if existe_agora:
+    if existe:
 
-        st.error(
-            "❌ O DFD desta solicitação já foi incluído por outro usuário."
+        st.warning(
+            "⚠️ Esta solicitação já possui DFD. "
+            "Use Localizar para consultar ou alterar."
         )
 
-        st.session_state[
-            "sisget_dfd_reset"
-        ] += 1
+        return
 
-        st.rerun()
 
+    # ========================================================
+    # SALVAR DFD
+    #
+    # IMPORTANTE:
+    # NÃO MUDA A ETAPA PARA ETP.
+    # ========================================================
 
     codigo_salvar = sisget_proximo_codigo(
         "solicitacoes_dfd",
@@ -39734,36 +39697,11 @@ def dfd_incluir():
         )
 
 
-        cursor.execute(
-            """
-            UPDATE solicitacoes
-
-            SET
-                etapa_atual = 'ETP',
-                status = 'EM_ANDAMENTO'
-
-            WHERE id = ?
-              AND UPPER(
-                    TRIM(
-                        COALESCE(
-                            etapa_atual,
-                            ''
-                        )
-                    )
-                  ) = 'DFD'
-            """,
-            (
-                solicitacao_id,
-            )
-        )
-
-
-        if cursor.rowcount != 1:
-
-            raise Exception(
-                "A etapa da solicitação foi alterada durante a gravação."
-            )
-
+        # ====================================================
+        # HISTÓRICO
+        # SOMENTE REGISTRA QUE O DFD FOI INCLUÍDO.
+        # A ETAPA CONTINUA DFD.
+        # ====================================================
 
         cursor.execute(
             """
@@ -39787,11 +39725,12 @@ def dfd_incluir():
                     "usuario_id"
                 ),
                 "DFD",
-                "ETP",
-                "DFD_CONCLUIDO",
+                "DFD",
+                "DFD_INCLUIDO",
                 (
-                    "DFD concluído. Solicitação encaminhada "
-                    "para a etapa ETP."
+                    "DFD incluído. "
+                    "A solicitação permanece na etapa DFD "
+                    "aguardando assinatura."
                 )
             )
         )
@@ -39812,17 +39751,22 @@ def dfd_incluir():
 
 
         st.error(
-            f"❌ Erro ao salvar e concluir o DFD: {erro}"
+            f"❌ Erro ao salvar DFD: {erro}"
         )
 
         return
 
 
+    # ========================================================
+    # SUCESSO
+    # ========================================================
+
     st.session_state[
         "sisget_mensagem_dfd"
     ] = (
-        "✅ DFD salvo e concluído com sucesso. "
-        "A solicitação foi encaminhada para 📘 ETP."
+        "✅ DFD incluído com sucesso. "
+        "Agora use o botão ✍️ Assinar para encaminhar "
+        "a solicitação ao ETP."
     )
 
 
@@ -39842,9 +39786,553 @@ def dfd_incluir():
 
 
     st.rerun()
+def assinatura_dfd():
+
+    import hashlib
+    from datetime import datetime
 
 
+    # ========================================================
+    # RESET / MENSAGEM
+    # ========================================================
 
+    if "sisget_assinatura_dfd_reset" not in st.session_state:
+
+        st.session_state[
+            "sisget_assinatura_dfd_reset"
+        ] = 0
+
+
+    reset = st.session_state[
+        "sisget_assinatura_dfd_reset"
+    ]
+
+
+    if "sisget_mensagem_assinatura_dfd" in st.session_state:
+
+        st.success(
+            st.session_state.pop(
+                "sisget_mensagem_assinatura_dfd"
+            )
+        )
+
+
+    # ========================================================
+    # SOMENTE DFDs PRONTOS PARA ASSINATURA
+    # ========================================================
+
+    solicitacoes = _sisget_fetch(
+        """
+        SELECT
+            s.id,
+            s.codigo,
+            s.numero,
+            s.objeto,
+            d.codigo
+
+        FROM solicitacoes s
+
+        INNER JOIN solicitacoes_dfd d
+            ON d.solicitacao_id = s.id
+
+        WHERE s.ativo = TRUE
+
+          AND UPPER(
+                TRIM(
+                    COALESCE(
+                        s.tipo_solicitacao,
+                        ''
+                    )
+                )
+              ) = 'LICITACAO'
+
+          AND UPPER(
+                TRIM(
+                    COALESCE(
+                        s.etapa_atual,
+                        ''
+                    )
+                )
+              ) = 'DFD'
+
+        ORDER BY
+            s.exercicio DESC,
+            s.numero DESC,
+            s.id DESC
+        """
+    )
+
+
+    if not solicitacoes:
+
+        st.info(
+            "ℹ️ Nenhuma solicitação possui DFD pronto para assinatura."
+        )
+
+        return
+
+
+    mapa = {}
+
+
+    for (
+        solicitacao_id,
+        codigo_solicitacao,
+        numero_solicitacao,
+        objeto_solicitacao,
+        codigo_dfd
+    ) in solicitacoes:
+
+        identificacao = (
+            codigo_solicitacao
+            or numero_solicitacao
+            or solicitacao_id
+        )
+
+
+        rotulo = (
+            f"{identificacao}"
+            f" | {objeto_solicitacao or ''}"
+        )
+
+
+        mapa[
+            rotulo
+        ] = {
+            "id": solicitacao_id,
+            "codigo": codigo_solicitacao,
+            "numero": numero_solicitacao,
+            "objeto": objeto_solicitacao,
+            "codigo_dfd": codigo_dfd
+        }
+
+
+    solicitacao_nome = st.selectbox(
+        "Solicitação *",
+        list(
+            mapa.keys()
+        ),
+        key=(
+            f"assinatura_dfd_solicitacao_"
+            f"{reset}"
+        )
+    )
+
+
+    dados = mapa[
+        solicitacao_nome
+    ]
+
+
+    solicitacao_id = dados[
+        "id"
+    ]
+
+
+    # ========================================================
+    # RESUMO
+    # ========================================================
+
+    st.info(
+        "Ao assinar o DFD, a solicitação será encaminhada para 📘 ETP."
+    )
+
+
+    c1, c2, c3 = st.columns(
+        3
+    )
+
+
+    c1.text_input(
+        "Solicitação",
+        value=str(
+            dados[
+                "codigo"
+            ]
+            or dados[
+                "numero"
+            ]
+            or ""
+        ),
+        disabled=True,
+        key=(
+            f"assinatura_dfd_codigo_"
+            f"{solicitacao_id}_"
+            f"{reset}"
+        )
+    )
+
+
+    c2.text_input(
+        "DFD",
+        value=str(
+            dados[
+                "codigo_dfd"
+            ]
+            or ""
+        ),
+        disabled=True,
+        key=(
+            f"assinatura_dfd_documento_"
+            f"{solicitacao_id}_"
+            f"{reset}"
+        )
+    )
+
+
+    c3.text_input(
+        "Próxima Etapa",
+        value="📘 ETP",
+        disabled=True,
+        key=(
+            f"assinatura_dfd_destino_"
+            f"{solicitacao_id}_"
+            f"{reset}"
+        )
+    )
+
+
+    st.text_area(
+        "Objeto",
+        value=str(
+            dados[
+                "objeto"
+            ]
+            or ""
+        ),
+        disabled=True,
+        height=90,
+        key=(
+            f"assinatura_dfd_objeto_"
+            f"{solicitacao_id}_"
+            f"{reset}"
+        )
+    )
+
+
+    codigo_assinatura = sisget_proximo_codigo(
+        "solicitacoes_assinaturas",
+        tamanho=8
+    )
+
+
+    # ========================================================
+    # FORMULÁRIO
+    # ========================================================
+
+    with st.form(
+        f"form_assinatura_dfd_"
+        f"{solicitacao_id}_"
+        f"{reset}"
+    ):
+
+        st.text_input(
+            "Código da Assinatura",
+            value=str(
+                codigo_assinatura
+                or ""
+            ),
+            disabled=True
+        )
+
+
+        st.text_input(
+            "Etapa",
+            value="📄 DFD",
+            disabled=True
+        )
+
+
+        st.text_input(
+            "Decisão",
+            value="ASSINADO",
+            disabled=True
+        )
+
+
+        observacao = st.text_area(
+            "Observação",
+            height=110
+        )
+
+
+        confirmar = st.checkbox(
+            "Confirmo a assinatura do DFD e o envio da solicitação para ETP."
+        )
+
+
+        assinar = st.form_submit_button(
+            "✍️ Assinar DFD e Avançar para ETP",
+            type="primary",
+            use_container_width=True
+        )
+
+
+    if not assinar:
+
+        return
+
+
+    if not confirmar:
+
+        st.warning(
+            "⚠️ Confirme a assinatura antes de continuar."
+        )
+
+        return
+
+
+    usuario_id = st.session_state.get(
+        "usuario_id"
+    )
+
+
+    if not usuario_id:
+
+        st.error(
+            "❌ Usuário não identificado."
+        )
+
+        return
+
+
+    # ========================================================
+    # CONFERÊNCIA FINAL
+    # ========================================================
+
+    conferencia = _sisget_fetchone(
+        """
+        SELECT
+            s.etapa_atual,
+            d.id
+
+        FROM solicitacoes s
+
+        LEFT JOIN solicitacoes_dfd d
+            ON d.solicitacao_id = s.id
+
+        WHERE s.id = ?
+          AND s.ativo = TRUE
+        """,
+        (
+            solicitacao_id,
+        )
+    )
+
+
+    if not conferencia:
+
+        st.error(
+            "❌ Solicitação não encontrada."
+        )
+
+        return
+
+
+    etapa_banco = str(
+        conferencia[
+            0
+        ]
+        or ""
+    ).strip().upper()
+
+
+    dfd_id = conferencia[
+        1
+    ]
+
+
+    if etapa_banco != "DFD":
+
+        st.warning(
+            "⚠️ A solicitação não está mais na etapa DFD."
+        )
+
+        st.session_state[
+            "sisget_assinatura_dfd_reset"
+        ] += 1
+
+        st.rerun()
+
+
+    if not dfd_id:
+
+        st.error(
+            "❌ O DFD precisa ser incluído antes da assinatura."
+        )
+
+        return
+
+
+    # ========================================================
+    # HASH
+    # ========================================================
+
+    instante = datetime.now()
+
+
+    conteudo_hash = (
+        f"{solicitacao_id}|"
+        f"{usuario_id}|"
+        f"DFD|"
+        f"ASSINADO|"
+        f"{instante.isoformat()}"
+    )
+
+
+    hash_assinatura = hashlib.sha256(
+        conteudo_hash.encode(
+            "utf-8"
+        )
+    ).hexdigest()
+
+
+    codigo_assinatura = sisget_proximo_codigo(
+        "solicitacoes_assinaturas",
+        tamanho=8
+    )
+
+
+    # ========================================================
+    # TRANSAÇÃO
+    # ========================================================
+
+    try:
+
+        cursor.execute(
+            """
+            INSERT INTO solicitacoes_assinaturas
+            (
+                codigo,
+                solicitacao_id,
+                usuario_id,
+                etapa,
+                decisao,
+                observacao,
+                hash_assinatura,
+                assinado_em
+            )
+            VALUES
+            (
+                ?, ?, ?, ?, ?, ?, ?, ?
+            )
+            """,
+            (
+                codigo_assinatura,
+                solicitacao_id,
+                usuario_id,
+                "DFD",
+                "ASSINADO",
+                observacao.strip()
+                or None,
+                hash_assinatura,
+                instante
+            )
+        )
+
+
+        cursor.execute(
+            """
+            UPDATE solicitacoes
+
+            SET
+                etapa_atual = 'ETP',
+                status = 'EM_ANDAMENTO'
+
+            WHERE id = ?
+
+              AND UPPER(
+                    TRIM(
+                        COALESCE(
+                            etapa_atual,
+                            ''
+                        )
+                    )
+                  ) = 'DFD'
+            """,
+            (
+                solicitacao_id,
+            )
+        )
+
+
+        if cursor.rowcount != 1:
+
+            raise Exception(
+                "A solicitação mudou de etapa durante a assinatura."
+            )
+
+
+        cursor.execute(
+            """
+            INSERT INTO solicitacoes_historico
+            (
+                solicitacao_id,
+                usuario_id,
+                etapa_origem,
+                etapa_destino,
+                acao,
+                observacao
+            )
+            VALUES
+            (
+                ?, ?, ?, ?, ?, ?
+            )
+            """,
+            (
+                solicitacao_id,
+                usuario_id,
+                "DFD",
+                "ETP",
+                "ASSINATURA",
+                (
+                    observacao.strip()
+                    or
+                    "DFD assinado. Solicitação encaminhada para ETP."
+                )
+            )
+        )
+
+
+        conn.commit()
+
+
+    except Exception as erro:
+
+        try:
+
+            conn.rollback()
+
+        except Exception:
+
+            pass
+
+
+        st.error(
+            f"❌ Erro ao assinar DFD: {erro}"
+        )
+
+        return
+
+
+    # ========================================================
+    # SUCESSO
+    # ========================================================
+
+    st.session_state[
+        "sisget_mensagem_assinatura_dfd"
+    ] = (
+        "✅ DFD assinado com sucesso. "
+        "A solicitação foi encaminhada para 📘 ETP."
+    )
+
+
+    st.session_state[
+        "sisget_assinatura_dfd_reset"
+    ] += 1
+
+
+    st.rerun()
 def dfd_localizar():
 
     df = _sisget_dataframe(
