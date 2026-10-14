@@ -40191,6 +40191,7 @@ def dfd_imprimir():
 # ============================================================
 
 def cadastro_etp_solicitacoes():
+
     sisget_tela_principal(
         titulo="ETP - Estudo Técnico Preliminar",
         chave="solicitacoes_etp",
@@ -40199,9 +40200,12 @@ def cadastro_etp_solicitacoes():
         func_alterar=etp_alterar,
         func_excluir=etp_excluir,
         func_imprimir=etp_imprimir,
+        func_estornar=solicitacao_estornar,
+        func_assinar=lambda: assinatura_solicitacao_incluir(
+            "ETP"
+        ),
         icone="📘"
     )
-
 
 def etp_incluir():
 
@@ -40592,6 +40596,7 @@ def etp_imprimir():
 # ============================================================
 
 def cadastro_riscos_solicitacoes():
+
     sisget_tela_principal(
         titulo="Mapa de Riscos",
         chave="solicitacoes_riscos",
@@ -40600,9 +40605,12 @@ def cadastro_riscos_solicitacoes():
         func_alterar=risco_alterar,
         func_excluir=risco_excluir,
         func_imprimir=risco_imprimir,
+        func_estornar=solicitacao_estornar,
+        func_assinar=lambda: assinatura_solicitacao_incluir(
+            "RISCOS"
+        ),
         icone="⚠️"
     )
-
 
 def risco_incluir():
 
@@ -41458,6 +41466,7 @@ def risco_imprimir():
 
 
 def cadastro_cotacoes_solicitacoes():
+
     sisget_tela_principal(
         titulo="Cotações / Pesquisa de Preços",
         chave="cotacoes",
@@ -41466,9 +41475,12 @@ def cadastro_cotacoes_solicitacoes():
         func_alterar=cotacao_alterar,
         func_excluir=cotacao_excluir,
         func_imprimir=cotacao_imprimir,
+        func_estornar=solicitacao_estornar,
+        func_assinar=lambda: assinatura_solicitacao_incluir(
+            "COTACOES"
+        ),
         icone="💲"
     )
-
 
 def _cotacao_limpar_documento(documento):
     return "".join(c for c in str(documento or "") if c.isdigit())
@@ -44431,6 +44443,7 @@ def cotacao_imprimir():
 
 
 def cadastro_fichas_solicitacoes():
+
     sisget_tela_principal(
         titulo="Fichas Orçamentárias das Solicitações",
         chave="solicitacoes_fichas",
@@ -44439,9 +44452,12 @@ def cadastro_fichas_solicitacoes():
         func_alterar=solicitacao_ficha_alterar,
         func_excluir=solicitacao_ficha_excluir,
         func_imprimir=solicitacao_ficha_imprimir,
+        func_estornar=solicitacao_estornar,
+        func_assinar=lambda: assinatura_solicitacao_incluir(
+            "FICHAS"
+        ),
         icone="🧾"
     )
-
 
 def solicitacao_ficha_incluir():
 
@@ -44759,6 +44775,7 @@ def solicitacao_ficha_imprimir():
 # ============================================================
 
 def cadastro_financeiro_solicitacoes():
+
     sisget_tela_principal(
         titulo="Validação Financeira das Solicitações",
         chave="solicitacoes_financeiro",
@@ -44767,9 +44784,12 @@ def cadastro_financeiro_solicitacoes():
         func_alterar=financeiro_solicitacao_alterar,
         func_excluir=financeiro_solicitacao_excluir,
         func_imprimir=financeiro_solicitacao_imprimir,
+        func_estornar=solicitacao_estornar,
+        func_assinar=lambda: assinatura_solicitacao_incluir(
+            "FINANCEIRO"
+        ),
         icone="💰"
     )
-
 
 def financeiro_solicitacao_incluir():
 
@@ -45082,6 +45102,7 @@ def financeiro_solicitacao_imprimir():
 # ============================================================
 
 def cadastro_enquadramento_solicitacoes():
+
     sisget_tela_principal(
         titulo="Enquadramento da Contratação",
         chave="solicitacoes_enquadramento",
@@ -45090,6 +45111,10 @@ def cadastro_enquadramento_solicitacoes():
         func_alterar=enquadramento_alterar,
         func_excluir=enquadramento_excluir,
         func_imprimir=enquadramento_imprimir,
+        func_estornar=solicitacao_estornar,
+        func_assinar=lambda: assinatura_solicitacao_incluir(
+            "ENQUADRAMENTO"
+        ),
         icone="⚖️"
     )
 
@@ -45505,6 +45530,7 @@ def enquadramento_imprimir():
 # ============================================================
 
 def cadastro_tr_solicitacoes():
+
     sisget_tela_principal(
         titulo="Termo de Referência - TR",
         chave="solicitacoes_tr",
@@ -45513,9 +45539,12 @@ def cadastro_tr_solicitacoes():
         func_alterar=tr_alterar,
         func_excluir=tr_excluir,
         func_imprimir=tr_imprimir,
+        func_estornar=solicitacao_estornar,
+        func_assinar=lambda: assinatura_solicitacao_incluir(
+            "TR"
+        ),
         icone="📑"
     )
-
 
 def tr_incluir():
 
