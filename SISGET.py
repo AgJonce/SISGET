@@ -32981,16 +32981,37 @@ def modulo_solicitacao_compra():
 
 
 def modulo_solicitacao_licitacao():
-    sisget_tela_principal(
-        titulo="Solicitação para Licitação",
-        chave="solicitacao_licitacao",
-        func_incluir=solicitacao_licitacao_incluir,
-        func_localizar=solicitacao_licitacao_localizar,
-        func_alterar=solicitacao_licitacao_alterar,
-        func_excluir=solicitacao_licitacao_excluir,
-        func_imprimir=solicitacao_licitacao_imprimir,
-        icone="⚖️"
+
+    st.subheader("⚖️ Solicitação para Licitação")
+
+    opcao = st.selectbox(
+        "Menu *",
+        [
+            "📋 Cadastro da Solicitação",
+            "🔄 Fluxo da Solicitação"
+        ],
+        key="sisget_menu_solicitacao_licitacao"
     )
+
+    st.divider()
+
+    if opcao == "📋 Cadastro da Solicitação":
+
+        sisget_tela_principal(
+            titulo="Solicitação para Licitação",
+            chave="solicitacao_licitacao",
+            func_incluir=solicitacao_licitacao_incluir,
+            func_localizar=solicitacao_licitacao_localizar,
+            func_alterar=solicitacao_licitacao_alterar,
+            func_excluir=solicitacao_licitacao_excluir,
+            func_imprimir=solicitacao_licitacao_imprimir,
+            icone="⚖️"
+        )
+
+    elif opcao == "🔄 Fluxo da Solicitação":
+
+        solicitacao_licitacao_fluxo_menu()
+
 
 
 def sisget_itens_solicitacao(
@@ -35332,17 +35353,624 @@ def solicitacao_compra_alterar(solicitacao_id):
     )
 
 
-def solicitacao_licitacao_alterar(solicitacao_id):
+def solicitacao_licitacao_alterar(
+    solicitacao_id
+):
+
     sisget_solicitacao_alterar_base(
         solicitacao_id
     )
 
-    st.markdown("---")
 
-    solicitacao_licitacao_fluxo(
-        solicitacao_id
+def solicitacao_licitacao_incluir():
+
+    if "sisget_solicitacao_licitacao_reset" not in st.session_state:
+
+        st.session_state[
+            "sisget_solicitacao_licitacao_reset"
+        ] = 0
+
+    reset = st.session_state[
+        "sisget_solicitacao_licitacao_reset"
+    ]
+
+    if "sisget_mensagem_solicitacao_licitacao" in st.session_state:
+
+        st.success(
+            st.session_state.pop(
+                "sisget_mensagem_solicitacao_licitacao"
+            )
+        )
+
+    exercicio = datetime.now().year
+
+    numero = sisget_proximo_numero_solicitacao(
+        "LICITACAO",
+        exercicio
     )
 
+    codigo = (
+        f"LIC-{exercicio}-"
+        f"{str(numero).zfill(6)}"
+    )
+
+    unidades = _sisget_fetch(
+        """
+        SELECT
+            id,
+            codigo,
+            nome
+        FROM unidades_administrativas
+        WHERE ativo = TRUE
+        ORDER BY
+            codigo,
+            nome
+        """
+    )
+
+    if not unidades:
+
+        st.warning(
+            "⚠️ Nenhuma Unidade Administrativa ativa."
+        )
+
+        return
+
+    mapa_unidades = {
+        f"{codigo_u} - {nome_u}": id_u
+        for id_u, codigo_u, nome_u in unidades
+    }
+
+    with st.form(
+        f"form_solicitacao_licitacao_{reset}"
+    ):
+
+        st.text_input(
+            "Código",
+            value=codigo,
+            disabled=True
+        )
+
+        unidade_nome = st.selectbox(
+            "Unidade / Setor Solicitante *",
+            list(
+                mapa_unidades.keys()
+            )
+        )
+
+        prioridade = st.selectbox(
+            "Prioridade *",
+            [
+                "Normal",
+                "Alta",
+                "Urgente"
+            ]
+        )
+
+        objeto = st.text_area(
+            "Objeto / Resumo *"
+        )
+
+        justificativa = st.text_area(
+            "Justificativa *"
+        )
+
+        data_necessidade = st.date_input(
+            "Data da Necessidade"
+        )
+
+        observacao = st.text_area(
+            "Observações"
+        )
+
+        st.markdown("---")
+
+        aprovar_agora = st.radio(
+            "Deseja aprovar esta Solicitação para Licitação ao salvar? *",
+            [
+                "Sim",
+                "Não"
+            ],
+            horizontal=True,
+            index=0
+        )
+
+        if aprovar_agora == "Sim":
+
+            st.info(
+                "✅ Ao salvar, a solicitação será aprovada e encaminhada para 📦 Itens."
+            )
+
+        else:
+
+            st.info(
+                "ℹ️ Ao salvar, a solicitação ficará aguardando aprovação no menu 🔄 Fluxo da Solicitação."
+            )
+
+        salvar = st.form_submit_button(
+            "💾 Salvar Solicitação",
+            type="primary",
+            use_container_width=True
+        )
+
+    if not salvar:
+
+        return
+
+    if not objeto.strip():
+
+        st.warning(
+            "⚠️ Informe o objeto da solicitação."
+        )
+
+        return
+
+    if not justificativa.strip():
+
+        st.warning(
+            "⚠️ Informe a justificativa da solicitação."
+        )
+
+        return
+
+    if aprovar_agora == "Sim":
+
+        status = "EM_ANDAMENTO"
+        etapa_atual = "ITENS"
+        acao_historico = "SOLICITACAO_APROVADA"
+
+        observacao_historico = (
+            "Solicitação para Licitação criada e aprovada. "
+            "Encaminhada para a etapa Itens."
+        )
+
+    else:
+
+        status = "AGUARDANDO_APROVACAO"
+        etapa_atual = "SOLICITACAO"
+        acao_historico = "SOLICITACAO_CRIADA"
+
+        observacao_historico = (
+            "Solicitação para Licitação criada e mantida aguardando aprovação."
+        )
+
+    numero_salvar = sisget_proximo_numero_solicitacao(
+        "LICITACAO",
+        exercicio
+    )
+
+    codigo_salvar = (
+        f"LIC-{exercicio}-"
+        f"{str(numero_salvar).zfill(6)}"
+    )
+
+    try:
+
+        cursor.execute(
+            """
+            INSERT INTO solicitacoes
+            (
+                codigo,
+                exercicio,
+                numero,
+                tipo_solicitacao,
+                unidade_administrativa_id,
+                solicitante_usuario_id,
+                prioridade,
+                objeto,
+                justificativa,
+                data_necessidade,
+                observacao,
+                status,
+                etapa_atual,
+                ativo
+            )
+            VALUES
+            (
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE
+            )
+            RETURNING id
+            """,
+            (
+                codigo_salvar,
+                exercicio,
+                numero_salvar,
+                "LICITACAO",
+                mapa_unidades[
+                    unidade_nome
+                ],
+                st.session_state.get(
+                    "usuario_id"
+                ),
+                prioridade,
+                objeto.strip(),
+                justificativa.strip(),
+                data_necessidade,
+                observacao.strip() or None,
+                status,
+                etapa_atual
+            )
+        )
+
+        retorno = cursor.fetchone()
+
+        if not retorno:
+
+            raise Exception(
+                "Não foi possível obter o ID da solicitação criada."
+            )
+
+        solicitacao_id = retorno[0]
+
+        cursor.execute(
+            """
+            INSERT INTO solicitacoes_historico
+            (
+                solicitacao_id,
+                usuario_id,
+                etapa_origem,
+                etapa_destino,
+                acao,
+                observacao
+            )
+            VALUES
+            (
+                ?, ?, ?, ?, ?, ?
+            )
+            """,
+            (
+                solicitacao_id,
+                st.session_state.get(
+                    "usuario_id"
+                ),
+                "SOLICITACAO",
+                etapa_atual,
+                acao_historico,
+                observacao_historico
+            )
+        )
+
+        conn.commit()
+
+    except Exception as erro:
+
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+
+        st.error(
+            f"❌ Erro ao salvar Solicitação para Licitação: {erro}"
+        )
+
+        return
+
+    if aprovar_agora == "Sim":
+
+        mensagem = (
+            f"✅ Solicitação {codigo_salvar} salva e aprovada. "
+            f"Ela foi encaminhada para 📦 Itens."
+        )
+
+    else:
+
+        mensagem = (
+            f"✅ Solicitação {codigo_salvar} salva. "
+            f"Ela está aguardando aprovação no menu 🔄 Fluxo da Solicitação."
+        )
+
+    st.session_state[
+        "sisget_mensagem_solicitacao_licitacao"
+    ] = mensagem
+
+    st.session_state[
+        "sisget_solicitacao_licitacao_reset"
+    ] += 1
+
+    st.rerun()
+
+
+def solicitacao_licitacao_fluxo_menu():
+
+    st.markdown(
+        "### 🔄 Fluxo da Solicitação"
+    )
+
+    st.caption(
+        "Aqui aparecem as Solicitações para Licitação que ainda aguardam aprovação."
+    )
+
+    solicitacoes = _sisget_fetch(
+        """
+        SELECT
+            s.id,
+            s.codigo,
+            s.numero,
+            s.objeto,
+            s.prioridade,
+            s.status,
+            s.etapa_atual
+        FROM solicitacoes s
+        WHERE s.ativo = TRUE
+          AND UPPER(TRIM(COALESCE(s.tipo_solicitacao, ''))) = 'LICITACAO'
+          AND UPPER(TRIM(COALESCE(s.etapa_atual, ''))) = 'SOLICITACAO'
+        ORDER BY
+            s.exercicio DESC,
+            s.numero DESC,
+            s.id DESC
+        """
+    )
+
+    if not solicitacoes:
+
+        st.info(
+            "✅ Não existem Solicitações para Licitação aguardando aprovação."
+        )
+
+        return
+
+    mapa = {}
+
+    for (
+        solicitacao_id,
+        codigo,
+        numero,
+        objeto,
+        prioridade,
+        status,
+        etapa_atual
+    ) in solicitacoes:
+
+        identificacao = (
+            codigo
+            or numero
+            or solicitacao_id
+        )
+
+        rotulo = (
+            f"{identificacao}"
+            f" | {objeto or ''}"
+        )
+
+        mapa[rotulo] = {
+            "id": solicitacao_id,
+            "codigo": codigo,
+            "numero": numero,
+            "objeto": objeto,
+            "prioridade": prioridade,
+            "status": status,
+            "etapa": etapa_atual
+        }
+
+    nome = st.selectbox(
+        "Solicitação *",
+        list(
+            mapa.keys()
+        ),
+        key="sisget_fluxo_solicitacao_licitacao"
+    )
+
+    dados = mapa[
+        nome
+    ]
+
+    solicitacao_id = dados[
+        "id"
+    ]
+
+    c1, c2 = st.columns(2)
+
+    c1.text_input(
+        "Solicitação",
+        value=str(
+            dados["codigo"]
+            or dados["numero"]
+            or ""
+        ),
+        disabled=True,
+        key=f"fluxo_licitacao_codigo_{solicitacao_id}"
+    )
+
+    c2.text_input(
+        "Prioridade",
+        value=str(
+            dados["prioridade"]
+            or ""
+        ),
+        disabled=True,
+        key=f"fluxo_licitacao_prioridade_{solicitacao_id}"
+    )
+
+    st.text_area(
+        "Objeto",
+        value=str(
+            dados["objeto"]
+            or ""
+        ),
+        disabled=True,
+        height=90,
+        key=f"fluxo_licitacao_objeto_{solicitacao_id}"
+    )
+
+    with st.form(
+        f"form_fluxo_aprovacao_{solicitacao_id}"
+    ):
+
+        observacao = st.text_area(
+            "Observação",
+            height=100
+        )
+
+        col1, col2 = st.columns(2)
+
+        aprovar = col1.form_submit_button(
+            "✅ Aprovar Solicitação",
+            type="primary",
+            use_container_width=True
+        )
+
+        rejeitar = col2.form_submit_button(
+            "❌ Rejeitar Solicitação",
+            use_container_width=True
+        )
+
+    if aprovar:
+
+        try:
+
+            cursor.execute(
+                """
+                UPDATE solicitacoes
+                SET
+                    status = 'EM_ANDAMENTO',
+                    etapa_atual = 'ITENS'
+                WHERE id = ?
+                  AND UPPER(TRIM(COALESCE(etapa_atual, ''))) = 'SOLICITACAO'
+                """,
+                (
+                    solicitacao_id,
+                )
+            )
+
+            if cursor.rowcount != 1:
+
+                raise Exception(
+                    "A solicitação não está mais aguardando aprovação."
+                )
+
+            cursor.execute(
+                """
+                INSERT INTO solicitacoes_historico
+                (
+                    solicitacao_id,
+                    usuario_id,
+                    etapa_origem,
+                    etapa_destino,
+                    acao,
+                    observacao
+                )
+                VALUES
+                (
+                    ?, ?, ?, ?, ?, ?
+                )
+                """,
+                (
+                    solicitacao_id,
+                    st.session_state.get(
+                        "usuario_id"
+                    ),
+                    "SOLICITACAO",
+                    "ITENS",
+                    "SOLICITACAO_APROVADA",
+                    (
+                        observacao.strip()
+                        or
+                        "Solicitação aprovada e encaminhada para Itens."
+                    )
+                )
+            )
+
+            conn.commit()
+
+        except Exception as erro:
+
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+
+            st.error(
+                f"❌ Erro ao aprovar solicitação: {erro}"
+            )
+
+            return
+
+        st.success(
+            "✅ Solicitação aprovada e encaminhada para 📦 Itens."
+        )
+
+        st.rerun()
+
+    if rejeitar:
+
+        if not observacao.strip():
+
+            st.warning(
+                "⚠️ Informe o motivo da rejeição."
+            )
+
+            return
+
+        try:
+
+            cursor.execute(
+                """
+                UPDATE solicitacoes
+                SET
+                    status = 'REJEITADA',
+                    etapa_atual = 'SOLICITACAO'
+                WHERE id = ?
+                  AND UPPER(TRIM(COALESCE(etapa_atual, ''))) = 'SOLICITACAO'
+                """,
+                (
+                    solicitacao_id,
+                )
+            )
+
+            if cursor.rowcount != 1:
+
+                raise Exception(
+                    "A solicitação não está mais aguardando aprovação."
+                )
+
+            cursor.execute(
+                """
+                INSERT INTO solicitacoes_historico
+                (
+                    solicitacao_id,
+                    usuario_id,
+                    etapa_origem,
+                    etapa_destino,
+                    acao,
+                    observacao
+                )
+                VALUES
+                (
+                    ?, ?, ?, ?, ?, ?
+                )
+                """,
+                (
+                    solicitacao_id,
+                    st.session_state.get(
+                        "usuario_id"
+                    ),
+                    "SOLICITACAO",
+                    "SOLICITACAO",
+                    "SOLICITACAO_REJEITADA",
+                    observacao.strip()
+                )
+            )
+
+            conn.commit()
+
+        except Exception as erro:
+
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+
+            st.error(
+                f"❌ Erro ao rejeitar solicitação: {erro}"
+            )
+
+            return
+
+        st.success(
+            "❌ Solicitação rejeitada."
+        )
+
+        st.rerun()
 
 def sisget_solicitacao_excluir_tipo(
     tipo_solicitacao,
