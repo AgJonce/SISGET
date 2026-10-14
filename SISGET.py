@@ -38371,35 +38371,17 @@ def modulo_documentos_solicitacoes():
 
 def solicitacao_item_incluir():
 
-    # ========================================================
-    # RESET / MENSAGEM
-    # ========================================================
+    if "sisget_item_aprovacao_reset" not in st.session_state:
+        st.session_state["sisget_item_aprovacao_reset"] = 0
 
-    if "sisget_item_solicitacao_reset" not in st.session_state:
+    reset = st.session_state["sisget_item_aprovacao_reset"]
 
-        st.session_state[
-            "sisget_item_solicitacao_reset"
-        ] = 0
-
-
-    reset = st.session_state[
-        "sisget_item_solicitacao_reset"
-    ]
-
-
-    if "sisget_mensagem_item_solicitacao" in st.session_state:
-
+    if "sisget_mensagem_item_aprovacao" in st.session_state:
         st.success(
             st.session_state.pop(
-                "sisget_mensagem_item_solicitacao"
+                "sisget_mensagem_item_aprovacao"
             )
         )
-
-
-    # ========================================================
-    # SOLICITAÇÕES DISPONÍVEIS
-    # NÃO MOSTRA SOLICITAÇÃO QUE JÁ POSSUI COTAÇÃO
-    # ========================================================
 
     solicitacoes = _sisget_fetch(
         """
@@ -38408,32 +38390,12 @@ def solicitacao_item_incluir():
             s.codigo,
             s.numero,
             s.objeto,
-            s.status,
             s.etapa_atual,
             s.data_solicitacao
-
         FROM solicitacoes s
-
         WHERE s.ativo = TRUE
-
-          AND UPPER(
-                TRIM(
-                    COALESCE(
-                        s.tipo_solicitacao,
-                        ''
-                    )
-                )
-              ) = 'LICITACAO'
-
-          AND NOT EXISTS
-          (
-              SELECT 1
-
-              FROM cotacoes c
-
-              WHERE c.solicitacao_id = s.id
-          )
-
+          AND UPPER(TRIM(COALESCE(s.tipo_solicitacao, ''))) = 'LICITACAO'
+          AND UPPER(TRIM(COALESCE(s.etapa_atual, ''))) = 'ITENS'
         ORDER BY
             s.exercicio DESC,
             s.numero DESC,
@@ -38441,26 +38403,19 @@ def solicitacao_item_incluir():
         """
     )
 
-
     if not solicitacoes:
-
         st.info(
-            "✅ Não existem solicitações de licitação disponíveis "
-            "para inclusão de itens."
+            "ℹ️ Não existem solicitações aguardando aprovação de itens."
         )
-
         return
 
-
     mapa_solicitacoes = {}
-
 
     for (
         solicitacao_id,
         codigo_solicitacao,
         numero_solicitacao,
         objeto_solicitacao,
-        status_solicitacao,
         etapa_solicitacao,
         data_solicitacao
     ) in solicitacoes:
@@ -38471,590 +38426,475 @@ def solicitacao_item_incluir():
             or solicitacao_id
         )
 
-
         rotulo = (
             f"{identificacao}"
             f" | {objeto_solicitacao or ''}"
-            f" | {status_solicitacao or ''}"
         )
 
-
-        mapa_solicitacoes[
-            rotulo
-        ] = {
+        mapa_solicitacoes[rotulo] = {
             "id": solicitacao_id,
             "codigo": codigo_solicitacao,
             "numero": numero_solicitacao,
             "objeto": objeto_solicitacao,
-            "status": status_solicitacao,
             "etapa": etapa_solicitacao,
             "data": data_solicitacao
         }
 
-
     solicitacao_nome = st.selectbox(
         "Solicitação para Licitação *",
-        list(
-            mapa_solicitacoes.keys()
-        ),
-        key=(
-            f"item_solicitacao_"
-            f"{reset}"
-        )
+        list(mapa_solicitacoes.keys()),
+        key=f"item_aprovacao_solicitacao_{reset}"
     )
-
 
     dados_solicitacao = mapa_solicitacoes[
         solicitacao_nome
     ]
 
-
     solicitacao_id = dados_solicitacao[
         "id"
     ]
 
-
-    # ========================================================
-    # RESUMO DA SOLICITAÇÃO
-    # ========================================================
-
-    c1, c2, c3 = st.columns(
-        3
+    st.markdown(
+        "### 📋 Solicitação"
     )
 
+    c1, c2 = st.columns(2)
 
     c1.text_input(
         "Número",
         value=str(
-            dados_solicitacao[
-                "numero"
-            ]
-            or dados_solicitacao[
-                "codigo"
-            ]
+            dados_solicitacao["numero"]
+            or dados_solicitacao["codigo"]
             or ""
         ),
         disabled=True,
-        key=(
-            f"item_sol_numero_"
-            f"{solicitacao_id}_"
-            f"{reset}"
-        )
+        key=f"item_aprovacao_numero_{solicitacao_id}_{reset}"
     )
-
 
     c2.text_input(
-        "Status",
-        value=str(
-            dados_solicitacao[
-                "status"
-            ]
-            or ""
-        ),
-        disabled=True,
-        key=(
-            f"item_sol_status_"
-            f"{solicitacao_id}_"
-            f"{reset}"
-        )
-    )
-
-
-    c3.text_input(
         "Etapa Atual",
-        value=str(
-            dados_solicitacao[
-                "etapa"
-            ]
-            or ""
-        ),
+        value="📦 ITENS",
         disabled=True,
-        key=(
-            f"item_sol_etapa_"
-            f"{solicitacao_id}_"
-            f"{reset}"
-        )
+        key=f"item_aprovacao_etapa_{solicitacao_id}_{reset}"
     )
-
 
     st.text_area(
         "Objeto",
         value=str(
-            dados_solicitacao[
-                "objeto"
-            ]
+            dados_solicitacao["objeto"]
             or ""
         ),
         disabled=True,
         height=80,
-        key=(
-            f"item_sol_objeto_"
-            f"{solicitacao_id}_"
-            f"{reset}"
-        )
+        key=f"item_aprovacao_objeto_{solicitacao_id}_{reset}"
     )
 
-
-    # ========================================================
-    # PRÓXIMO NÚMERO DO ITEM
-    # ========================================================
-
-    proximo_item = _sisget_fetchone(
-        """
-        SELECT
-            COALESCE(
-                MAX(
-                    numero_item
-                ),
-                0
-            ) + 1
-
-        FROM solicitacoes_itens
-
-        WHERE solicitacao_id = ?
-        """,
-        (
-            solicitacao_id,
-        )
-    )
-
-
-    numero_item = int(
-        proximo_item[
-            0
-        ]
-        or 1
-    )
-
-
-    codigo = sisget_proximo_codigo(
-        "solicitacoes_itens",
-        tamanho=6
-    )
-
-
-    # ========================================================
-    # PRODUTOS
-    # ========================================================
-
-    produtos = _sisget_fetch(
-        """
-        SELECT
-            id,
-            codigo,
-            descricao
-
-        FROM produtos
-
-        WHERE ativo = TRUE
-
-        ORDER BY
-            codigo,
-            descricao
-        """
-    )
-
-
-    if not produtos:
-
-        st.warning(
-            "⚠️ Nenhum produto ativo cadastrado."
-        )
-
-        return
-
-
-    mapa_produtos = {}
-
-
-    for (
-        produto_id,
-        codigo_produto,
-        descricao_produto
-    ) in produtos:
-
-        rotulo_produto = (
-            f"{codigo_produto or produto_id}"
-            f" - "
-            f"{descricao_produto or ''}"
-        )
-
-
-        mapa_produtos[
-            rotulo_produto
-        ] = {
-            "id": produto_id,
-            "codigo": codigo_produto,
-            "descricao": descricao_produto
-        }
-
-
-    # ========================================================
-    # DADOS DO ITEM
-    # ========================================================
-
-    i1, i2 = st.columns(
-        2
-    )
-
-
-    i1.text_input(
-        "Código",
-        value=str(
-            codigo
-            or ""
-        ),
-        disabled=True,
-        key=(
-            f"item_codigo_"
-            f"{solicitacao_id}_"
-            f"{reset}"
-        )
-    )
-
-
-    i2.text_input(
-        "Número do Item",
-        value=str(
-            numero_item
-        ),
-        disabled=True,
-        key=(
-            f"item_numero_"
-            f"{solicitacao_id}_"
-            f"{reset}"
-        )
-    )
-
-
-    produto_nome = st.selectbox(
-        "Produto *",
-        list(
-            mapa_produtos.keys()
-        ),
-        key=(
-            f"item_produto_"
-            f"{solicitacao_id}_"
-            f"{reset}"
-        )
-    )
-
-
-    produto_selecionado = mapa_produtos[
-        produto_nome
-    ]
-
-
-    produto_id = produto_selecionado[
-        "id"
-    ]
-
-
-    # ========================================================
-    # PRODUTO REPETIDO
-    # ========================================================
-
-    produto_ja_incluido = _sisget_fetchone(
+    itens = _sisget_fetch(
         """
         SELECT
             si.id,
-            si.numero_item
-
+            si.codigo,
+            si.numero_item,
+            p.codigo,
+            p.descricao,
+            si.quantidade,
+            si.valor_estimado_unitario,
+            si.valor_estimado_total,
+            si.especificacao_complementar,
+            COALESCE(a.situacao, 'PENDENTE'),
+            a.observacao
         FROM solicitacoes_itens si
-
+        INNER JOIN produtos p
+            ON p.id = si.produto_id
+        LEFT JOIN solicitacoes_itens_aprovacoes a
+            ON a.solicitacao_item_id = si.id
         WHERE si.solicitacao_id = ?
-          AND si.produto_id = ?
-
         ORDER BY
+            si.numero_item,
             si.id
-
-        LIMIT 1
         """,
-        (
-            solicitacao_id,
-            produto_id
-        )
+        (solicitacao_id,)
     )
 
-
-    if produto_ja_incluido:
-
+    if not itens:
         st.warning(
-            "⚠️ Este produto já está incluído nesta solicitação "
-            f"no item {produto_ja_incluido[1]}."
+            "⚠️ Esta solicitação não possui itens para aprovação."
+        )
+        return
+
+    total_itens = len(itens)
+
+    aprovados = sum(
+        1
+        for item in itens
+        if str(item[9] or "").strip().upper() == "APROVADO"
+    )
+
+    desaprovados = sum(
+        1
+        for item in itens
+        if str(item[9] or "").strip().upper() == "DESAPROVADO"
+    )
+
+    pendentes = (
+        total_itens
+        - aprovados
+        - desaprovados
+    )
+
+    r1, r2, r3, r4 = st.columns(4)
+
+    r1.metric(
+        "Total de Itens",
+        total_itens
+    )
+
+    r2.metric(
+        "Aprovados",
+        aprovados
+    )
+
+    r3.metric(
+        "Desaprovados",
+        desaprovados
+    )
+
+    r4.metric(
+        "Pendentes",
+        pendentes
+    )
+
+    st.markdown("---")
+
+    st.markdown(
+        "### ✅ Aprovação dos Itens"
+    )
+
+    decisoes = {}
+
+    opcoes = [
+        "PENDENTE",
+        "APROVADO",
+        "DESAPROVADO"
+    ]
+
+    for item in itens:
+
+        (
+            item_id,
+            codigo_item,
+            numero_item,
+            codigo_produto,
+            descricao_produto,
+            quantidade,
+            valor_unitario,
+            valor_total,
+            especificacao,
+            situacao_atual,
+            observacao_atual
+        ) = item
+
+        situacao_atual = str(
+            situacao_atual
+            or "PENDENTE"
+        ).strip().upper()
+
+        if situacao_atual not in opcoes:
+            situacao_atual = "PENDENTE"
+
+        indice_atual = opcoes.index(
+            situacao_atual
         )
 
+        st.markdown(
+            f"#### Item {numero_item or item_id} - "
+            f"{descricao_produto or ''}"
+        )
 
-        permitir_repetir = st.checkbox(
-            "Permitir incluir o mesmo produto novamente",
-            key=(
-                f"item_repetir_"
-                f"{solicitacao_id}_"
-                f"{produto_id}_"
-                f"{reset}"
+        d1, d2, d3, d4 = st.columns(4)
+
+        d1.text_input(
+            "Código",
+            value=str(
+                codigo_item
+                or codigo_produto
+                or ""
+            ),
+            disabled=True,
+            key=f"item_aprov_codigo_{item_id}_{reset}"
+        )
+
+        d2.number_input(
+            "Quantidade",
+            value=float(
+                quantidade
+                or 0
+            ),
+            disabled=True,
+            key=f"item_aprov_qtd_{item_id}_{reset}"
+        )
+
+        d3.number_input(
+            "Valor Unitário",
+            value=float(
+                valor_unitario
+                or 0
+            ),
+            format="%.2f",
+            disabled=True,
+            key=f"item_aprov_vu_{item_id}_{reset}"
+        )
+
+        d4.number_input(
+            "Valor Total",
+            value=float(
+                valor_total
+                or 0
+            ),
+            format="%.2f",
+            disabled=True,
+            key=f"item_aprov_vt_{item_id}_{reset}"
+        )
+
+        if especificacao:
+            st.text_area(
+                "Especificação Complementar",
+                value=str(
+                    especificacao
+                ),
+                disabled=True,
+                height=80,
+                key=f"item_aprov_especificacao_{item_id}_{reset}"
             )
+
+        decisao = st.selectbox(
+            "Decisão *",
+            opcoes,
+            index=indice_atual,
+            key=f"item_aprov_decisao_{item_id}_{reset}"
         )
 
+        observacao = st.text_area(
+            "Observação da Aprovação",
+            value=str(
+                observacao_atual
+                or ""
+            ),
+            height=80,
+            key=f"item_aprov_observacao_{item_id}_{reset}"
+        )
+
+        decisoes[item_id] = {
+            "situacao": decisao,
+            "observacao": observacao
+        }
+
+        st.markdown("---")
+
+    salvar = st.button(
+        "💾 Salvar Aprovação dos Itens",
+        type="primary",
+        use_container_width=True,
+        key=f"salvar_aprovacao_itens_{solicitacao_id}_{reset}"
+    )
+
+    if not salvar:
+        st.info(
+            "Depois de aprovar ou desaprovar todos os itens, "
+            "use o botão ✍️ Assinar para encaminhar a solicitação ao DFD."
+        )
+        return
+
+    etapa_atual = _sisget_fetchone(
+        """
+        SELECT
+            etapa_atual
+        FROM solicitacoes
+        WHERE id = ?
+          AND ativo = TRUE
+        """,
+        (solicitacao_id,)
+    )
+
+    if not etapa_atual:
+        st.error(
+            "❌ Solicitação não encontrada ou inativa."
+        )
+        return
+
+    etapa_banco = str(
+        etapa_atual[0]
+        or ""
+    ).strip().upper()
+
+    if etapa_banco != "ITENS":
+        st.error(
+            "❌ Esta solicitação não está mais na etapa Itens."
+        )
+        st.session_state[
+            "sisget_item_aprovacao_reset"
+        ] += 1
+        st.rerun()
+
+    try:
+
+        for item_id, dados_decisao in decisoes.items():
+
+            situacao = str(
+                dados_decisao["situacao"]
+                or "PENDENTE"
+            ).strip().upper()
+
+            observacao = str(
+                dados_decisao["observacao"]
+                or ""
+            ).strip()
+
+            cursor.execute(
+                """
+                INSERT INTO solicitacoes_itens_aprovacoes
+                (
+                    solicitacao_item_id,
+                    situacao,
+                    observacao,
+                    usuario_id,
+                    atualizado_em
+                )
+                VALUES
+                (
+                    ?, ?, ?, ?, CURRENT_TIMESTAMP
+                )
+                ON CONFLICT (solicitacao_item_id)
+                DO UPDATE SET
+                    situacao = EXCLUDED.situacao,
+                    observacao = EXCLUDED.observacao,
+                    usuario_id = EXCLUDED.usuario_id,
+                    atualizado_em = CURRENT_TIMESTAMP
+                """,
+                (
+                    item_id,
+                    situacao,
+                    observacao or None,
+                    st.session_state.get("usuario_id")
+                )
+            )
+
+        conn.commit()
+
+    except Exception as erro:
+
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+
+        st.error(
+            f"❌ Erro ao salvar aprovação dos itens: {erro}"
+        )
+        return
+
+    resumo_aprovacao = _sisget_fetchone(
+        """
+        SELECT
+            COUNT(*),
+            COUNT(*) FILTER
+            (
+                WHERE UPPER(
+                    TRIM(
+                        COALESCE(
+                            a.situacao,
+                            'PENDENTE'
+                        )
+                    )
+                ) = 'APROVADO'
+            ),
+            COUNT(*) FILTER
+            (
+                WHERE UPPER(
+                    TRIM(
+                        COALESCE(
+                            a.situacao,
+                            'PENDENTE'
+                        )
+                    )
+                ) = 'DESAPROVADO'
+            ),
+            COUNT(*) FILTER
+            (
+                WHERE UPPER(
+                    TRIM(
+                        COALESCE(
+                            a.situacao,
+                            'PENDENTE'
+                        )
+                    )
+                ) = 'PENDENTE'
+            )
+        FROM solicitacoes_itens si
+        LEFT JOIN solicitacoes_itens_aprovacoes a
+            ON a.solicitacao_item_id = si.id
+        WHERE si.solicitacao_id = ?
+        """,
+        (solicitacao_id,)
+    )
+
+    total_final = int(
+        resumo_aprovacao[0]
+        or 0
+    )
+
+    aprovados_final = int(
+        resumo_aprovacao[1]
+        or 0
+    )
+
+    desaprovados_final = int(
+        resumo_aprovacao[2]
+        or 0
+    )
+
+    pendentes_final = int(
+        resumo_aprovacao[3]
+        or 0
+    )
+
+    if pendentes_final > 0:
+
+        mensagem = (
+            f"💾 Aprovações salvas. "
+            f"Aprovados: {aprovados_final} | "
+            f"Desaprovados: {desaprovados_final} | "
+            f"Pendentes: {pendentes_final}. "
+            f"Resolva todos os itens antes de assinar."
+        )
+
+    elif aprovados_final <= 0:
+
+        mensagem = (
+            "⚠️ Aprovações salvas, mas nenhum item foi aprovado. "
+            "A solicitação não deve seguir para DFD."
+        )
 
     else:
 
-        permitir_repetir = True
-
-
-    # ========================================================
-    # QUANTIDADE / VALORES
-    # ========================================================
-
-    v1, v2, v3 = st.columns(
-        3
-    )
-
-
-    quantidade = v1.number_input(
-        "Quantidade *",
-        min_value=0.000001,
-        value=1.0,
-        step=1.0,
-        format="%.6f",
-        key=(
-            f"item_quantidade_"
-            f"{solicitacao_id}_"
-            f"{reset}"
-        )
-    )
-
-
-    valor_unitario = v2.number_input(
-        "Valor Estimado Unitário",
-        min_value=0.0,
-        value=0.0,
-        step=0.01,
-        format="%.2f",
-        key=(
-            f"item_valor_unitario_"
-            f"{solicitacao_id}_"
-            f"{reset}"
-        )
-    )
-
-
-    valor_total = (
-        float(
-            quantidade
-        )
-        *
-        float(
-            valor_unitario
-        )
-    )
-
-
-    v3.text_input(
-        "Valor Estimado Total",
-        value=(
-            f"R$ {valor_total:,.2f}"
-            .replace(
-                ",",
-                "X"
-            )
-            .replace(
-                ".",
-                ","
-            )
-            .replace(
-                "X",
-                "."
-            )
-        ),
-        disabled=True,
-        key=(
-            f"item_valor_total_"
-            f"{solicitacao_id}_"
-            f"{reset}"
-        )
-    )
-
-
-    especificacao = st.text_area(
-        "Especificação Complementar",
-        placeholder=(
-            "Informe características adicionais do item."
-        ),
-        height=100,
-        key=(
-            f"item_especificacao_"
-            f"{solicitacao_id}_"
-            f"{reset}"
-        )
-    )
-
-
-    # ========================================================
-    # SALVAR
-    # ========================================================
-
-    salvar = st.button(
-        "💾 Salvar Item",
-        type="primary",
-        use_container_width=True,
-        key=(
-            f"salvar_item_solicitacao_"
-            f"{solicitacao_id}_"
-            f"{reset}"
-        )
-    )
-
-
-    if salvar:
-
-        if quantidade <= 0:
-
-            st.warning(
-                "⚠️ Informe uma quantidade maior que zero."
-            )
-
-            return
-
-
-        if (
-            produto_ja_incluido
-            and
-            not permitir_repetir
-        ):
-
-            st.warning(
-                "⚠️ Este produto já está incluído na solicitação."
-            )
-
-            return
-
-
-        ja_possui_cotacao = _sisget_fetchone(
-            """
-            SELECT
-                id
-
-            FROM cotacoes
-
-            WHERE solicitacao_id = ?
-
-            LIMIT 1
-            """,
-            (
-                solicitacao_id,
-            )
+        mensagem = (
+            f"✅ Aprovação dos itens concluída. "
+            f"Aprovados: {aprovados_final} | "
+            f"Desaprovados: {desaprovados_final}. "
+            f"Agora use o botão ✍️ Assinar para encaminhar "
+            f"a solicitação ao DFD."
         )
 
+    st.session_state[
+        "sisget_mensagem_item_aprovacao"
+    ] = mensagem
 
-        if ja_possui_cotacao:
+    st.session_state[
+        "sisget_item_aprovacao_reset"
+    ] += 1
 
-            st.error(
-                "❌ Esta solicitação já possui cotação. "
-                "Não é mais permitido incluir novos itens."
-            )
+    st.rerun()
 
-            st.session_state[
-                "sisget_item_solicitacao_reset"
-            ] += 1
-
-            st.rerun()
-
-
-        proximo_item_salvar = _sisget_fetchone(
-            """
-            SELECT
-                COALESCE(
-                    MAX(
-                        numero_item
-                    ),
-                    0
-                ) + 1
-
-            FROM solicitacoes_itens
-
-            WHERE solicitacao_id = ?
-            """,
-            (
-                solicitacao_id,
-            )
-        )
-
-
-        numero_item_salvar = int(
-            proximo_item_salvar[
-                0
-            ]
-            or 1
-        )
-
-
-        codigo_salvar = sisget_proximo_codigo(
-            "solicitacoes_itens",
-            tamanho=6
-        )
-
-
-        valor_total_salvar = (
-            float(
-                quantidade
-            )
-            *
-            float(
-                valor_unitario
-            )
-        )
-
-
-        if _sisget_salvar(
-            """
-            INSERT INTO solicitacoes_itens
-            (
-                solicitacao_id,
-                produto_id,
-                numero_item,
-                quantidade,
-                especificacao_complementar,
-                valor_estimado_unitario,
-                valor_estimado_total,
-                codigo
-            )
-            VALUES
-            (
-                ?, ?, ?, ?, ?, ?, ?, ?
-            )
-            """,
-            (
-                solicitacao_id,
-                produto_id,
-                numero_item_salvar,
-                float(
-                    quantidade
-                ),
-                especificacao.strip()
-                or None,
-                float(
-                    valor_unitario
-                ),
-                valor_total_salvar,
-                codigo_salvar
-            )
-        ):
-
-            st.session_state[
-                "sisget_mensagem_item_solicitacao"
-            ] = (
-                f"✅ Item {numero_item_salvar} - "
-                f"{produto_selecionado['descricao'] or ''} "
-                "incluído com sucesso."
-            )
-
-
-            st.session_state[
-                "sisget_item_solicitacao_reset"
-            ] += 1
-
-
-            st.rerun()
 
 
 def solicitacao_item_localizar():
