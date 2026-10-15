@@ -48944,84 +48944,328 @@ def cadastro_financeiro_solicitacoes():
 def financeiro_solicitacao_incluir():
 
     if "sisget_financeiro_sol_reset" not in st.session_state:
+
         st.session_state[
             "sisget_financeiro_sol_reset"
         ] = 0
+
 
     reset = st.session_state[
         "sisget_financeiro_sol_reset"
     ]
 
-    solicitacao_id = sisget_selecionar_solicitacao(
-        "Solicitação *",
-        f"financeiro_sol_{reset}"
+
+    # ========================================================
+    # MOSTRAR SOMENTE SOLICITAÇÕES QUE:
+    #
+    # 1. ESTÃO NA ETAPA FINANCEIRO
+    # 2. POSSUEM FICHA VINCULADA
+    # 3. AINDA NÃO POSSUEM VALIDAÇÃO FINANCEIRA
+    # ========================================================
+
+    solicitacoes_financeiro = _sisget_fetch(
+        """
+        SELECT DISTINCT
+            s.id,
+            s.codigo,
+            s.numero,
+            s.objeto
+
+        FROM solicitacoes s
+
+        WHERE s.ativo = TRUE
+
+          AND UPPER(
+                TRIM(
+                    COALESCE(
+                        s.tipo_solicitacao,
+                        ''
+                    )
+                )
+              ) = 'LICITACAO'
+
+          AND UPPER(
+                TRIM(
+                    COALESCE(
+                        s.etapa_atual,
+                        ''
+                    )
+                )
+              ) = 'FINANCEIRO'
+
+          AND EXISTS
+          (
+              SELECT 1
+
+              FROM solicitacoes_fichas sf
+
+              WHERE sf.solicitacao_id = s.id
+          )
+
+          AND NOT EXISTS
+          (
+              SELECT 1
+
+              FROM solicitacoes_financeiro fin
+
+              WHERE fin.solicitacao_id = s.id
+          )
+
+        ORDER BY
+            s.numero DESC,
+            s.id DESC
+        """
     )
 
-    if not solicitacao_id:
+
+    if not solicitacoes_financeiro:
+
+        st.info(
+            "ℹ️ Não existem solicitações aguardando "
+            "validação financeira."
+        )
+
         return
+
+
+    mapa_solicitacoes = {}
+
+
+    for (
+        solicitacao_id_registro,
+        codigo_solicitacao,
+        numero_solicitacao,
+        objeto_solicitacao
+    ) in solicitacoes_financeiro:
+
+        identificacao = (
+            codigo_solicitacao
+            or numero_solicitacao
+            or solicitacao_id_registro
+        )
+
+
+        rotulo = (
+            f"{identificacao}"
+            f" | {objeto_solicitacao or ''}"
+        )
+
+
+        mapa_solicitacoes[
+            rotulo
+        ] = solicitacao_id_registro
+
+
+    solicitacao_nome = st.selectbox(
+        "Solicitação *",
+        list(
+            mapa_solicitacoes.keys()
+        ),
+        key=f"financeiro_sol_{reset}"
+    )
+
+
+    solicitacao_id = mapa_solicitacoes[
+        solicitacao_nome
+    ]
+
+
+    # ========================================================
+    # CÓDIGO
+    # ========================================================
 
     codigo = sisget_proximo_codigo(
         "solicitacoes_financeiro",
         tamanho=6
     )
 
-    total = _sisget_fetchone(
+
+    # ========================================================
+    # VALOR DA COTAÇÃO
+    # ========================================================
+
+    valor_cotacao_registro = _sisget_fetchone(
         """
-        SELECT COALESCE(
-            SUM(valor_estimado_total),
-            0
-        )
-        FROM solicitacoes_itens
-        WHERE solicitacao_id = ?
-          AND ativo = TRUE
+        SELECT
+            COALESCE(
+                SUM(
+                    ci.valor_total
+                ),
+                0
+            )
+
+        FROM cotacoes c
+
+        INNER JOIN cotacoes_itens ci
+            ON ci.cotacao_id = c.id
+
+        INNER JOIN solicitacoes_itens si
+            ON si.id = ci.solicitacao_item_id
+
+        WHERE si.solicitacao_id = ?
         """,
-        (solicitacao_id,)
+        (
+            solicitacao_id,
+        )
     )
 
-    valor_estimado = float(
-        total[0] or 0
+
+    valor_cotacao = float(
+        (
+            valor_cotacao_registro[
+                0
+            ]
+            if valor_cotacao_registro
+            else 0
+        )
+        or 0
     )
+
+
+    # ========================================================
+    # VALOR VINCULADO NAS FICHAS
+    # ========================================================
+
+    valor_fichas_registro = _sisget_fetchone(
+        """
+        SELECT
+            COALESCE(
+                SUM(
+                    sf.valor_vinculado
+                ),
+                0
+            )
+
+        FROM solicitacoes_fichas sf
+
+        WHERE sf.solicitacao_id = ?
+        """,
+        (
+            solicitacao_id,
+        )
+    )
+
+
+    valor_fichas = float(
+        (
+            valor_fichas_registro[
+                0
+            ]
+            if valor_fichas_registro
+            else 0
+        )
+        or 0
+    )
+
+
+    # ========================================================
+    # RESUMO
+    # ========================================================
+
+    st.markdown(
+        "### 💰 Resumo Financeiro"
+    )
+
+
+    c1, c2, c3 = st.columns(
+        3
+    )
+
+
+    c1.metric(
+        "Valor da Cotação",
+        f"R$ {valor_cotacao:,.2f}"
+    )
+
+
+    c2.metric(
+        "Valor Vinculado em Fichas",
+        f"R$ {valor_fichas:,.2f}"
+    )
+
+
+    diferenca = (
+        valor_fichas
+        -
+        valor_cotacao
+    )
+
+
+    c3.metric(
+        "Diferença",
+        f"R$ {diferenca:,.2f}"
+    )
+
+
+    # ========================================================
+    # FORMULÁRIO
+    # ========================================================
 
     with st.form(
         f"form_financeiro_sol_{reset}_{solicitacao_id}"
     ):
+
         st.text_input(
             "Código",
             value=codigo,
             disabled=True
         )
 
+
         st.number_input(
-            "Valor Estimado",
-            value=valor_estimado,
+            "Valor da Cotação",
+            value=float(
+                valor_cotacao
+            ),
             disabled=True,
             format="%.2f"
         )
 
+
+        st.number_input(
+            "Valor Vinculado em Fichas",
+            value=float(
+                valor_fichas
+            ),
+            disabled=True,
+            format="%.2f"
+        )
+
+
         valor_validado = st.number_input(
             "Valor Validado *",
             min_value=0.0,
-            value=valor_estimado,
+            value=float(
+                valor_cotacao
+            ),
             format="%.2f"
         )
+
 
         cota = st.number_input(
             "Cota Financeira",
             min_value=0.0,
-            value=0.0,
+            value=float(
+                valor_fichas
+            ),
             format="%.2f"
         )
+
 
         reserva = st.number_input(
             "Reserva",
             min_value=0.0,
-            value=0.0,
+            value=float(
+                valor_fichas
+            ),
             format="%.2f"
         )
+
 
         parecer = st.text_area(
             "Parecer Financeiro"
         )
+
 
         salvar = st.form_submit_button(
             "💾 Salvar Validação",
@@ -49029,11 +49273,49 @@ def financeiro_solicitacao_incluir():
             use_container_width=True
         )
 
+
+    # ========================================================
+    # SALVAR
+    # ========================================================
+
     if salvar:
+
+        if float(
+            valor_validado
+        ) <= 0:
+
+            st.warning(
+                "⚠️ Informe um valor validado maior que zero."
+            )
+
+            return
+
+
+        if (
+            valor_fichas > 0
+            and
+            float(
+                valor_validado
+            )
+            >
+            valor_fichas
+        ):
+
+            st.warning(
+                (
+                    "⚠️ O valor validado não pode ser maior "
+                    "que o valor vinculado nas fichas."
+                )
+            )
+
+            return
+
+
         codigo = sisget_proximo_codigo(
             "solicitacoes_financeiro",
             tamanho=6
         )
+
 
         if _sisget_salvar(
             """
@@ -49054,17 +49336,41 @@ def financeiro_solicitacao_incluir():
             (
                 codigo,
                 solicitacao_id,
-                valor_estimado,
-                float(valor_validado),
-                float(cota),
-                float(reserva),
-                parecer.strip() or None,
-                st.session_state.get("usuario_id")
+                valor_cotacao,
+                float(
+                    valor_validado
+                ),
+                float(
+                    cota
+                ),
+                float(
+                    reserva
+                ),
+                (
+                    parecer.strip()
+                    or None
+                ),
+                st.session_state.get(
+                    "usuario_id"
+                )
             )
         ):
+
             st.session_state[
                 "sisget_financeiro_sol_reset"
             ] += 1
+
+
+            st.session_state[
+                "sisget_tela_solicitacoes_financeiro"
+            ] = "principal"
+
+
+            st.session_state[
+                "sisget_id_solicitacoes_financeiro"
+            ] = None
+
+
             st.rerun()
 
 
