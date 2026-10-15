@@ -48542,7 +48542,18 @@ def solicitacao_ficha_incluir():
         ] += 1
 
 
+        st.session_state[
+            "sisget_tela_solicitacoes_fichas"
+        ] = "principal"
+
+
+        st.session_state[
+            "sisget_id_solicitacoes_fichas"
+        ] = None
+
+
         st.rerun()
+
 
 
 def solicitacao_ficha_localizar():
