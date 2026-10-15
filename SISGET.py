@@ -47620,8 +47620,353 @@ def solicitacao_ficha_incluir():
 
 
     # ========================================================
-    # MOSTRAR SOMENTE SOLICITAÇÕES COM COTAÇÃO
-    # E QUE JÁ ESTÃO NA ETAPA FICHAS
+    # AUXILIAR - CALCULAR VALOR / SALDO DA COTAÇÃO
+    # ========================================================
+
+    def _calcular_cotacao_solicitacao(
+        solicitacao_id_calculo
+    ):
+
+        cotacao_cabecalho = _sisget_fetchone(
+            """
+            SELECT
+                c.entidade_id,
+                c.exercicio_id,
+                c.numero,
+                COALESCE(
+                    c.criterio_cotacao,
+                    ''
+                ),
+                COALESCE(
+                    c.metodologia,
+                    ''
+                )
+
+            FROM cotacoes c
+
+            WHERE
+                c.solicitacao_id = ?
+
+                OR EXISTS
+                (
+                    SELECT 1
+
+                    FROM cotacoes_solicitacoes cs
+
+                    WHERE cs.cotacao_id = c.id
+                      AND cs.solicitacao_id = ?
+                )
+
+            ORDER BY
+                c.id DESC
+
+            LIMIT 1
+            """,
+            (
+                solicitacao_id_calculo,
+                solicitacao_id_calculo
+            )
+        )
+
+
+        if not cotacao_cabecalho:
+
+            return None
+
+
+        (
+            cot_entidade_id,
+            cot_exercicio_id,
+            numero_cotacao_calculo,
+            criterio_cotacao_calculo,
+            metodologia_cotacao_calculo
+        ) = cotacao_cabecalho
+
+
+        linhas_cotacao = _sisget_fetch(
+            """
+            SELECT
+                c.id,
+                ci.solicitacao_item_id,
+                ci.quantidade,
+                ci.valor_unitario,
+                ci.valor_total
+
+            FROM cotacoes c
+
+            INNER JOIN cotacoes_itens ci
+                ON ci.cotacao_id = c.id
+
+            INNER JOIN solicitacoes_itens si
+                ON si.id = ci.solicitacao_item_id
+
+            WHERE c.entidade_id = ?
+              AND c.exercicio_id = ?
+              AND c.numero = ?
+              AND si.solicitacao_id = ?
+
+            ORDER BY
+                ci.solicitacao_item_id,
+                c.id
+            """,
+            (
+                cot_entidade_id,
+                cot_exercicio_id,
+                numero_cotacao_calculo,
+                solicitacao_id_calculo
+            )
+        )
+
+
+        valor_cotacao_calculo = 0.0
+
+
+        if linhas_cotacao:
+
+            criterio_normalizado = str(
+                criterio_cotacao_calculo
+                or ""
+            ).strip().lower()
+
+
+            metodologia_normalizada = str(
+                metodologia_cotacao_calculo
+                or ""
+            ).strip().lower()
+
+
+            # =================================================
+            # MENOR PREÇO GLOBAL
+            # =================================================
+
+            if (
+                "global"
+                in criterio_normalizado
+                and
+                "unitário/global"
+                not in criterio_normalizado
+                and
+                "unitario/global"
+                not in criterio_normalizado
+            ):
+
+                totais_por_proposta = {}
+
+
+                for (
+                    cotacao_id,
+                    solicitacao_item_id,
+                    quantidade,
+                    valor_unitario,
+                    valor_total
+                ) in linhas_cotacao:
+
+                    totais_por_proposta[
+                        cotacao_id
+                    ] = (
+                        totais_por_proposta.get(
+                            cotacao_id,
+                            0.0
+                        )
+                        +
+                        float(
+                            valor_total
+                            or 0
+                        )
+                    )
+
+
+                if totais_por_proposta:
+
+                    valor_cotacao_calculo = min(
+                        totais_por_proposta.values()
+                    )
+
+
+            # =================================================
+            # PREÇO MÉDIO / MEDIANA / MENOR UNITÁRIO
+            # =================================================
+
+            else:
+
+                precos_por_item = {}
+
+
+                for (
+                    cotacao_id,
+                    solicitacao_item_id,
+                    quantidade,
+                    valor_unitario,
+                    valor_total
+                ) in linhas_cotacao:
+
+                    item_id = int(
+                        solicitacao_item_id
+                    )
+
+
+                    if item_id not in precos_por_item:
+
+                        precos_por_item[
+                            item_id
+                        ] = {
+                            "quantidade": float(
+                                quantidade
+                                or 0
+                            ),
+                            "precos": []
+                        }
+
+
+                    preco = float(
+                        valor_unitario
+                        or 0
+                    )
+
+
+                    if preco > 0:
+
+                        precos_por_item[
+                            item_id
+                        ][
+                            "precos"
+                        ].append(
+                            preco
+                        )
+
+
+                for dados_item in precos_por_item.values():
+
+                    precos = dados_item[
+                        "precos"
+                    ]
+
+
+                    if not precos:
+
+                        continue
+
+
+                    quantidade = dados_item[
+                        "quantidade"
+                    ]
+
+
+                    if (
+                        "médio"
+                        in criterio_normalizado
+                        or
+                        "medio"
+                        in criterio_normalizado
+                        or
+                        metodologia_normalizada
+                        == "média"
+                        or
+                        metodologia_normalizada
+                        == "media"
+                    ):
+
+                        preco_referencia = (
+                            statistics.mean(
+                                precos
+                            )
+                        )
+
+
+                    elif (
+                        metodologia_normalizada
+                        == "mediana"
+                    ):
+
+                        preco_referencia = (
+                            statistics.median(
+                                precos
+                            )
+                        )
+
+
+                    else:
+
+                        preco_referencia = min(
+                            precos
+                        )
+
+
+                    valor_cotacao_calculo += (
+                        quantidade
+                        *
+                        preco_referencia
+                    )
+
+
+        valor_ja_vinculado_registro = _sisget_fetchone(
+            """
+            SELECT
+                COALESCE(
+                    SUM(
+                        valor_vinculado
+                    ),
+                    0
+                )
+
+            FROM solicitacoes_fichas
+
+            WHERE solicitacao_id = ?
+            """,
+            (
+                solicitacao_id_calculo,
+            )
+        )
+
+
+        valor_ja_vinculado_calculo = float(
+            (
+                valor_ja_vinculado_registro[
+                    0
+                ]
+                if valor_ja_vinculado_registro
+                else 0
+            )
+            or 0
+        )
+
+
+        valor_restante_calculo = (
+            float(
+                valor_cotacao_calculo
+                or 0
+            )
+            -
+            valor_ja_vinculado_calculo
+        )
+
+
+        # Evitar resíduos de centavos por ponto flutuante.
+        if abs(
+            valor_restante_calculo
+        ) < 0.005:
+
+            valor_restante_calculo = 0.0
+
+
+        return {
+            "numero": numero_cotacao_calculo,
+            "criterio": criterio_cotacao_calculo,
+            "metodologia": metodologia_cotacao_calculo,
+            "valor_cotacao": float(
+                valor_cotacao_calculo
+                or 0
+            ),
+            "valor_vinculado": valor_ja_vinculado_calculo,
+            "valor_restante": max(
+                0.0,
+                valor_restante_calculo
+            )
+        }
+
+
+    # ========================================================
+    # MOSTRAR SOMENTE COTAÇÕES COM SALDO A VINCULAR
     # ========================================================
 
     solicitacoes_com_cotacao = _sisget_fetch(
@@ -47686,16 +48031,6 @@ def solicitacao_ficha_incluir():
     )
 
 
-    if not solicitacoes_com_cotacao:
-
-        st.info(
-            "ℹ️ Não existem cotações aguardando vinculação "
-            "de ficha orçamentária."
-        )
-
-        return
-
-
     mapa_solicitacoes_cotadas = {}
 
 
@@ -47708,6 +48043,33 @@ def solicitacao_ficha_incluir():
         etapa_solicitacao
     ) in solicitacoes_com_cotacao:
 
+        dados_cotacao = (
+            _calcular_cotacao_solicitacao(
+                solicitacao_id_registro
+            )
+        )
+
+
+        if not dados_cotacao:
+
+            continue
+
+
+        # ====================================================
+        # REGRA PRINCIPAL:
+        # SE NÃO TEM MAIS SALDO, NÃO APARECE NO SELECTBOX
+        # ====================================================
+
+        if (
+            dados_cotacao[
+                "valor_restante"
+            ]
+            <= 0.005
+        ):
+
+            continue
+
+
         identificacao = (
             codigo_solicitacao
             or numero_solicitacao
@@ -47718,13 +48080,28 @@ def solicitacao_ficha_incluir():
         rotulo = (
             f"{identificacao}"
             f" | {objeto_solicitacao or ''}"
-            f" | Cotação"
+            f" | Cotação {dados_cotacao['numero']}"
+            f" | Saldo: "
+            f"R$ {dados_cotacao['valor_restante']:,.2f}"
         )
 
 
         mapa_solicitacoes_cotadas[
             rotulo
-        ] = solicitacao_id_registro
+        ] = {
+            "solicitacao_id": solicitacao_id_registro,
+            "cotacao": dados_cotacao
+        }
+
+
+    if not mapa_solicitacoes_cotadas:
+
+        st.info(
+            "ℹ️ Não existem cotações com saldo pendente "
+            "para vincular em ficha orçamentária."
+        )
+
+        return
 
 
     solicitacao_nome = st.selectbox(
@@ -47736,342 +48113,54 @@ def solicitacao_ficha_incluir():
     )
 
 
-    solicitacao_id = (
+    registro_selecionado = (
         mapa_solicitacoes_cotadas[
             solicitacao_nome
         ]
     )
 
 
-    # ========================================================
-    # VALOR DA COTAÇÃO DA SOLICITAÇÃO
-    # ========================================================
-
-    cotacao_cabecalho = _sisget_fetchone(
-        """
-        SELECT
-            c.entidade_id,
-            c.exercicio_id,
-            c.numero,
-            COALESCE(
-                c.criterio_cotacao,
-                ''
-            ),
-            COALESCE(
-                c.metodologia,
-                ''
-            )
-
-        FROM cotacoes c
-
-        WHERE
-            c.solicitacao_id = ?
-
-            OR EXISTS
-            (
-                SELECT 1
-
-                FROM cotacoes_solicitacoes cs
-
-                WHERE cs.cotacao_id = c.id
-                  AND cs.solicitacao_id = ?
-            )
-
-        ORDER BY
-            c.id DESC
-
-        LIMIT 1
-        """,
-        (
-            solicitacao_id,
-            solicitacao_id
-        )
-    )
-
-
-    numero_cotacao = None
-    criterio_cotacao = ""
-    metodologia_cotacao = ""
-    valor_cotacao = 0.0
-
-
-    if cotacao_cabecalho:
-
-        (
-            cot_entidade_id,
-            cot_exercicio_id,
-            numero_cotacao,
-            criterio_cotacao,
-            metodologia_cotacao
-        ) = cotacao_cabecalho
-
-
-        linhas_cotacao = _sisget_fetch(
-            """
-            SELECT
-                c.id,
-                ci.solicitacao_item_id,
-                ci.quantidade,
-                ci.valor_unitario,
-                ci.valor_total
-
-            FROM cotacoes c
-
-            INNER JOIN cotacoes_itens ci
-                ON ci.cotacao_id = c.id
-
-            INNER JOIN solicitacoes_itens si
-                ON si.id = ci.solicitacao_item_id
-
-            WHERE c.entidade_id = ?
-              AND c.exercicio_id = ?
-              AND c.numero = ?
-              AND si.solicitacao_id = ?
-
-            ORDER BY
-                ci.solicitacao_item_id,
-                c.id
-            """,
-            (
-                cot_entidade_id,
-                cot_exercicio_id,
-                numero_cotacao,
-                solicitacao_id
-            )
-        )
-
-
-        if linhas_cotacao:
-
-            criterio_normalizado = str(
-                criterio_cotacao
-                or ""
-            ).strip().lower()
-
-
-            metodologia_normalizada = str(
-                metodologia_cotacao
-                or ""
-            ).strip().lower()
-
-
-            # =================================================
-            # MENOR PREÇO GLOBAL
-            #
-            # Soma os itens de cada proposta e utiliza a
-            # proposta de menor valor total.
-            # =================================================
-
-            if (
-                "global"
-                in criterio_normalizado
-                and
-                "unitário/global"
-                not in criterio_normalizado
-                and
-                "unitario/global"
-                not in criterio_normalizado
-            ):
+    solicitacao_id = registro_selecionado[
+        "solicitacao_id"
+    ]
 
-                totais_por_proposta = {}
 
+    dados_cotacao_selecionada = registro_selecionado[
+        "cotacao"
+    ]
 
-                for (
-                    cotacao_id,
-                    solicitacao_item_id,
-                    quantidade,
-                    valor_unitario,
-                    valor_total
-                ) in linhas_cotacao:
 
-                    totais_por_proposta[
-                        cotacao_id
-                    ] = (
-                        totais_por_proposta.get(
-                            cotacao_id,
-                            0.0
-                        )
-                        +
-                        float(
-                            valor_total
-                            or 0
-                        )
-                    )
+    numero_cotacao = dados_cotacao_selecionada[
+        "numero"
+    ]
 
 
-                if totais_por_proposta:
+    criterio_cotacao = dados_cotacao_selecionada[
+        "criterio"
+    ]
 
-                    valor_cotacao = min(
-                        totais_por_proposta.values()
-                    )
 
+    metodologia_cotacao = dados_cotacao_selecionada[
+        "metodologia"
+    ]
 
-            # =================================================
-            # PREÇO MÉDIO / MENOR PREÇO UNITÁRIO
-            #
-            # Calcula item a item e depois soma o resultado.
-            # =================================================
 
-            else:
+    valor_cotacao = dados_cotacao_selecionada[
+        "valor_cotacao"
+    ]
 
-                precos_por_item = {}
 
+    valor_ja_vinculado = dados_cotacao_selecionada[
+        "valor_vinculado"
+    ]
 
-                for (
-                    cotacao_id,
-                    solicitacao_item_id,
-                    quantidade,
-                    valor_unitario,
-                    valor_total
-                ) in linhas_cotacao:
 
-                    item_id = int(
-                        solicitacao_item_id
-                    )
+    valor_restante_cotacao = dados_cotacao_selecionada[
+        "valor_restante"
+    ]
 
 
-                    if item_id not in precos_por_item:
-
-                        precos_por_item[
-                            item_id
-                        ] = {
-                            "quantidade": float(
-                                quantidade
-                                or 0
-                            ),
-                            "precos": []
-                        }
-
-
-                    preco = float(
-                        valor_unitario
-                        or 0
-                    )
-
-
-                    if preco > 0:
-
-                        precos_por_item[
-                            item_id
-                        ][
-                            "precos"
-                        ].append(
-                            preco
-                        )
-
-
-                valor_cotacao = 0.0
-
-
-                for dados_item in precos_por_item.values():
-
-                    precos = dados_item[
-                        "precos"
-                    ]
-
-
-                    if not precos:
-
-                        continue
-
-
-                    quantidade = dados_item[
-                        "quantidade"
-                    ]
-
-
-                    if (
-                        "médio"
-                        in criterio_normalizado
-                        or
-                        "medio"
-                        in criterio_normalizado
-                        or
-                        metodologia_normalizada
-                        == "média"
-                        or
-                        metodologia_normalizada
-                        == "media"
-                    ):
-
-                        preco_referencia = (
-                            statistics.mean(
-                                precos
-                            )
-                        )
-
-
-                    elif (
-                        metodologia_normalizada
-                        == "mediana"
-                    ):
-
-                        preco_referencia = (
-                            statistics.median(
-                                precos
-                            )
-                        )
-
-
-                    else:
-
-                        preco_referencia = min(
-                            precos
-                        )
-
-
-                    valor_cotacao += (
-                        quantidade
-                        *
-                        preco_referencia
-                    )
-
-
-    # ========================================================
-    # VALOR JÁ VINCULADO EM FICHAS
-    # ========================================================
-
-    valor_ja_vinculado_registro = _sisget_fetchone(
-        """
-        SELECT
-            COALESCE(
-                SUM(
-                    valor_vinculado
-                ),
-                0
-            )
-
-        FROM solicitacoes_fichas
-
-        WHERE solicitacao_id = ?
-        """,
-        (
-            solicitacao_id,
-        )
-    )
-
-
-    valor_ja_vinculado = float(
-        (
-            valor_ja_vinculado_registro[
-                0
-            ]
-            if valor_ja_vinculado_registro
-            else 0
-        )
-        or 0
-    )
-
-
-    valor_restante_cotacao = max(
-        0.0,
-        float(
-            valor_cotacao
-            or 0
-        )
-        -
-        valor_ja_vinculado
-    )
+    cotacao_cabecalho = True
 
 
     # ========================================================
@@ -48666,9 +48755,6 @@ def solicitacao_ficha_incluir():
 
 
         st.rerun()
-
-
-
 
 def solicitacao_ficha_localizar():
 
