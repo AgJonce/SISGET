@@ -47619,15 +47619,128 @@ def solicitacao_ficha_incluir():
     ]
 
 
-    solicitacao_id = sisget_selecionar_solicitacao(
-        "Solicitação *",
-        f"sol_ficha_solicitacao_{reset}"
+    # ========================================================
+    # MOSTRAR SOMENTE SOLICITAÇÕES COM COTAÇÃO
+    # E QUE JÁ ESTÃO NA ETAPA FICHAS
+    # ========================================================
+
+    solicitacoes_com_cotacao = _sisget_fetch(
+        """
+        SELECT DISTINCT
+            s.id,
+            s.codigo,
+            s.numero,
+            s.objeto,
+            s.status,
+            s.etapa_atual
+
+        FROM solicitacoes s
+
+        WHERE s.ativo = TRUE
+
+          AND UPPER(
+                TRIM(
+                    COALESCE(
+                        s.tipo_solicitacao,
+                        ''
+                    )
+                )
+              ) = 'LICITACAO'
+
+          AND UPPER(
+                TRIM(
+                    COALESCE(
+                        s.etapa_atual,
+                        ''
+                    )
+                )
+              ) = 'FICHAS'
+
+          AND
+          (
+              EXISTS
+              (
+                  SELECT 1
+
+                  FROM cotacoes c
+
+                  WHERE c.solicitacao_id = s.id
+              )
+
+              OR
+
+              EXISTS
+              (
+                  SELECT 1
+
+                  FROM cotacoes_solicitacoes cs
+
+                  WHERE cs.solicitacao_id = s.id
+              )
+          )
+
+        ORDER BY
+            s.numero DESC,
+            s.id DESC
+        """
     )
 
 
-    if not solicitacao_id:
+    if not solicitacoes_com_cotacao:
+
+        st.info(
+            "ℹ️ Não existem cotações aguardando vinculação "
+            "de ficha orçamentária."
+        )
 
         return
+
+
+    mapa_solicitacoes_cotadas = {}
+
+
+    for (
+        solicitacao_id_registro,
+        codigo_solicitacao,
+        numero_solicitacao,
+        objeto_solicitacao,
+        status_solicitacao,
+        etapa_solicitacao
+    ) in solicitacoes_com_cotacao:
+
+        identificacao = (
+            codigo_solicitacao
+            or numero_solicitacao
+            or solicitacao_id_registro
+        )
+
+
+        rotulo = (
+            f"{identificacao}"
+            f" | {objeto_solicitacao or ''}"
+            f" | Cotação"
+        )
+
+
+        mapa_solicitacoes_cotadas[
+            rotulo
+        ] = solicitacao_id_registro
+
+
+    solicitacao_nome = st.selectbox(
+        "Cotação *",
+        list(
+            mapa_solicitacoes_cotadas.keys()
+        ),
+        key=f"sol_ficha_cotacao_{reset}"
+    )
+
+
+    solicitacao_id = (
+        mapa_solicitacoes_cotadas[
+            solicitacao_nome
+        ]
+    )
 
 
     # ========================================================
@@ -48553,6 +48666,7 @@ def solicitacao_ficha_incluir():
 
 
         st.rerun()
+
 
 
 
