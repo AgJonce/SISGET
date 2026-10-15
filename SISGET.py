@@ -45377,11 +45377,30 @@ def cotacao_incluir():
         key=f"cot_resp_{solicitacao_id}_{reset}"
     )
 
+    st.markdown("### ⚖️ Critério da Cotação")
+
+    criterio_cotacao = st.selectbox(
+        "Tipo / Critério da Cotação *",
+        [
+            "Preço médio",
+            "Menor preço global",
+            "Menor preço unitário",
+            "Menor preço unitário/global"
+        ],
+        key=f"cot_criterio_{solicitacao_id}_{reset}"
+    )
+
     m1, m2 = st.columns(2)
 
     metodologia = m1.selectbox(
-        "Metodologia",
-        ["Média", "Mediana", "Menor preço", "Conjunto de preços", "Outra"],
+        "Metodologia de formação do preço",
+        [
+            "Média",
+            "Mediana",
+            "Menor preço",
+            "Conjunto de preços",
+            "Outra"
+        ],
         key=f"cot_metodo_{solicitacao_id}_{reset}"
     )
 
@@ -45708,6 +45727,7 @@ def cotacao_incluir():
                             valor_frete,
                             desconto_percentual,
                             tipo_cotacao,
+                            criterio_cotacao,
                             fonte_pesquisa,
                             agente_responsavel,
                             metodologia,
@@ -45716,7 +45736,7 @@ def cotacao_incluir():
                         VALUES
                         (
                             ?,?,?,?,?,?,?,?,?,?,
-                            ?,?,?,?,?,?,?,?,?,?,?,?,?
+                            ?,?,?,?,?,?,?,?,?,?,?,?,?,?
                         )
                         RETURNING id
                         """,
@@ -45740,6 +45760,7 @@ def cotacao_incluir():
                             proposta["valor_frete"],
                             proposta["desconto"],
                             "FORNECEDOR",
+                            criterio_cotacao,
                             "Pesquisa direta com fornecedor",
                             responsavel.strip() or None,
                             metodologia,
@@ -46221,12 +46242,13 @@ def cotacao_incluir():
                             codigo,
                             fornecedor_id,
                             tipo_cotacao,
+                            criterio_cotacao,
                             fonte_pesquisa,
                             agente_responsavel,
                             metodologia,
                             justificativa_metodologia
                         )
-                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                         RETURNING id
                         """,
                         (
@@ -46240,6 +46262,7 @@ def cotacao_incluir():
                             f"COT-{numero}-{indice_referencia:03d}",
                             local["fornecedor_id"],
                             "BANCO_PUBLICO",
+                            criterio_cotacao,
                             resultado.get("fonte"),
                             responsavel.strip() or None,
                             metodologia,
@@ -46507,6 +46530,7 @@ def cotacao_incluir():
                             prazo_entrega_dias,
                             desconto_percentual,
                             tipo_cotacao,
+                            criterio_cotacao,
                             fonte_pesquisa,
                             agente_responsavel,
                             metodologia,
@@ -46514,7 +46538,7 @@ def cotacao_incluir():
                             bdi_percentual,
                             encargos_sociais_percentual
                         )
-                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                         RETURNING id
                         """,
                         (
@@ -46530,6 +46554,7 @@ def cotacao_incluir():
                             p["prazo"],
                             p["desconto"],
                             "OBRA",
+                            criterio_cotacao,
                             "Orçamento de obra / engenharia",
                             responsavel.strip() or None,
                             metodologia,
@@ -46588,6 +46613,7 @@ def cotacao_incluir():
             )
             st.session_state["sisget_cotacao_reset"] += 1
             st.rerun()
+
 
 def _cotacao_texto_compativel(
     termo,
