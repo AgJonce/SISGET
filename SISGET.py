@@ -43995,232 +43995,6 @@ def _cotacao_normalizar(texto):
     )
 
 
-def _cotacao_texto_compativel(
-    termo,
-    descricao
-):
-
-    termo = _cotacao_normalizar(
-        termo
-    )
-
-    descricao = _cotacao_normalizar(
-        descricao
-    )
-
-
-    if not termo:
-
-        return True
-
-
-    if termo in descricao:
-
-        return True
-
-
-    stopwords = {
-        "com",
-        "para",
-        "por",
-        "das",
-        "dos",
-        "uma",
-        "uns",
-        "nas",
-        "nos",
-        "que",
-        "de",
-        "da",
-        "do",
-        "em",
-        "e",
-        "a",
-        "o",
-        "as",
-        "os",
-        "ou",
-        "sem",
-        "tipo",
-        "modelo",
-        "cor",
-        "altura",
-        "largura",
-        "profundidade",
-        "peso",
-        "garantia",
-        "meses",
-        "unidade"
-    }
-
-
-    palavras = []
-
-
-    for palavra in termo.split():
-
-        palavra = "".join(
-            caractere
-            for caractere in palavra
-            if caractere.isalnum()
-        )
-
-
-        if len(
-            palavra
-        ) < 3:
-
-            continue
-
-
-        if palavra in stopwords:
-
-            continue
-
-
-        if palavra.isdigit():
-
-            continue
-
-
-        if palavra not in palavras:
-
-            palavras.append(
-                palavra
-            )
-
-
-    if not palavras:
-
-        return termo in descricao
-
-
-    # Usa as palavras principais da descrição.
-    # Evita exigir 60% de uma descrição enorme, que é o que
-    # estava eliminando itens válidos do PNCP.
-    principais = palavras[
-        :12
-    ]
-
-
-    acertos = sum(
-        1
-        for palavra in principais
-        if palavra in descricao
-    )
-
-
-    minimo = max(
-        2,
-        int(
-            len(
-                principais
-            )
-            *
-            0.35
-        )
-    )
-
-
-    duas_primeiras = False
-
-
-    if len(
-        principais
-    ) >= 2:
-
-        duas_primeiras = (
-            principais[
-                0
-            ]
-            in descricao
-            and
-            principais[
-                1
-            ]
-            in descricao
-        )
-
-
-    return (
-        acertos >= minimo
-        or duas_primeiras
-    )
-
-
-def _cotacao_buscar_pncp(
-    termo,
-    data_inicial,
-    data_final,
-    uf=None,
-    codigos_modalidade=None,
-    limite_contratacoes=200,
-    incluir_estimados=False
-):
-
-    import requests
-
-    from concurrent.futures import (
-        ThreadPoolExecutor,
-        as_completed
-    )
-
-
-    # ========================================================
-    # MODALIDADES
-    # ========================================================
-
-    if codigos_modalidade is None:
-
-        codigos_modalidade = [
-            6,
-            8,
-            4
-        ]
-
-
-    codigos_modalidade = [
-        int(
-            codigo
-        )
-        for codigo in codigos_modalidade
-        if str(
-            codigo
-        ).strip().isdigit()
-    ]
-
-
-    if not codigos_modalidade:
-
-        codigos_modalidade = [
-            6,
-            8,
-            4
-        ]
-
-
-    limite_contratacoes = max(
-        50,
-        min(
-            int(
-                limite_contratacoes
-            ),
-            500
-        )
-    )
-
-
-    headers = {
-        "accept": "application/json",
-        "User-Agent": "SISGET/1.0"
-    }
-
-
-    # ========================================================
-    # HTTP
-    # ========================================================
-
-
 def _cotacao_tabela_existe(nome_tabela):
     r = _sisget_fetchone(
         """
@@ -44599,473 +44373,6 @@ def _cotacao_identificar_compra_pncp(contratacao):
         sequencial = None
 
     return cnpj, ano, sequencial, numero_controle
-
-
-def _cotacao_buscar_pncp(
-    termo,
-    data_inicial,
-    data_final,
-    uf=None,
-    codigos_modalidade=None,
-    limite_contratacoes=20,
-    incluir_estimados=False
-):
-
-    import requests
-
-    from concurrent.futures import (
-        ThreadPoolExecutor,
-        as_completed
-    )
-
-
-    # ========================================================
-    # CONFIGURAÇÕES
-    # ========================================================
-
-    if codigos_modalidade is None:
-
-        codigos_modalidade = [
-            6
-        ]
-
-
-    limite_contratacoes = max(
-        5,
-        min(
-            int(
-                limite_contratacoes
-            ),
-            50
-        )
-    )
-
-
-    max_workers = min(
-        10,
-        limite_contratacoes
-    )
-
-
-    headers = {
-        "accept": "application/json",
-        "User-Agent": "SISGET/1.0"
-    }
-
-
-    # ========================================================
-    # FUNÇÃO HTTP INTERNA RÁPIDA
-    # ========================================================
-
-    def get_json(
-        url,
-        parametros=None,
-        timeout=20
-    ):
-
-        try:
-
-            resposta = requests.get(
-                url,
-                params=parametros,
-                headers=headers,
-                timeout=timeout
-            )
-
-
-            if resposta.status_code in (
-                204,
-                404
-            ):
-
-                return None
-
-
-            resposta.raise_for_status()
-
-
-            return resposta.json()
-
-
-        except Exception:
-
-            return None
-
-
-    # ========================================================
-    # CONTRATAÇÕES
-    #
-    # O endpoint de publicação NÃO recebe a descrição do item.
-    # Por isso precisamos percorrer páginas e abrir os itens.
-    # ========================================================
-
-    url_consulta = (
-        "https://pncp.gov.br/"
-        "api/consulta/v1/"
-        "contratacoes/publicacao"
-    )
-
-
-    contratacoes = []
-
-
-    for modalidade in codigos_modalidade:
-
-        pagina = 1
-
-
-        while len(
-            contratacoes
-        ) < limite_contratacoes:
-
-            faltam = (
-                limite_contratacoes
-                -
-                len(
-                    contratacoes
-                )
-            )
-
-
-            tamanho_pagina = min(
-                50,
-                faltam
-            )
-
-
-            parametros = {
-                "dataInicial": data_inicial.strftime(
-                    "%Y%m%d"
-                ),
-                "dataFinal": data_final.strftime(
-                    "%Y%m%d"
-                ),
-                "codigoModalidadeContratacao": int(
-                    modalidade
-                ),
-                "pagina": pagina,
-                "tamanhoPagina": tamanho_pagina
-            }
-
-
-            if uf:
-
-                parametros[
-                    "uf"
-                ] = uf
-
-
-            bruto = get_json(
-                url_consulta,
-                parametros,
-                timeout=20
-            )
-
-
-            if bruto is None:
-
-                break
-
-
-            lista = _cotacao_lista_json(
-                bruto
-            )
-
-
-            if not lista:
-
-                break
-
-
-            contratacoes.extend(
-                lista[
-                    :faltam
-                ]
-            )
-
-
-            total_paginas = None
-
-
-            if isinstance(
-                bruto,
-                dict
-            ):
-
-                total_paginas = (
-                    bruto.get(
-                        "totalPaginas"
-                    )
-                    or
-                    bruto.get(
-                        "totalPages"
-                    )
-                )
-
-
-            if total_paginas is not None:
-
-                try:
-
-                    if pagina >= int(
-                        total_paginas
-                    ):
-
-                        break
-
-                except Exception:
-
-                    pass
-
-
-            if len(
-                lista
-            ) < tamanho_pagina:
-
-                break
-
-
-            pagina += 1
-
-
-        if len(
-            contratacoes
-        ) >= limite_contratacoes:
-
-            break
-
-
-    if not contratacoes:
-
-        return []
-
-
-    # ========================================================
-    # PREPARAR CONTRATAÇÕES
-    # ========================================================
-
-    compras = []
-
-
-    for contratacao in contratacoes:
-
-        (
-            cnpj_orgao,
-            ano,
-            sequencial,
-            numero_controle
-        ) = _cotacao_identificar_compra_pncp(
-            contratacao
-        )
-
-
-        if not (
-            cnpj_orgao
-            and ano
-            and sequencial
-        ):
-
-            continue
-
-
-        orgao_entidade = (
-            contratacao.get(
-                "orgaoEntidade"
-            )
-            or {}
-        )
-
-
-        unidade = (
-            contratacao.get(
-                "unidadeOrgao"
-            )
-            or contratacao.get(
-                "unidade"
-            )
-            or {}
-        )
-
-
-        compras.append(
-            {
-                "contratacao": contratacao,
-                "cnpj_orgao": cnpj_orgao,
-                "ano": ano,
-                "sequencial": sequencial,
-                "numero_controle": numero_controle,
-
-                "nome_orgao": (
-                    orgao_entidade.get(
-                        "razaoSocial"
-                    )
-                    or contratacao.get(
-                        "razaoSocial"
-                    )
-                    or ""
-                ),
-
-                "uf": (
-                    unidade.get(
-                        "ufSigla"
-                    )
-                    or contratacao.get(
-                        "uf"
-                    )
-                    or ""
-                ),
-
-                "codigo_unidade": (
-                    unidade.get(
-                        "codigoUnidade"
-                    )
-                    or unidade.get(
-                        "codigo"
-                    )
-                    or ""
-                ),
-
-                "nome_unidade": (
-                    unidade.get(
-                        "nomeUnidade"
-                    )
-                    or unidade.get(
-                        "nome"
-                    )
-                    or ""
-                )
-            }
-        )
-
-
-    if not compras:
-
-        return []
-
-
-    # ========================================================
-    # BUSCAR ITENS DAS CONTRATAÇÕES
-    # ========================================================
-
-    def buscar_itens(
-        compra
-    ):
-
-        url = (
-            "https://pncp.gov.br/"
-            f"api/pncp/v1/orgaos/"
-            f"{compra['cnpj_orgao']}/"
-            f"compras/"
-            f"{compra['ano']}/"
-            f"{compra['sequencial']}/"
-            f"itens"
-        )
-
-
-        bruto = get_json(
-            url,
-            timeout=15
-        )
-
-
-        return (
-            compra,
-            _cotacao_lista_json(
-                bruto
-            )
-        )
-
-
-    itens_compativeis = []
-
-
-    with ThreadPoolExecutor(
-        max_workers=min(
-            12,
-            max(
-                1,
-                len(
-                    compras
-                )
-            )
-        )
-    ) as executor:
-
-        futuros = [
-            executor.submit(
-                buscar_itens,
-                compra
-            )
-            for compra in compras
-        ]
-
-
-        for futuro in as_completed(
-            futuros
-        ):
-
-            try:
-
-                compra, itens_pncp = futuro.result()
-
-            except Exception:
-
-                continue
-
-
-            for item in itens_pncp:
-
-                descricao = (
-                    item.get(
-                        "descricao"
-                    )
-                    or
-                    item.get(
-                        "descricaoItem"
-                    )
-                    or ""
-                )
-
-
-                if not _cotacao_texto_compativel(
-                    termo,
-                    descricao
-                ):
-
-                    continue
-
-
-                numero_item = (
-                    item.get(
-                        "numeroItem"
-                    )
-                    or item.get(
-                        "numero"
-                    )
-                )
-
-
-                if numero_item is None:
-
-                    continue
-
-
-                itens_compativeis.append(
-                    (
-                        compra,
-                        item
-                    )
-                )
-
-
-    if not itens_compativeis:
-
-        return []
-
-
-    # ========================================================
-    # BUSCAR RESULTADOS HOMOLOGADOS
-    # ========================================================
 
 
     def buscar_resultados(
@@ -47282,6 +46589,345 @@ def cotacao_incluir():
             st.session_state["sisget_cotacao_reset"] += 1
             st.rerun()
 
+def _cotacao_texto_compativel(
+    termo,
+    descricao
+):
+
+    termo = _cotacao_normalizar(termo)
+    descricao = _cotacao_normalizar(descricao)
+
+    if not termo:
+        return True
+
+    if termo in descricao:
+        return True
+
+    stopwords = {
+        "com", "para", "por", "das", "dos", "uma", "nas", "nos",
+        "que", "de", "da", "do", "em", "e", "a", "o", "as", "os",
+        "ou", "sem", "tipo", "modelo", "cor", "altura", "largura",
+        "profundidade", "peso", "garantia", "meses", "unidade"
+    }
+
+    palavras = []
+
+    for palavra in termo.split():
+        palavra = "".join(c for c in palavra if c.isalnum())
+
+        if len(palavra) < 3:
+            continue
+
+        if palavra in stopwords:
+            continue
+
+        if palavra.isdigit():
+            continue
+
+        if palavra not in palavras:
+            palavras.append(palavra)
+
+    if not palavras:
+        return termo in descricao
+
+    principais = palavras[:12]
+    acertos = sum(1 for p in principais if p in descricao)
+    minimo = max(2, round(len(principais) * 0.30))
+
+    inicio_compativel = False
+
+    if len(principais) >= 2:
+        inicio_compativel = (
+            principais[0] in descricao
+            and principais[1] in descricao
+        )
+
+    return acertos >= minimo or inicio_compativel
+
+def _cotacao_buscar_pncp(
+    termo,
+    data_inicial,
+    data_final,
+    uf=None,
+    codigos_modalidade=None,
+    limite_contratacoes=300,
+    incluir_estimados=True
+):
+
+    import requests
+    from datetime import timedelta
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    if codigos_modalidade is None:
+        codigos_modalidade = [6, 8, 4]
+
+    codigos_modalidade = [
+        int(codigo)
+        for codigo in codigos_modalidade
+        if str(codigo).strip().isdigit()
+    ]
+
+    if not codigos_modalidade:
+        codigos_modalidade = [6, 8, 4]
+
+    limite_contratacoes = max(50, min(int(limite_contratacoes), 1000))
+
+    headers = {
+        "accept": "application/json",
+        "User-Agent": "SISGET/1.0"
+    }
+
+    def get_json(url, parametros=None, timeout=20):
+        try:
+            resposta = requests.get(
+                url,
+                params=parametros,
+                headers=headers,
+                timeout=timeout
+            )
+
+            if resposta.status_code in (204, 404):
+                return None
+
+            resposta.raise_for_status()
+            return resposta.json()
+
+        except Exception:
+            return None
+
+    url_consulta = (
+        "https://pncp.gov.br/"
+        "api/consulta/v1/"
+        "contratacoes/publicacao"
+    )
+
+    contratacoes = []
+    vistos_contratacao = set()
+    dia = data_final
+
+    while dia >= data_inicial and len(contratacoes) < limite_contratacoes:
+        for modalidade in codigos_modalidade:
+            pagina = 1
+
+            while len(contratacoes) < limite_contratacoes:
+                params = {
+                    "dataInicial": dia.strftime("%Y%m%d"),
+                    "dataFinal": dia.strftime("%Y%m%d"),
+                    "codigoModalidadeContratacao": int(modalidade),
+                    "pagina": pagina,
+                    "tamanhoPagina": 50
+                }
+
+                if uf:
+                    params["uf"] = uf
+
+                bruto = get_json(url_consulta, params, timeout=20)
+
+                if bruto is None:
+                    break
+
+                lista = _cotacao_lista_json(bruto)
+
+                if not lista:
+                    break
+
+                for contratacao in lista:
+                    chave_contratacao = str(
+                        contratacao.get("numeroControlePNCP")
+                        or (
+                            contratacao.get("cnpjOrgao"),
+                            contratacao.get("anoCompra"),
+                            contratacao.get("sequencialCompra")
+                        )
+                    )
+
+                    if chave_contratacao in vistos_contratacao:
+                        continue
+
+                    vistos_contratacao.add(chave_contratacao)
+                    contratacoes.append(contratacao)
+
+                    if len(contratacoes) >= limite_contratacoes:
+                        break
+
+                total_paginas = None
+
+                if isinstance(bruto, dict):
+                    total_paginas = bruto.get("totalPaginas") or bruto.get("totalPages")
+
+                if total_paginas is not None:
+                    try:
+                        if pagina >= int(total_paginas):
+                            break
+                    except Exception:
+                        pass
+
+                if len(lista) < 50:
+                    break
+
+                pagina += 1
+
+        dia -= timedelta(days=1)
+
+    if not contratacoes:
+        return []
+
+    compras = []
+
+    for contratacao in contratacoes:
+        cnpj_orgao, ano, sequencial, numero_controle = _cotacao_identificar_compra_pncp(contratacao)
+
+        if not (cnpj_orgao and ano and sequencial):
+            continue
+
+        orgao_entidade = contratacao.get("orgaoEntidade") or {}
+        unidade = contratacao.get("unidadeOrgao") or contratacao.get("unidade") or {}
+
+        compras.append({
+            "contratacao": contratacao,
+            "cnpj_orgao": cnpj_orgao,
+            "ano": ano,
+            "sequencial": sequencial,
+            "numero_controle": numero_controle,
+            "nome_orgao": orgao_entidade.get("razaoSocial") or contratacao.get("razaoSocial") or "",
+            "uf": unidade.get("ufSigla") or contratacao.get("uf") or "",
+            "codigo_unidade": unidade.get("codigoUnidade") or unidade.get("codigo") or "",
+            "nome_unidade": unidade.get("nomeUnidade") or unidade.get("nome") or ""
+        })
+
+    if not compras:
+        return []
+
+    def buscar_itens(compra):
+        url = (
+            "https://pncp.gov.br/"
+            f"api/pncp/v1/orgaos/{compra['cnpj_orgao']}/"
+            f"compras/{compra['ano']}/{compra['sequencial']}/itens"
+        )
+        bruto = get_json(url, timeout=15)
+        return compra, _cotacao_lista_json(bruto)
+
+    itens_compativeis = []
+
+    with ThreadPoolExecutor(max_workers=min(12, max(1, len(compras)))) as executor:
+        futuros = [executor.submit(buscar_itens, compra) for compra in compras]
+
+        for futuro in as_completed(futuros):
+            try:
+                compra, itens_pncp = futuro.result()
+            except Exception:
+                continue
+
+            for item in itens_pncp:
+                descricao = item.get("descricao") or item.get("descricaoItem") or ""
+
+                if not _cotacao_texto_compativel(termo, descricao):
+                    continue
+
+                numero_item = item.get("numeroItem") or item.get("numero")
+
+                if numero_item is None:
+                    continue
+
+                itens_compativeis.append((compra, item))
+
+    if not itens_compativeis:
+        return []
+
+    def buscar_resultados(compra, item):
+        numero_item = item.get("numeroItem") or item.get("numero")
+        url = (
+            "https://pncp.gov.br/"
+            f"api/pncp/v1/orgaos/{compra['cnpj_orgao']}/"
+            f"compras/{compra['ano']}/{compra['sequencial']}/"
+            f"itens/{numero_item}/resultados"
+        )
+        bruto = get_json(url, timeout=15)
+        return compra, item, _cotacao_lista_json(bruto)
+
+    resultados_finais = []
+
+    with ThreadPoolExecutor(max_workers=min(12, max(1, len(itens_compativeis)))) as executor:
+        futuros = [executor.submit(buscar_resultados, compra, item) for compra, item in itens_compativeis]
+
+        for futuro in as_completed(futuros):
+            try:
+                compra, item, resultados = futuro.result()
+            except Exception:
+                continue
+
+            descricao = item.get("descricao") or item.get("descricaoItem") or ""
+            encontrou_homologado = False
+
+            for resultado in resultados:
+                valor = (
+                    resultado.get("valorUnitarioHomologado")
+                    or resultado.get("valorUnitario")
+                    or 0
+                )
+
+                try:
+                    valor = float(valor or 0)
+                except Exception:
+                    valor = 0
+
+                if valor <= 0:
+                    continue
+
+                encontrou_homologado = True
+
+                resultados_finais.append({
+                    "fonte": "PNCP - Homologado",
+                    "origem": "PNCP",
+                    "cnpj": resultado.get("niFornecedor") or resultado.get("cnpjCpfFornecedor") or "",
+                    "fornecedor": resultado.get("nomeRazaoSocialFornecedor") or resultado.get("nomeFornecedor") or "",
+                    "descricao": descricao,
+                    "valor_unitario": valor,
+                    "data": resultado.get("dataResultado") or compra["contratacao"].get("dataPublicacaoPncp"),
+                    "orgao": compra["nome_orgao"],
+                    "uf": compra["uf"],
+                    "marca": resultado.get("marca") or "",
+                    "codigo_catalogo": item.get("codigoItemCatalogo") or item.get("codigoCatalogo") or "",
+                    "referencia": compra["numero_controle"],
+                    "codigo_uasg": compra["codigo_unidade"],
+                    "nome_uasg": compra["nome_unidade"],
+                    "id_compra": compra["numero_controle"],
+                    "percentual_desconto": resultado.get("percentualDesconto") or resultado.get("percentualMaiorDesconto") or 0
+                })
+
+            if not encontrou_homologado and incluir_estimados:
+                valor_estimado = (
+                    item.get("valorUnitarioEstimado")
+                    or item.get("valorUnitario")
+                    or 0
+                )
+
+                try:
+                    valor_estimado = float(valor_estimado or 0)
+                except Exception:
+                    valor_estimado = 0
+
+                if valor_estimado > 0:
+                    resultados_finais.append({
+                        "fonte": "PNCP - Valor estimado (sem resultado homologado)",
+                        "origem": "PNCP_ESTIMADO",
+                        "cnpj": "",
+                        "fornecedor": "Sem fornecedor selecionado",
+                        "descricao": descricao,
+                        "valor_unitario": valor_estimado,
+                        "data": compra["contratacao"].get("dataPublicacaoPncp"),
+                        "orgao": compra["nome_orgao"],
+                        "uf": compra["uf"],
+                        "marca": "",
+                        "codigo_catalogo": item.get("codigoItemCatalogo") or item.get("codigoCatalogo") or "",
+                        "referencia": compra["numero_controle"],
+                        "codigo_uasg": compra["codigo_unidade"],
+                        "nome_uasg": compra["nome_unidade"],
+                        "id_compra": compra["numero_controle"],
+                        "percentual_desconto": 0
+                    })
+
+    return _cotacao_deduplicar_resultados(resultados_finais)
 
 def sisget_selecionar_solicitacoes_para_cotacao(
     label,
@@ -48000,6 +47646,1292 @@ def cotacao_incluir():
     # ========================================================
     # AUXILIAR INTERNO - VINCULAR TODAS AS SOLICITAÇÕES
     # ========================================================
+
+    def _vincular_solicitacoes_cotacao(
+        cotacao_id
+    ):
+
+        for solicitacao_vinculo_id in solicitacao_ids:
+
+            cursor.execute(
+                """
+                INSERT INTO cotacoes_solicitacoes
+                (
+                    cotacao_id,
+                    solicitacao_id
+                )
+                VALUES
+                (
+                    ?, ?
+                )
+                ON CONFLICT
+                (
+                    cotacao_id,
+                    solicitacao_id
+                )
+                DO NOTHING
+                """,
+                (
+                    cotacao_id,
+                    solicitacao_vinculo_id
+                )
+            )
+
+
+    st.markdown("---")
+
+    tipos = [
+        "Fornecedor",
+        "Banco de Preços Públicos"
+    ]
+
+    if any(
+        str(tipo_item or "").strip().lower() == "obra"
+        for tipo_item in tipos_objeto
+    ):
+        tipos.append("Obra / Engenharia")
+
+    tipo_cotacao = st.radio(
+        "Tipo de Cotação *",
+        tipos,
+        horizontal=True,
+        key=f"cot_tipo_{solicitacao_id}_{reset}"
+    )
+
+    st.markdown("### 🧾 Dados Gerais")
+
+    g1, g2, g3 = st.columns(3)
+
+    data_abertura = g1.date_input(
+        "Data da Pesquisa *",
+        value=datetime.now().date(),
+        key=f"cot_data_{solicitacao_id}_{reset}"
+    )
+
+    data_limite = g2.date_input(
+        "Data Limite",
+        value=datetime.now().date(),
+        key=f"cot_limite_{solicitacao_id}_{reset}"
+    )
+
+    responsavel = g3.text_input(
+        "Responsável pela Pesquisa",
+        key=f"cot_resp_{solicitacao_id}_{reset}"
+    )
+
+    m1, m2 = st.columns(2)
+
+    metodologia = m1.selectbox(
+        "Metodologia",
+        ["Média", "Mediana", "Menor preço", "Conjunto de preços", "Outra"],
+        key=f"cot_metodo_{solicitacao_id}_{reset}"
+    )
+
+    justificativa = m2.text_input(
+        "Justificativa / Critério",
+        key=f"cot_just_{solicitacao_id}_{reset}"
+    )
+
+    if data_limite < data_abertura:
+        st.warning("⚠️ A Data Limite não pode ser anterior à Data da Pesquisa.")
+
+    # ========================================================
+    # FORNECEDORES
+    # ========================================================
+
+    if tipo_cotacao == "Fornecedor":
+        st.markdown("---")
+        st.markdown("### 🏢 Fornecedores")
+
+        fornecedores = _sisget_fetch(
+            """
+            SELECT
+                id,
+                codigo,
+                cpf_cnpj,
+                razao_social,
+                nome_fantasia,
+                telefone,
+                whatsapp,
+                email,
+                cidade,
+                uf
+            FROM fornecedores
+            WHERE ativo = TRUE
+            ORDER BY razao_social, codigo
+            """
+        )
+
+        if not fornecedores:
+            st.warning("⚠️ Nenhum fornecedor ativo cadastrado.")
+            return
+
+        mapa = {}
+
+        for f in fornecedores:
+            rotulo = (
+                f"{f[1] or f[0]} - "
+                f"{f[3] or f[4] or 'Fornecedor'}"
+            )
+
+            if f[2]:
+                rotulo += f" | {f[2]}"
+
+            mapa[rotulo] = {
+                "id": f[0],
+                "cnpj": f[2],
+                "razao": f[3],
+                "fantasia": f[4],
+                "telefone": f[5],
+                "whatsapp": f[6],
+                "email": f[7],
+                "cidade": f[8],
+                "uf": f[9]
+            }
+
+        nomes = st.multiselect(
+            "Selecione um ou mais fornecedores *",
+            list(mapa.keys()),
+            key=f"cot_fornecedores_{solicitacao_id}_{reset}"
+        )
+
+        if not nomes:
+            st.info("ℹ️ Selecione pelo menos um fornecedor.")
+            return
+
+        abas = st.tabs([
+            (mapa[n]["fantasia"] or mapa[n]["razao"] or n)[:30]
+            for n in nomes
+        ])
+
+        propostas = []
+
+        for pos, nome in enumerate(nomes):
+            dados = mapa[nome]
+            fornecedor_id = dados["id"]
+
+            with abas[pos]:
+                f1, f2, f3 = st.columns(3)
+
+                f1.text_input(
+                    "CNPJ / CPF",
+                    value=dados["cnpj"] or "",
+                    disabled=True,
+                    key=f"f_cnpj_{fornecedor_id}_{reset}"
+                )
+
+                f2.text_input(
+                    "Razão Social",
+                    value=dados["razao"] or "",
+                    disabled=True,
+                    key=f"f_razao_{fornecedor_id}_{reset}"
+                )
+
+                f3.text_input(
+                    "Contato",
+                    value=dados["whatsapp"] or dados["telefone"] or "",
+                    disabled=True,
+                    key=f"f_contato_{fornecedor_id}_{reset}"
+                )
+
+                p1, p2, p3 = st.columns(3)
+
+                numero_proposta = p1.text_input(
+                    "Número da Proposta",
+                    key=f"p_num_{fornecedor_id}_{reset}"
+                )
+
+                data_proposta = p2.date_input(
+                    "Data da Proposta",
+                    value=datetime.now().date(),
+                    key=f"p_data_{fornecedor_id}_{reset}"
+                )
+
+                validade = p3.number_input(
+                    "Validade (dias)",
+                    min_value=0,
+                    value=30,
+                    key=f"p_validade_{fornecedor_id}_{reset}"
+                )
+
+                p4, p5, p6 = st.columns(3)
+
+                prazo = p4.number_input(
+                    "Prazo de Entrega (dias)",
+                    min_value=0,
+                    value=0,
+                    key=f"p_prazo_{fornecedor_id}_{reset}"
+                )
+
+                pagamento = p5.text_input(
+                    "Condição de Pagamento",
+                    key=f"p_pagamento_{fornecedor_id}_{reset}"
+                )
+
+                frete = p6.selectbox(
+                    "Frete",
+                    ["Incluso", "Fornecedor", "Contratante", "Não informado"],
+                    key=f"p_frete_{fornecedor_id}_{reset}"
+                )
+
+                p7, p8 = st.columns(2)
+
+                valor_frete = p7.number_input(
+                    "Valor do Frete",
+                    min_value=0.0,
+                    value=0.0,
+                    step=0.01,
+                    format="%.2f",
+                    key=f"p_vfrete_{fornecedor_id}_{reset}"
+                )
+
+                desconto = p8.number_input(
+                    "Desconto Geral (%)",
+                    min_value=0.0,
+                    max_value=100.0,
+                    value=0.0,
+                    step=0.01,
+                    key=f"p_desc_{fornecedor_id}_{reset}"
+                )
+
+                linhas = []
+
+                for item in itens:
+                    linhas.append({
+                        "_id": item[0],
+                        "Cotou": True,
+                        "Item": item[1],
+                        "Código": item[3] or item[2] or "",
+                        "Descrição": item[4] or "",
+                        "Qtd.": float(item[5] or 0),
+                        "Marca": "",
+                        "Modelo": "",
+                        "Valor Unitário": 0.0,
+                        "Observação": ""
+                    })
+
+                df = st.data_editor(
+                    pd.DataFrame(linhas),
+                    use_container_width=True,
+                    hide_index=True,
+                    num_rows="fixed",
+                    disabled=["_id", "Item", "Código", "Descrição", "Qtd."],
+                    column_config={
+                        "_id": None,
+                        "Cotou": st.column_config.CheckboxColumn("Cotou", width="small"),
+                        "Item": st.column_config.NumberColumn("Item", format="%d", width="small"),
+                        "Código": st.column_config.TextColumn("Código", width="small"),
+                        "Descrição": st.column_config.TextColumn("Descrição", width="large"),
+                        "Qtd.": st.column_config.NumberColumn("Qtd.", format="%.4f", width="small"),
+                        "Marca": st.column_config.TextColumn("Marca", width="medium"),
+                        "Modelo": st.column_config.TextColumn("Modelo", width="medium"),
+                        "Valor Unitário": st.column_config.NumberColumn(
+                            "Valor Unitário",
+                            min_value=0.0,
+                            step=0.01,
+                            format="R$ %.2f",
+                            width="medium"
+                        ),
+                        "Observação": st.column_config.TextColumn("Observação", width="medium")
+                    },
+                    key=f"editor_forn_{solicitacao_id}_{fornecedor_id}_{reset}"
+                )
+
+                itens_validos = []
+
+                for _, linha in df.iterrows():
+                    if not bool(linha["Cotou"]):
+                        continue
+
+                    valor = float(linha["Valor Unitário"] or 0)
+
+                    if valor <= 0:
+                        continue
+
+                    qtd = float(linha["Qtd."] or 0)
+
+                    itens_validos.append({
+                        "solicitacao_item_id": int(linha["_id"]),
+                        "quantidade": qtd,
+                        "marca": str(linha["Marca"] or "").strip() or None,
+                        "modelo": str(linha["Modelo"] or "").strip() or None,
+                        "valor_unitario": valor,
+                        "valor_total": qtd * valor,
+                        "observacao": str(linha["Observação"] or "").strip() or None
+                    })
+
+                subtotal = sum(i["valor_total"] for i in itens_validos)
+                total = subtotal - (subtotal * float(desconto) / 100) + float(valor_frete)
+
+                q1, q2, q3 = st.columns(3)
+
+                q1.metric("Itens Cotados", len(itens_validos))
+                q2.metric("Subtotal", _cotacao_moeda(subtotal))
+                q3.metric("Total", _cotacao_moeda(total))
+
+                observacao = st.text_area(
+                    "Observação da Proposta",
+                    key=f"p_obs_{fornecedor_id}_{reset}"
+                )
+
+                propostas.append({
+                    "fornecedor_id": fornecedor_id,
+                    "dados": dados,
+                    "numero_proposta": numero_proposta.strip() or None,
+                    "data_proposta": data_proposta,
+                    "validade": int(validade),
+                    "prazo": int(prazo),
+                    "pagamento": pagamento.strip() or None,
+                    "frete": frete,
+                    "valor_frete": float(valor_frete),
+                    "desconto": float(desconto),
+                    "observacao": observacao.strip() or None,
+                    "itens": itens_validos,
+                    "total": total
+                })
+
+        st.markdown("### 🏆 Comparativo")
+
+        resumo = [{
+            "Fornecedor": p["dados"]["razao"] or p["dados"]["fantasia"] or "-",
+            "Itens": len(p["itens"]),
+            "Frete": p["valor_frete"],
+            "Desconto %": p["desconto"],
+            "Prazo": p["prazo"],
+            "Total": p["total"]
+        } for p in propostas]
+
+        st.dataframe(
+            pd.DataFrame(resumo),
+            use_container_width=True,
+            hide_index=True
+        )
+
+        if st.button(
+            "💾 Salvar Cotações dos Fornecedores",
+            type="primary",
+            use_container_width=True,
+            key=f"salvar_forn_{solicitacao_id}_{reset}"
+        ):
+            validas = [p for p in propostas if p["itens"]]
+
+            if not validas:
+                st.warning("⚠️ Nenhuma proposta possui item com preço.")
+                return
+
+            numero = numero_unico_cotacao
+
+            try:
+                for indice_proposta, proposta in enumerate(
+                    validas,
+                    start=1
+                ):
+
+                    cursor.execute(
+                        """
+                        INSERT INTO cotacoes
+                        (
+                            entidade_id,
+                            exercicio_id,
+                            solicitacao_id,
+                            numero,
+                            data_abertura,
+                            data_limite,
+                            situacao,
+                            observacao,
+                            codigo,
+                            fornecedor_id,
+                            numero_proposta,
+                            data_proposta,
+                            validade_proposta_dias,
+                            prazo_entrega_dias,
+                            condicao_pagamento,
+                            frete,
+                            valor_frete,
+                            desconto_percentual,
+                            tipo_cotacao,
+                            fonte_pesquisa,
+                            agente_responsavel,
+                            metodologia,
+                            justificativa_metodologia
+                        )
+                        VALUES
+                        (
+                            ?,?,?,?,?,?,?,?,?,?,
+                            ?,?,?,?,?,?,?,?,?,?,?,?,?
+                        )
+                        RETURNING id
+                        """,
+                        (
+                            entidade_id,
+                            exercicio_id,
+                            solicitacao_id,
+                            numero,
+                            data_abertura,
+                            data_limite,
+                            "ABERTA",
+                            proposta["observacao"],
+                            f"COT-{numero}-{indice_proposta:03d}",
+                            proposta["fornecedor_id"],
+                            proposta["numero_proposta"],
+                            proposta["data_proposta"],
+                            proposta["validade"],
+                            proposta["prazo"],
+                            proposta["pagamento"],
+                            proposta["frete"],
+                            proposta["valor_frete"],
+                            proposta["desconto"],
+                            "FORNECEDOR",
+                            "Pesquisa direta com fornecedor",
+                            responsavel.strip() or None,
+                            metodologia,
+                            justificativa.strip() or None
+                        )
+                    )
+
+                    cotacao_id = cursor.fetchone()[0]
+
+                    _vincular_solicitacoes_cotacao(
+                        cotacao_id
+                    )
+
+                    for item in proposta["itens"]:
+                        cursor.execute(
+                            """
+                            INSERT INTO cotacoes_itens
+                            (
+                                cotacao_id,
+                                solicitacao_item_id,
+                                quantidade,
+                                valor_unitario,
+                                valor_total,
+                                observacao,
+                                marca,
+                                modelo,
+                                origem_pesquisa
+                            )
+                            VALUES (?,?,?,?,?,?,?,?,?)
+                            """,
+                            (
+                                cotacao_id,
+                                item["solicitacao_item_id"],
+                                item["quantidade"],
+                                item["valor_unitario"],
+                                item["valor_total"],
+                                item["observacao"],
+                                item["marca"],
+                                item["modelo"],
+                                "FORNECEDOR"
+                            )
+                        )
+
+
+                conn.commit()
+
+            except Exception as erro:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+
+                st.error(f"❌ Erro ao salvar cotações: {erro}")
+                return
+
+            st.session_state["sisget_mensagem_cotacao"] = (
+                f"✅ Cotação {numero_unico_cotacao} salva com {len(validas)} proposta(s)."
+            )
+            st.session_state["sisget_cotacao_reset"] += 1
+            st.rerun()
+
+    # ========================================================
+    # BANCO DE PREÇOS PÚBLICOS
+    # ========================================================
+
+    elif tipo_cotacao == "Banco de Preços Públicos":
+        st.markdown("---")
+        st.markdown("### 🌐 Banco de Preços Públicos")
+
+        st.info(
+            "O SISGET tenta o Compras.gov.br e o PNCP. "
+            "Se uma fonte não retornar resultado, a outra continua."
+        )
+
+        mapa_itens = {}
+
+        for item in itens:
+            rotulo = (
+                f"Item {item[1] or '-'} | "
+                f"{item[3] or item[2] or ''} - "
+                f"{item[4] or ''}"
+            )
+
+            mapa_itens[rotulo] = {
+                "id": item[0],
+                "numero": item[1],
+                "codigo": item[3] or item[2] or "",
+                "descricao": item[4] or "",
+                "quantidade": float(item[5] or 0),
+                "estimado": float(item[6] or 0),
+                "catalogo": item[8] or ""
+            }
+
+        item_nome = st.selectbox(
+            "Item da Solicitação *",
+            list(mapa_itens.keys()),
+            key=f"pub_item_{solicitacao_id}_{reset}"
+        )
+
+        item_sel = mapa_itens[item_nome]
+
+        b1, b2, b3 = st.columns(3)
+
+        fonte = b1.selectbox(
+            "Fonte",
+            [
+                "Automático - Compras.gov.br + PNCP",
+                "Somente Compras.gov.br",
+                "Somente PNCP"
+            ],
+            key=f"pub_fonte_{solicitacao_id}_{item_sel['id']}_{reset}"
+        )
+
+        tipo_catalogo = b2.selectbox(
+            "Catálogo",
+            ["Material", "Serviço"],
+            index=1 if str(tipo_solicitacao or "").lower() == "servico" else 0,
+            key=f"pub_tipo_catalogo_{solicitacao_id}_{item_sel['id']}_{reset}"
+        )
+
+        codigo_catalogo = b3.text_input(
+            "CATMAT / CATSER",
+            value=str(item_sel["catalogo"] or ""),
+            key=f"pub_catalogo_{solicitacao_id}_{item_sel['id']}_{reset}"
+        )
+
+        termo = st.text_input(
+            "Descrição / Palavras para pesquisa no PNCP *",
+            value=item_sel["descricao"],
+            key=f"pub_termo_{solicitacao_id}_{item_sel['id']}_{reset}"
+        )
+
+        d1, d2, d3 = st.columns(3)
+
+        data_ini = d1.date_input(
+            "PNCP - Data Inicial",
+            value=datetime.now().date() - timedelta(days=30),
+            key=f"pub_ini_{solicitacao_id}_{item_sel['id']}_{reset}"
+        )
+
+        data_fim = d2.date_input(
+            "PNCP - Data Final",
+            value=datetime.now().date(),
+            key=f"pub_fim_{solicitacao_id}_{item_sel['id']}_{reset}"
+        )
+
+        uf = d3.selectbox(
+            "UF",
+            [
+                "Todas","MG","AC","AL","AP","AM","BA","CE","DF","ES","GO","MA",
+                "MT","MS","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR",
+                "SC","SP","SE","TO"
+            ],
+            key=f"pub_uf_{solicitacao_id}_{item_sel['id']}_{reset}"
+        )
+
+        with st.expander("⚙️ Opções avançadas do PNCP", expanded=False):
+            modalidade_txt = st.text_input(
+                "Códigos de modalidade PNCP",
+                value="6",
+                help="Padrão: 6 = Pregão Eletrônico. Separe múltiplos códigos por vírgula.",
+                key=f"pub_modal_{solicitacao_id}_{item_sel['id']}_{reset}"
+            )
+
+            limite = st.slider(
+                "Máximo de contratações a analisar",
+                50,
+                500,
+                300,
+                50,
+                key=f"pub_limite_{solicitacao_id}_{item_sel['id']}_{reset}"
+            )
+
+            incluir_estimados = st.checkbox(
+                "Usar preço estimado do PNCP quando não houver homologado",
+                value=True,
+                key=f"pub_estimado_{solicitacao_id}_{item_sel['id']}_{reset}"
+            )
+
+        chave = (
+            f"pub_resultados_{solicitacao_id}_{item_sel['id']}_{reset}"
+        )
+
+        if st.button(
+            "🔎 Pesquisar Preços Públicos",
+            type="primary",
+            use_container_width=True,
+            key=f"pub_pesquisar_{solicitacao_id}_{item_sel['id']}_{reset}"
+        ):
+            resultados = []
+
+            if fonte != "Somente PNCP":
+                if codigo_catalogo.strip():
+                    with st.spinner("Consultando Compras.gov.br..."):
+                        catalogo = _cotacao_validar_catalogo_comprasgov(
+                            codigo_catalogo,
+                            tipo_catalogo
+                        )
+
+                        if catalogo["ok"]:
+                            if catalogo.get("descricao"):
+                                st.success(
+                                    "✅ CATMAT/CATSER localizado: "
+                                    + str(catalogo["descricao"])
+                                )
+
+                            encontrados = _cotacao_buscar_comprasgov(
+                                codigo_catalogo,
+                                tipo_catalogo
+                            )
+
+                            resultados.extend(encontrados)
+
+                            if encontrados:
+                                st.success(
+                                    f"✅ Compras.gov.br: {len(encontrados)} preço(s)."
+                                )
+                            else:
+                                st.warning(
+                                    "⚠️ Compras.gov.br não retornou preço praticado."
+                                )
+                        else:
+                            st.warning(
+                                "⚠️ Compras.gov.br: "
+                                + str(catalogo.get("mensagem") or "código não localizado.")
+                            )
+                else:
+                    st.info(
+                        "ℹ️ Sem CATMAT/CATSER. A busca seguirá pelo PNCP."
+                    )
+
+            if fonte != "Somente Compras.gov.br":
+                codigos = []
+
+                for parte in modalidade_txt.split(","):
+                    parte = parte.strip()
+
+                    if parte.isdigit():
+                        codigos.append(int(parte))
+
+                if not codigos:
+                    codigos = [6]
+
+                with st.spinner(
+                    "Consultando PNCP e verificando itens/resultados homologados..."
+                ):
+                    encontrados = _cotacao_buscar_pncp(
+                        termo=termo,
+                        data_inicial=data_ini,
+                        data_final=data_fim,
+                        uf=None if uf == "Todas" else uf,
+                        codigos_modalidade=codigos,
+                        limite_contratacoes=limite,
+                        incluir_estimados=incluir_estimados
+                    )
+
+                resultados.extend(encontrados)
+
+                if encontrados:
+                    st.success(f"✅ PNCP: {len(encontrados)} referência(s).")
+                else:
+                    st.warning(
+                        "⚠️ PNCP não retornou preço compatível nos filtros informados."
+                    )
+
+            st.session_state[chave] = _cotacao_deduplicar_resultados(resultados)
+
+        resultados = st.session_state.get(chave, [])
+
+        with st.expander("➕ Adicionar referência manual", expanded=False):
+            ma1, ma2 = st.columns(2)
+
+            manual_fonte = ma1.text_input(
+                "Fonte / Portal",
+                key=f"manual_fonte_{item_sel['id']}_{reset}"
+            )
+
+            manual_data = ma2.date_input(
+                "Data",
+                value=datetime.now().date(),
+                key=f"manual_data_{item_sel['id']}_{reset}"
+            )
+
+            ma3, ma4 = st.columns(2)
+
+            manual_cnpj = ma3.text_input(
+                "CNPJ / CPF",
+                key=f"manual_cnpj_{item_sel['id']}_{reset}"
+            )
+
+            manual_fornecedor = ma4.text_input(
+                "Fornecedor",
+                key=f"manual_forn_{item_sel['id']}_{reset}"
+            )
+
+            ma5, ma6 = st.columns(2)
+
+            manual_orgao = ma5.text_input(
+                "Órgão / Entidade de Origem",
+                key=f"manual_orgao_{item_sel['id']}_{reset}"
+            )
+
+            manual_valor = ma6.number_input(
+                "Valor Unitário",
+                min_value=0.0,
+                value=0.0,
+                step=0.01,
+                format="%.2f",
+                key=f"manual_valor_{item_sel['id']}_{reset}"
+            )
+
+            if st.button(
+                "➕ Adicionar à Pesquisa",
+                use_container_width=True,
+                key=f"manual_add_{item_sel['id']}_{reset}"
+            ):
+                if manual_valor <= 0:
+                    st.warning("⚠️ Informe um valor maior que zero.")
+                else:
+                    atual = st.session_state.get(chave, [])
+
+                    atual.append({
+                        "fonte": manual_fonte.strip() or "Referência Manual",
+                        "origem": "MANUAL",
+                        "cnpj": manual_cnpj.strip(),
+                        "fornecedor": manual_fornecedor.strip(),
+                        "descricao": item_sel["descricao"],
+                        "valor_unitario": float(manual_valor),
+                        "data": manual_data,
+                        "orgao": manual_orgao.strip(),
+                        "uf": "",
+                        "marca": "",
+                        "codigo_catalogo": codigo_catalogo.strip(),
+                        "referencia": "MANUAL",
+                        "codigo_uasg": "",
+                        "nome_uasg": "",
+                        "id_compra": "",
+                        "percentual_desconto": 0
+                    })
+
+                    st.session_state[chave] = atual
+                    st.rerun()
+
+        if not resultados:
+            st.info(
+                "Nenhuma referência carregada. Pesquise ou adicione uma referência manual."
+            )
+            return
+
+        tabela = []
+
+        for idx, resultado in enumerate(resultados):
+            local = _cotacao_fornecedor_por_cnpj(
+                resultado.get("cnpj"),
+                entidade_id
+            )
+
+            tabela.append({
+                "_idx": idx,
+                "Usar": False,
+                "Fonte": resultado.get("fonte"),
+                "CNPJ / CPF": resultado.get("cnpj"),
+                "Fornecedor": resultado.get("fornecedor"),
+                "Descrição": resultado.get("descricao"),
+                "Valor Unitário": float(resultado.get("valor_unitario") or 0),
+                "Data": resultado.get("data"),
+                "Órgão": resultado.get("orgao"),
+                "UF": resultado.get("uf"),
+                "Cadastro SISGET": "Sim" if local["cadastrado"] else "Não",
+                "Na Entidade": "Sim" if local["na_entidade"] else "Não",
+                "Referência": resultado.get("referencia")
+            })
+
+        df = st.data_editor(
+            pd.DataFrame(tabela),
+            use_container_width=True,
+            hide_index=True,
+            num_rows="fixed",
+            disabled=[
+                "_idx","Fonte","CNPJ / CPF","Fornecedor","Descrição",
+                "Valor Unitário","Data","Órgão","UF","Cadastro SISGET",
+                "Na Entidade","Referência"
+            ],
+            column_config={
+                "_idx": None,
+                "Usar": st.column_config.CheckboxColumn("Usar", width="small"),
+                "Fonte": st.column_config.TextColumn("Fonte", width="medium"),
+                "CNPJ / CPF": st.column_config.TextColumn("CNPJ / CPF", width="medium"),
+                "Fornecedor": st.column_config.TextColumn("Fornecedor", width="large"),
+                "Descrição": st.column_config.TextColumn("Descrição", width="large"),
+                "Valor Unitário": st.column_config.NumberColumn(
+                    "Valor Unitário",
+                    format="R$ %.2f",
+                    width="medium"
+                ),
+                "Órgão": st.column_config.TextColumn("Órgão", width="large")
+            },
+            key=f"pub_editor_{solicitacao_id}_{item_sel['id']}_{reset}"
+        )
+
+        selecionados = df[df["Usar"] == True].copy()
+
+        if not selecionados.empty:
+            precos = selecionados["Valor Unitário"].astype(float).tolist()
+
+            media = statistics.mean(precos)
+            mediana = statistics.median(precos)
+            menor = min(precos)
+            maior = max(precos)
+
+            a1, a2, a3, a4 = st.columns(4)
+
+            a1.metric("Referências", len(precos))
+            a2.metric("Média", _cotacao_moeda(media))
+            a3.metric("Mediana", _cotacao_moeda(mediana))
+            a4.metric("Menor", _cotacao_moeda(menor))
+
+            if maior > 0 and ((maior - menor) / maior) * 100 >= 50:
+                st.warning(
+                    "⚠️ Há grande dispersão entre os preços. "
+                    "Revise descrição, unidade, marca/modelo e condições."
+                )
+
+            if metodologia == "Média":
+                referencia = media
+            elif metodologia == "Mediana":
+                referencia = mediana
+            elif metodologia == "Menor preço":
+                referencia = menor
+            else:
+                referencia = mediana
+
+            t1, t2, t3 = st.columns(3)
+
+            t1.metric("Preço de Referência", _cotacao_moeda(referencia))
+            t2.metric("Quantidade", f"{item_sel['quantidade']:g}")
+            t3.metric(
+                "Total Referencial",
+                _cotacao_moeda(item_sel["quantidade"] * referencia)
+            )
+
+        if st.button(
+            "💾 Salvar Referências Selecionadas",
+            type="primary",
+            use_container_width=True,
+            key=f"pub_salvar_{solicitacao_id}_{item_sel['id']}_{reset}"
+        ):
+            if selecionados.empty:
+                st.warning("⚠️ Selecione pelo menos uma referência.")
+                return
+
+            numero = numero_unico_cotacao
+
+            try:
+                total_salvos = 0
+
+                for indice_referencia, (_, linha) in enumerate(
+                    selecionados.iterrows(),
+                    start=1
+                ):
+                    resultado = resultados[int(linha["_idx"])]
+
+                    local = _cotacao_fornecedor_por_cnpj(
+                        resultado.get("cnpj"),
+                        entidade_id
+                    )
+
+                    cursor.execute(
+                        """
+                        INSERT INTO cotacoes
+                        (
+                            entidade_id,
+                            exercicio_id,
+                            solicitacao_id,
+                            numero,
+                            data_abertura,
+                            data_limite,
+                            situacao,
+                            codigo,
+                            fornecedor_id,
+                            tipo_cotacao,
+                            fonte_pesquisa,
+                            agente_responsavel,
+                            metodologia,
+                            justificativa_metodologia
+                        )
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                        RETURNING id
+                        """,
+                        (
+                            entidade_id,
+                            exercicio_id,
+                            solicitacao_id,
+                            numero,
+                            data_abertura,
+                            data_limite,
+                            "ABERTA",
+                            f"COT-{numero}-{indice_referencia:03d}",
+                            local["fornecedor_id"],
+                            "BANCO_PUBLICO",
+                            resultado.get("fonte"),
+                            responsavel.strip() or None,
+                            metodologia,
+                            justificativa.strip() or None
+                        )
+                    )
+
+                    cotacao_id = cursor.fetchone()[0]
+
+                    _vincular_solicitacoes_cotacao(
+                        cotacao_id
+                    )
+
+                    valor = float(resultado.get("valor_unitario") or 0)
+                    qtd = float(item_sel["quantidade"] or 0)
+
+                    cursor.execute(
+                        """
+                        INSERT INTO cotacoes_itens
+                        (
+                            cotacao_id,
+                            solicitacao_item_id,
+                            quantidade,
+                            valor_unitario,
+                            valor_total,
+                            marca,
+                            origem_pesquisa,
+                            codigo_catalogo,
+                            fornecedor_cnpj_referencia,
+                            fornecedor_nome_referencia,
+                            id_compra_gov,
+                            codigo_uasg,
+                            nome_uasg,
+                            data_compra_gov,
+                            percentual_maior_desconto
+                        )
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                        """,
+                        (
+                            cotacao_id,
+                            item_sel["id"],
+                            qtd,
+                            valor,
+                            qtd * valor,
+                            resultado.get("marca") or None,
+                            resultado.get("origem"),
+                            resultado.get("codigo_catalogo") or None,
+                            resultado.get("cnpj") or None,
+                            resultado.get("fornecedor") or None,
+                            resultado.get("id_compra") or resultado.get("referencia") or None,
+                            resultado.get("codigo_uasg") or None,
+                            resultado.get("nome_uasg") or resultado.get("orgao") or None,
+                            resultado.get("data") or None,
+                            float(resultado.get("percentual_desconto") or 0)
+                        )
+                    )
+
+                    total_salvos += 1
+
+                conn.commit()
+
+            except Exception as erro:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+
+                st.error(f"❌ Erro ao salvar referências: {erro}")
+                return
+
+            st.session_state["sisget_mensagem_cotacao"] = (
+                f"✅ Cotação {numero_unico_cotacao} salva com {total_salvos} referência(s)."
+            )
+            st.session_state["sisget_cotacao_reset"] += 1
+            st.rerun()
+
+    # ========================================================
+    # OBRA / ENGENHARIA
+    # ========================================================
+
+    elif tipo_cotacao == "Obra / Engenharia":
+        st.markdown("---")
+        st.markdown("### 🏗️ Obra / Engenharia")
+
+        fornecedores = _sisget_fetch(
+            """
+            SELECT id, codigo, cpf_cnpj, razao_social, nome_fantasia
+            FROM fornecedores
+            WHERE ativo = TRUE
+            ORDER BY razao_social, codigo
+            """
+        )
+
+        if not fornecedores:
+            st.warning("⚠️ Nenhum fornecedor ativo cadastrado.")
+            return
+
+        mapa = {
+            f"{f[1] or f[0]} - {f[3] or f[4] or 'Fornecedor'}": f[0]
+            for f in fornecedores
+        }
+
+        empresas = st.multiselect(
+            "Empresas / Fornecedores *",
+            list(mapa.keys()),
+            key=f"obra_empresas_{solicitacao_id}_{reset}"
+        )
+
+        if not empresas:
+            st.info("ℹ️ Selecione pelo menos uma empresa.")
+            return
+
+        abas = st.tabs([e[:30] for e in empresas])
+        propostas = []
+
+        for pos, empresa in enumerate(empresas):
+            fornecedor_id = mapa[empresa]
+
+            with abas[pos]:
+                o1, o2, o3, o4 = st.columns(4)
+
+                bdi = o1.number_input(
+                    "BDI (%)",
+                    min_value=0.0,
+                    value=0.0,
+                    step=0.01,
+                    key=f"obra_bdi_{fornecedor_id}_{reset}"
+                )
+
+                encargos = o2.number_input(
+                    "Encargos Sociais (%)",
+                    min_value=0.0,
+                    value=0.0,
+                    step=0.01,
+                    key=f"obra_enc_{fornecedor_id}_{reset}"
+                )
+
+                desconto = o3.number_input(
+                    "Desconto (%)",
+                    min_value=0.0,
+                    max_value=100.0,
+                    value=0.0,
+                    step=0.01,
+                    key=f"obra_desc_{fornecedor_id}_{reset}"
+                )
+
+                prazo = o4.number_input(
+                    "Prazo de Execução (dias)",
+                    min_value=0,
+                    value=0,
+                    key=f"obra_prazo_{fornecedor_id}_{reset}"
+                )
+
+                linhas = [{
+                    "_id": i[0],
+                    "Item": i[1],
+                    "Código": i[3] or i[2] or "",
+                    "Descrição": i[4] or "",
+                    "Qtd.": float(i[5] or 0),
+                    "Valor Unitário": 0.0,
+                    "Observação": ""
+                } for i in itens]
+
+                df = st.data_editor(
+                    pd.DataFrame(linhas),
+                    use_container_width=True,
+                    hide_index=True,
+                    num_rows="fixed",
+                    disabled=["_id", "Item", "Código", "Descrição", "Qtd."],
+                    key=f"obra_editor_{solicitacao_id}_{fornecedor_id}_{reset}"
+                )
+
+                itens_obra = []
+                subtotal = 0
+
+                for _, linha in df.iterrows():
+                    valor = float(linha["Valor Unitário"] or 0)
+
+                    if valor <= 0:
+                        continue
+
+                    qtd = float(linha["Qtd."] or 0)
+                    total_item = qtd * valor
+                    subtotal += total_item
+
+                    itens_obra.append({
+                        "solicitacao_item_id": int(linha["_id"]),
+                        "quantidade": qtd,
+                        "valor_unitario": valor,
+                        "valor_total": total_item,
+                        "observacao": str(linha["Observação"] or "").strip() or None
+                    })
+
+                valor_bdi = subtotal * float(bdi) / 100
+                valor_encargos = subtotal * float(encargos) / 100
+                base = subtotal + valor_bdi + valor_encargos
+                total = base - (base * float(desconto) / 100)
+
+                z1, z2, z3, z4 = st.columns(4)
+
+                z1.metric("Subtotal", _cotacao_moeda(subtotal))
+                z2.metric("BDI", _cotacao_moeda(valor_bdi))
+                z3.metric("Encargos", _cotacao_moeda(valor_encargos))
+                z4.metric("Total", _cotacao_moeda(total))
+
+                propostas.append({
+                    "fornecedor_id": fornecedor_id,
+                    "empresa": empresa,
+                    "bdi": float(bdi),
+                    "encargos": float(encargos),
+                    "desconto": float(desconto),
+                    "prazo": int(prazo),
+                    "itens": itens_obra,
+                    "total": total
+                })
+
+        st.markdown("### 🏆 Comparativo")
+
+        st.dataframe(
+            pd.DataFrame([{
+                "Empresa": p["empresa"],
+                "BDI %": p["bdi"],
+                "Encargos %": p["encargos"],
+                "Desconto %": p["desconto"],
+                "Prazo": p["prazo"],
+                "Total": p["total"]
+            } for p in propostas]),
+            use_container_width=True,
+            hide_index=True
+        )
+
+        if st.button(
+            "💾 Salvar Orçamentos de Obra",
+            type="primary",
+            use_container_width=True,
+            key=f"obra_salvar_{solicitacao_id}_{reset}"
+        ):
+            validas = [p for p in propostas if p["itens"]]
+
+            if not validas:
+                st.warning("⚠️ Informe valores em pelo menos uma proposta.")
+                return
+
+            numero = numero_unico_cotacao
+
+            try:
+                for indice_obra, p in enumerate(
+                    validas,
+                    start=1
+                ):
+
+                    cursor.execute(
+                        """
+                        INSERT INTO cotacoes
+                        (
+                            entidade_id,
+                            exercicio_id,
+                            solicitacao_id,
+                            numero,
+                            data_abertura,
+                            data_limite,
+                            situacao,
+                            codigo,
+                            fornecedor_id,
+                            prazo_entrega_dias,
+                            desconto_percentual,
+                            tipo_cotacao,
+                            fonte_pesquisa,
+                            agente_responsavel,
+                            metodologia,
+                            justificativa_metodologia,
+                            bdi_percentual,
+                            encargos_sociais_percentual
+                        )
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                        RETURNING id
+                        """,
+                        (
+                            entidade_id,
+                            exercicio_id,
+                            solicitacao_id,
+                            numero,
+                            data_abertura,
+                            data_limite,
+                            "ABERTA",
+                            f"COT-{numero}-{indice_obra:03d}",
+                            p["fornecedor_id"],
+                            p["prazo"],
+                            p["desconto"],
+                            "OBRA",
+                            "Orçamento de obra / engenharia",
+                            responsavel.strip() or None,
+                            metodologia,
+                            justificativa.strip() or None,
+                            p["bdi"],
+                            p["encargos"]
+                        )
+                    )
+
+                    cotacao_id = cursor.fetchone()[0]
+
+                    _vincular_solicitacoes_cotacao(
+                        cotacao_id
+                    )
+
+                    for item in p["itens"]:
+                        cursor.execute(
+                            """
+                            INSERT INTO cotacoes_itens
+                            (
+                                cotacao_id,
+                                solicitacao_item_id,
+                                quantidade,
+                                valor_unitario,
+                                valor_total,
+                                observacao,
+                                origem_pesquisa
+                            )
+                            VALUES (?,?,?,?,?,?,?)
+                            """,
+                            (
+                                cotacao_id,
+                                item["solicitacao_item_id"],
+                                item["quantidade"],
+                                item["valor_unitario"],
+                                item["valor_total"],
+                                item["observacao"],
+                                "OBRA"
+                            )
+                        )
+
+
+                conn.commit()
+
+            except Exception as erro:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+
+                st.error(f"❌ Erro ao salvar orçamento: {erro}")
+                return
+
+            st.session_state["sisget_mensagem_cotacao"] = (
+                f"✅ Cotação {numero_unico_cotacao} salva com {len(validas)} orçamento(s)."
+            )
+            st.session_state["sisget_cotacao_reset"] += 1
+            st.rerun()
+
+
     def _vincular_solicitacoes_cotacao(
         cotacao_id
     ):
