@@ -47605,19 +47605,31 @@ def cadastro_fichas_solicitacoes():
 def solicitacao_ficha_incluir():
 
     if "sisget_sol_ficha_reset" not in st.session_state:
-        st.session_state["sisget_sol_ficha_reset"] = 0
+
+        st.session_state[
+            "sisget_sol_ficha_reset"
+        ] = 0
+
 
     reset = st.session_state[
         "sisget_sol_ficha_reset"
     ]
+
 
     solicitacao_id = sisget_selecionar_solicitacao(
         "Solicitação *",
         f"sol_ficha_solicitacao_{reset}"
     )
 
+
     if not solicitacao_id:
+
         return
+
+
+    # ========================================================
+    # FICHAS ORÇAMENTÁRIAS
+    # ========================================================
 
     fichas = _sisget_fetch(
         """
@@ -47625,27 +47637,85 @@ def solicitacao_ficha_incluir():
             id,
             exercicio,
             numero_ficha,
-            descricao
+            descricao,
+            valor_atual,
+            valor_reservado
+
         FROM fichas_orcamentarias
+
         WHERE ativo = TRUE
-        ORDER BY exercicio DESC, numero_ficha
+
+        ORDER BY
+            exercicio DESC,
+            numero_ficha
         """
     )
 
+
     if not fichas:
+
         st.warning(
             "⚠️ Nenhuma ficha orçamentária ativa."
         )
+
         return
 
-    mapa_fichas = {
-        (
+
+    mapa_fichas = {}
+
+
+    for (
+        ficha_id,
+        exercicio,
+        numero_ficha,
+        descricao,
+        valor_atual,
+        valor_reservado
+    ) in fichas:
+
+        valor_atual_float = float(
+            valor_atual
+            or 0
+        )
+
+
+        valor_reservado_float = float(
+            valor_reservado
+            or 0
+        )
+
+
+        valor_disponivel = (
+            valor_atual_float
+            -
+            valor_reservado_float
+        )
+
+
+        rotulo = (
             f"{exercicio}"
             f" | Ficha {numero_ficha}"
             f" | {descricao or ''}"
-        ): id_
-        for id_, exercicio, numero_ficha, descricao in fichas
-    }
+            f" | Disponível: "
+            f"R$ {valor_disponivel:,.2f}"
+        )
+
+
+        mapa_fichas[
+            rotulo
+        ] = {
+            "id": ficha_id,
+            "valor_atual": valor_atual_float,
+            "valor_reservado": valor_reservado_float,
+            "valor_disponivel": valor_disponivel
+        }
+
+
+    # ========================================================
+    # ITENS DA SOLICITAÇÃO
+    #
+    # A tabela solicitacoes_itens NÃO possui coluna ativo.
+    # ========================================================
 
     itens = _sisget_fetch(
         """
@@ -47653,59 +47723,152 @@ def solicitacao_ficha_incluir():
             si.id,
             p.codigo,
             p.descricao
+
         FROM solicitacoes_itens si
+
         INNER JOIN produtos p
             ON p.id = si.produto_id
+
         WHERE si.solicitacao_id = ?
-          AND si.ativo = TRUE
-        ORDER BY si.id
+
+        ORDER BY
+            si.numero_item,
+            si.id
         """,
-        (solicitacao_id,)
+        (
+            solicitacao_id,
+        )
     )
+
 
     mapa_itens = {
         "Toda a Solicitação": None
     }
 
-    for id_, codigo, descricao in itens:
+
+    for (
+        item_id,
+        codigo_produto,
+        descricao_produto
+    ) in itens:
+
         mapa_itens[
-            f"{codigo} - {descricao}"
-        ] = id_
+            (
+                f"{codigo_produto or ''}"
+                f" - "
+                f"{descricao_produto or ''}"
+            )
+        ] = item_id
+
 
     codigo = sisget_proximo_codigo(
         "solicitacoes_fichas",
         tamanho=6
     )
 
+
+    # ========================================================
+    # FORMULÁRIO
+    # ========================================================
+
     with st.form(
         f"form_sol_ficha_{reset}_{solicitacao_id}"
     ):
+
         st.text_input(
             "Código",
             value=codigo,
             disabled=True
         )
 
+
         ficha_nome = st.selectbox(
             "Ficha Orçamentária *",
-            list(mapa_fichas.keys())
+            list(
+                mapa_fichas.keys()
+            )
         )
+
+
+        ficha_dados = mapa_fichas[
+            ficha_nome
+        ]
+
+
+        c1, c2, c3 = st.columns(3)
+
+
+        c1.metric(
+            "Valor Atual",
+            (
+                f"R$ "
+                f"{ficha_dados['valor_atual']:,.2f}"
+            )
+        )
+
+
+        c2.metric(
+            "Já Reservado",
+            (
+                f"R$ "
+                f"{ficha_dados['valor_reservado']:,.2f}"
+            )
+        )
+
+
+        c3.metric(
+            "Disponível",
+            (
+                f"R$ "
+                f"{ficha_dados['valor_disponivel']:,.2f}"
+            )
+        )
+
 
         item_nome = st.selectbox(
             "Vincular ao Item",
-            list(mapa_itens.keys())
+            list(
+                mapa_itens.keys()
+            )
         )
+
 
         valor = st.number_input(
             "Valor Vinculado *",
             min_value=0.0,
             value=0.0,
+            step=0.01,
             format="%.2f"
         )
+
+
+        if float(
+            valor
+        ) > 0:
+
+            saldo_depois = (
+                ficha_dados[
+                    "valor_disponivel"
+                ]
+                -
+                float(
+                    valor
+                )
+            )
+
+
+            st.caption(
+                (
+                    "Saldo disponível após a reserva: "
+                    f"R$ {saldo_depois:,.2f}"
+                )
+            )
+
 
         observacao = st.text_area(
             "Observação"
         )
+
 
         salvar = st.form_submit_button(
             "💾 Vincular Ficha",
@@ -47713,40 +47876,237 @@ def solicitacao_ficha_incluir():
             use_container_width=True
         )
 
+
+    # ========================================================
+    # SALVAR
+    # ========================================================
+
     if salvar:
-        codigo = sisget_proximo_codigo(
-            "solicitacoes_fichas",
-            tamanho=6
+
+        valor_vincular = float(
+            valor
+            or 0
         )
 
-        if _sisget_salvar(
-            """
-            INSERT INTO solicitacoes_fichas
-            (
-                codigo,
-                solicitacao_id,
-                ficha_orcamentaria_id,
-                solicitacao_item_id,
-                valor_vinculado,
-                validada_contabilidade,
-                observacao
+
+        if valor_vincular <= 0:
+
+            st.warning(
+                "⚠️ Informe um valor vinculado maior que zero."
             )
-            VALUES
-            (?, ?, ?, ?, ?, TRUE, ?)
-            """,
-            (
-                codigo,
-                solicitacao_id,
-                mapa_fichas[ficha_nome],
-                mapa_itens[item_nome],
-                float(valor),
-                observacao.strip() or None
+
+            return
+
+
+        ficha_id = ficha_dados[
+            "id"
+        ]
+
+
+        try:
+
+            sisget_obter_conexao()
+
+
+            # =================================================
+            # BLOQUEAR A FICHA DURANTE A VALIDAÇÃO
+            # =================================================
+
+            cursor.execute(
+                """
+                SELECT
+                    valor_atual,
+                    valor_reservado
+
+                FROM fichas_orcamentarias
+
+                WHERE id = ?
+
+                FOR UPDATE
+                """,
+                (
+                    ficha_id,
+                )
             )
-        ):
-            st.session_state[
-                "sisget_sol_ficha_reset"
-            ] += 1
-            st.rerun()
+
+
+            registro_ficha = cursor.fetchone()
+
+
+            if not registro_ficha:
+
+                conn.rollback()
+
+                st.error(
+                    "❌ Ficha orçamentária não encontrada."
+                )
+
+                return
+
+
+            valor_atual_banco = float(
+                registro_ficha[
+                    0
+                ]
+                or 0
+            )
+
+
+            valor_reservado_banco = float(
+                registro_ficha[
+                    1
+                ]
+                or 0
+            )
+
+
+            valor_disponivel_banco = (
+                valor_atual_banco
+                -
+                valor_reservado_banco
+            )
+
+
+            if (
+                valor_vincular
+                >
+                valor_disponivel_banco
+            ):
+
+                conn.rollback()
+
+                st.warning(
+                    (
+                        "⚠️ Saldo insuficiente na ficha. "
+                        f"Disponível: "
+                        f"R$ {valor_disponivel_banco:,.2f}"
+                    )
+                )
+
+                return
+
+
+            # =================================================
+            # CÓDIGO
+            # =================================================
+
+            codigo = sisget_proximo_codigo(
+                "solicitacoes_fichas",
+                tamanho=6
+            )
+
+
+            # =================================================
+            # VINCULAR FICHA À SOLICITAÇÃO
+            # =================================================
+
+            cursor.execute(
+                """
+                INSERT INTO solicitacoes_fichas
+                (
+                    codigo,
+                    solicitacao_id,
+                    ficha_orcamentaria_id,
+                    solicitacao_item_id,
+                    valor_vinculado,
+                    validada_contabilidade,
+                    observacao
+                )
+                VALUES
+                (
+                    ?, ?, ?, ?, ?, TRUE, ?
+                )
+                """,
+                (
+                    codigo,
+                    solicitacao_id,
+                    ficha_id,
+                    mapa_itens[
+                        item_nome
+                    ],
+                    valor_vincular,
+                    (
+                        observacao.strip()
+                        or None
+                    )
+                )
+            )
+
+
+            # =================================================
+            # RESERVAR O VALOR NA FICHA
+            #
+            # NÃO diminui valor_atual.
+            # Aumenta valor_reservado.
+            #
+            # No Cadastro Básico:
+            # Disponível = valor_atual - valor_reservado
+            # =================================================
+
+            cursor.execute(
+                """
+                UPDATE fichas_orcamentarias
+
+                SET
+                    valor_reservado =
+                        COALESCE(
+                            valor_reservado,
+                            0
+                        )
+                        +
+                        ?
+
+                WHERE id = ?
+                """,
+                (
+                    valor_vincular,
+                    ficha_id
+                )
+            )
+
+
+            conn.commit()
+
+
+        except Exception as erro:
+
+            try:
+
+                conn.rollback()
+
+            except Exception:
+
+                pass
+
+
+            st.error(
+                (
+                    "❌ Erro ao vincular a ficha "
+                    f"orçamentária: {erro}"
+                )
+            )
+
+            return
+
+
+        # ====================================================
+        # SUCESSO
+        # ====================================================
+
+        st.session_state[
+            "sisget_mensagem_sol_ficha"
+        ] = (
+            "✅ Ficha vinculada e valor reservado "
+            "com sucesso."
+        )
+
+
+        st.session_state[
+            "sisget_sol_ficha_reset"
+        ] += 1
+
+
+        st.rerun()
 
 
 def solicitacao_ficha_localizar():
