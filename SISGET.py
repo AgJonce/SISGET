@@ -35317,19 +35317,6 @@ def solicitacao_licitacao_incluir():
         "SOLICITACAO"
     )
 
-    from datetime import datetime
-
-    # ========================================================
-    # TÍTULO
-    # ========================================================
-
-    st.subheader(
-        "⚖️ Nova Solicitação para Licitação"
-    )
-
-    # ========================================================
-    # RESET
-    # ========================================================
 
     reset = st.session_state.setdefault(
         "sisget_solicitacao_licitacao_reset",
