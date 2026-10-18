@@ -35310,6 +35310,13 @@ def solicitacao_compra_incluir():
 
 def solicitacao_licitacao_incluir():
 
+    sisget_solicitacao_incluir_base(
+        "LICITACAO",
+        "⚖️ Nova Solicitação para Licitação",
+        "sisget_solicitacao_licitacao_reset",
+        "SOLICITACAO"
+    )
+
     from datetime import datetime
 
     # ========================================================
