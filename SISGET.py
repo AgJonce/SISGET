@@ -50146,10 +50146,13 @@ def enquadramento_incluir():
     st.markdown("### ⚖️ Enquadramento")
 
     tipo_processo = st.selectbox(
-        "Tipo do Processo *",
+        "Tipo do Processo / Procedimento *",
         [
             "Licitação",
-            "Contratação Direta"
+            "Dispensa de Licitação",
+            "Inexigibilidade",
+            "Adesão à Ata de Registro de Preços",
+            "Chamamento Público / Credenciamento"
         ],
         key=f"enq_tipo_processo_{solicitacao_id}_{reset}"
     )
@@ -50163,6 +50166,7 @@ def enquadramento_incluir():
         "Locação",
         "Tecnologia da Informação",
         "Serviço técnico especializado",
+        "Alienação",
         "Outro"
     ]
 
@@ -50194,9 +50198,9 @@ def enquadramento_incluir():
     )
 
     modalidade = ""
-    criterio = ""
-    modo = ""
-    forma = ""
+    criterio = "Não se aplica"
+    modo = "Não se aplica"
+    forma = "Não se aplica"
     srp = False
     fundamento_legal = ""
     dispositivo_especifico = ""
@@ -50204,6 +50208,10 @@ def enquadramento_incluir():
     intervalo_minimo = 0.0
     peso_tecnica = None
     peso_preco = None
+
+    # ========================================================
+    # LICITAÇÃO - LEI 14.133/2021
+    # ========================================================
 
     if tipo_processo == "Licitação":
 
@@ -50219,36 +50227,43 @@ def enquadramento_incluir():
             key=f"enq_modalidade_{solicitacao_id}_{reset}"
         )
 
-        if modalidade == "Pregão":
-            criterios = [
-                "Menor preço",
-                "Maior desconto"
-            ]
-
-        elif modalidade == "Leilão":
-            criterios = [
-                "Maior lance"
-            ]
-
-        elif modalidade == "Concurso":
-            criterios = [
-                "Melhor técnica ou conteúdo artístico"
-            ]
-
-        else:
-            criterios = [
-                "Menor preço",
-                "Maior desconto",
-                "Melhor técnica ou conteúdo artístico",
-                "Técnica e preço",
-                "Maior retorno econômico"
-            ]
+        # Todos os critérios do art. 33 da Lei 14.133/2021.
+        criterios = [
+            "Menor preço",
+            "Maior desconto",
+            "Melhor técnica ou conteúdo artístico",
+            "Técnica e preço",
+            "Maior lance",
+            "Maior retorno econômico"
+        ]
 
         criterio = st.selectbox(
             "Critério de Julgamento *",
             criterios,
             key=f"enq_criterio_{solicitacao_id}_{reset}_{modalidade}"
         )
+
+        # Avisos de compatibilidade sem esconder critérios.
+        if modalidade == "Pregão" and criterio not in (
+            "Menor preço",
+            "Maior desconto"
+        ):
+            st.warning(
+                "⚠️ No Pregão, confira a compatibilidade do critério selecionado. "
+                "A regra geral da Lei nº 14.133/2021 vincula o pregão a bens e "
+                "serviços comuns e aos critérios de menor preço ou maior desconto."
+            )
+
+        if modalidade == "Leilão" and criterio != "Maior lance":
+            st.warning(
+                "⚠️ Para Leilão, o critério típico é Maior Lance."
+            )
+
+        if modalidade == "Concurso" and criterio != "Melhor técnica ou conteúdo artístico":
+            st.warning(
+                "⚠️ Para Concurso, confira a adequação do critério; normalmente "
+                "o julgamento envolve melhor técnica ou conteúdo artístico."
+            )
 
         if criterio in (
             "Menor preço",
@@ -50259,7 +50274,6 @@ def enquadramento_incluir():
                 "Aberto e fechado",
                 "Fechado e aberto"
             ]
-
         elif criterio in (
             "Técnica e preço",
             "Melhor técnica ou conteúdo artístico"
@@ -50267,12 +50281,10 @@ def enquadramento_incluir():
             modos = [
                 "Fechado"
             ]
-
         elif criterio == "Maior lance":
             modos = [
                 "Aberto"
             ]
-
         else:
             modos = [
                 "Aberto",
@@ -50369,16 +50381,10 @@ def enquadramento_incluir():
         artigo_criterio = {
             "Menor preço": "art. 33, I, c/c art. 34",
             "Maior desconto": "art. 33, II, c/c art. 34, § 2º",
-            "Melhor técnica ou conteúdo artístico": (
-                "art. 33, III, c/c art. 35"
-            ),
-            "Técnica e preço": (
-                "art. 33, IV, c/c art. 36"
-            ),
+            "Melhor técnica ou conteúdo artístico": "art. 33, III, c/c art. 35",
+            "Técnica e preço": "art. 33, IV, c/c art. 36",
             "Maior lance": "art. 33, V",
-            "Maior retorno econômico": (
-                "art. 33, VI, c/c art. 39"
-            )
+            "Maior retorno econômico": "art. 33, VI, c/c art. 39"
         }
 
         fundamento_legal = (
@@ -50395,43 +50401,37 @@ def enquadramento_incluir():
             key=f"enq_fundamento_{solicitacao_id}_{reset}_{modalidade}_{criterio}"
         )
 
-        if modalidade == "Pregão":
-            st.info(
-                "ℹ️ Pregão: utilize para objeto com padrões de "
-                "desempenho e qualidade objetivamente definidos "
-                "por especificações usuais de mercado."
-            )
-
         if forma == "Presencial":
             st.warning(
-                "⚠️ Registre na justificativa a motivação "
-                "para a forma presencial."
+                "⚠️ Registre na justificativa a motivação para a forma presencial."
             )
 
-    else:
+    # ========================================================
+    # DISPENSA DE LICITAÇÃO
+    # ========================================================
 
-        modalidade = st.selectbox(
-            "Hipótese de Contratação Direta *",
+    elif tipo_processo == "Dispensa de Licitação":
+
+        modalidade = "Dispensa de Licitação"
+        criterio = st.selectbox(
+            "Critério de seleção / julgamento",
             [
-                "Inexigibilidade",
-                "Dispensa"
+                "Menor preço",
+                "Maior desconto",
+                "Melhor técnica ou conteúdo artístico",
+                "Técnica e preço",
+                "Maior lance",
+                "Maior retorno econômico",
+                "Não se aplica"
             ],
-            key=f"enq_direta_{solicitacao_id}_{reset}"
+            index=0,
+            key=f"enq_criterio_dispensa_{solicitacao_id}_{reset}"
         )
 
-        if modalidade == "Inexigibilidade":
-            fundamento_legal = (
-                "Lei nº 14.133/2021, art. 74."
-            )
-        else:
-            fundamento_legal = (
-                "Lei nº 14.133/2021, art. 75."
-            )
-
         dispositivo_especifico = st.text_input(
-            "Inciso / alínea / hipótese específica *",
-            placeholder="Ex.: art. 75, II ou art. 74, I",
-            key=f"enq_dispositivo_{solicitacao_id}_{reset}"
+            "Inciso / alínea / hipótese específica da Dispensa *",
+            placeholder="Ex.: art. 75, II",
+            key=f"enq_dispositivo_dispensa_{solicitacao_id}_{reset}"
         )
 
         forma = st.selectbox(
@@ -50441,10 +50441,10 @@ def enquadramento_incluir():
                 "Presencial",
                 "Não se aplica"
             ],
-            key=f"enq_forma_direta_{solicitacao_id}_{reset}"
+            key=f"enq_forma_dispensa_{solicitacao_id}_{reset}"
         )
 
-        criterio = "Não se aplica"
+        fundamento_legal = "Lei nº 14.133/2021, arts. 72 e 75."
         modo = "Não se aplica"
         srp = False
 
@@ -50452,15 +50452,172 @@ def enquadramento_incluir():
             "Fundamento Legal",
             value=fundamento_legal,
             disabled=True,
-            key=f"enq_fundamento_direta_{solicitacao_id}_{reset}_{modalidade}"
+            key=f"enq_fundamento_dispensa_{solicitacao_id}_{reset}"
         )
 
-        st.caption(
-            "Informe o dispositivo concreto. "
-            "O sistema não presume automaticamente "
-            "a hipótese de dispensa ou inexigibilidade."
+    # ========================================================
+    # INEXIGIBILIDADE
+    # ========================================================
+
+    elif tipo_processo == "Inexigibilidade":
+
+        modalidade = "Inexigibilidade"
+        criterio = "Não se aplica"
+        modo = "Não se aplica"
+        forma = "Não se aplica"
+        srp = False
+
+        dispositivo_especifico = st.text_input(
+            "Inciso / alínea / hipótese específica da Inexigibilidade *",
+            placeholder="Ex.: art. 74, I",
+            key=f"enq_dispositivo_inexigibilidade_{solicitacao_id}_{reset}"
         )
 
+        fundamento_legal = "Lei nº 14.133/2021, arts. 72 e 74."
+
+        st.text_input(
+            "Fundamento Legal",
+            value=fundamento_legal,
+            disabled=True,
+            key=f"enq_fundamento_inexigibilidade_{solicitacao_id}_{reset}"
+        )
+
+    # ========================================================
+    # ADESÃO À ATA DE REGISTRO DE PREÇOS
+    # ========================================================
+
+    elif tipo_processo == "Adesão à Ata de Registro de Preços":
+
+        modalidade = "Adesão à Ata de Registro de Preços"
+        criterio = "Não se aplica"
+        modo = "Não se aplica"
+        forma = "Não se aplica"
+        srp = True
+
+        st.info(
+            "ℹ️ Adesão como órgão não participante: registre a vantagem da adesão, "
+            "a compatibilidade dos preços com o mercado e as anuências necessárias."
+        )
+
+        a1, a2 = st.columns(2)
+
+        orgao_gerenciador = a1.text_input(
+            "Órgão Gerenciador *",
+            key=f"enq_adesao_orgao_{solicitacao_id}_{reset}"
+        )
+
+        numero_ata = a2.text_input(
+            "Número da Ata de Registro de Preços *",
+            key=f"enq_adesao_ata_{solicitacao_id}_{reset}"
+        )
+
+        a3, a4 = st.columns(2)
+
+        processo_origem = a3.text_input(
+            "Processo / Licitação de Origem",
+            key=f"enq_adesao_processo_{solicitacao_id}_{reset}"
+        )
+
+        vigencia_ata = a4.text_input(
+            "Vigência da Ata",
+            placeholder="Ex.: 01/01/2026 a 31/12/2026",
+            key=f"enq_adesao_vigencia_{solicitacao_id}_{reset}"
+        )
+
+        compatibilidade_precos = st.checkbox(
+            "Foi demonstrada a compatibilidade dos preços registrados com o mercado",
+            key=f"enq_adesao_compatibilidade_{solicitacao_id}_{reset}"
+        )
+
+        anuencia_gerenciador = st.checkbox(
+            "Há consulta/aceitação do órgão gerenciador",
+            key=f"enq_adesao_anuencia_gerenciador_{solicitacao_id}_{reset}"
+        )
+
+        anuencia_fornecedor = st.checkbox(
+            "Há aceitação do fornecedor beneficiário da ata",
+            key=f"enq_adesao_anuencia_fornecedor_{solicitacao_id}_{reset}"
+        )
+
+        fundamento_legal = "Lei nº 14.133/2021, art. 86, especialmente § 2º."
+        dispositivo_especifico = (
+            f"Órgão gerenciador: {orgao_gerenciador.strip() or '-'}; "
+            f"Ata: {numero_ata.strip() or '-'}; "
+            f"Processo de origem: {processo_origem.strip() or '-'}; "
+            f"Vigência: {vigencia_ata.strip() or '-'}; "
+            f"Compatibilidade de preços: {'Sim' if compatibilidade_precos else 'Não'}; "
+            f"Anuência gerenciador: {'Sim' if anuencia_gerenciador else 'Não'}; "
+            f"Anuência fornecedor: {'Sim' if anuencia_fornecedor else 'Não'}"
+        )
+
+        st.text_input(
+            "Fundamento Legal",
+            value=fundamento_legal,
+            disabled=True,
+            key=f"enq_fundamento_adesao_{solicitacao_id}_{reset}"
+        )
+
+    # ========================================================
+    # CHAMAMENTO PÚBLICO / CREDENCIAMENTO
+    # ========================================================
+
+    else:
+
+        modalidade = "Chamamento Público / Credenciamento"
+        modo = "Não se aplica"
+        forma = st.selectbox(
+            "Forma do Chamamento",
+            [
+                "Eletrônica",
+                "Presencial",
+                "Híbrida"
+            ],
+            key=f"enq_forma_chamamento_{solicitacao_id}_{reset}"
+        )
+
+        criterio = st.selectbox(
+            "Critério de Seleção / Julgamento *",
+            [
+                "Credenciamento sem competição",
+                "Menor preço",
+                "Maior desconto",
+                "Melhor técnica ou conteúdo artístico",
+                "Técnica e preço",
+                "Maior lance",
+                "Maior retorno econômico",
+                "Ordem de inscrição",
+                "Sorteio",
+                "Critério definido no edital"
+            ],
+            key=f"enq_criterio_chamamento_{solicitacao_id}_{reset}"
+        )
+
+        dispositivo_especifico = st.text_input(
+            "Base legal / hipótese específica do Chamamento *",
+            placeholder=(
+                "Ex.: Lei nº 14.133/2021, art. 79 (credenciamento) "
+                "ou legislação específica aplicável"
+            ),
+            key=f"enq_dispositivo_chamamento_{solicitacao_id}_{reset}"
+        )
+
+        fundamento_legal = (
+            "Lei nº 14.133/2021, arts. 78, I, e 79, quando se tratar de credenciamento; "
+            "ou legislação específica indicada no processo."
+        )
+
+        st.warning(
+            "⚠️ 'Chamamento Público' pode ter fundamento em legislação específica. "
+            "Quando for credenciamento da Lei nº 14.133/2021, use o art. 79; "
+            "em outros casos, informe a base legal concreta."
+        )
+
+        st.text_input(
+            "Fundamento Legal de Referência",
+            value=fundamento_legal,
+            disabled=True,
+            key=f"enq_fundamento_chamamento_{solicitacao_id}_{reset}"
+        )
     justificativa = st.text_area(
         "Justificativa do Enquadramento *",
         height=160,
@@ -50517,14 +50674,36 @@ def enquadramento_incluir():
         return
 
     if (
-        tipo_processo == "Contratação Direta"
+        tipo_processo in (
+            "Dispensa de Licitação",
+            "Inexigibilidade",
+            "Chamamento Público / Credenciamento"
+        )
         and not dispositivo_especifico.strip()
     ):
         st.warning(
-            "⚠️ Informe o inciso/alínea ou hipótese legal "
-            "da contratação direta."
+            "⚠️ Informe o dispositivo ou a hipótese legal específica do procedimento."
         )
         return
+
+    if tipo_processo == "Adesão à Ata de Registro de Preços":
+        if not orgao_gerenciador.strip() or not numero_ata.strip():
+            st.warning(
+                "⚠️ Informe o Órgão Gerenciador e o Número da Ata."
+            )
+            return
+
+        if not compatibilidade_precos:
+            st.warning(
+                "⚠️ Confirme a demonstração de compatibilidade dos preços com o mercado."
+            )
+            return
+
+        if not anuencia_gerenciador or not anuencia_fornecedor:
+            st.warning(
+                "⚠️ Confirme as anuências do órgão gerenciador e do fornecedor."
+            )
+            return
 
     if (
         criterio == "Técnica e preço"
@@ -50572,9 +50751,9 @@ def enquadramento_incluir():
                 f"Peso do preço: {float(peso_preco):.2f}%"
             )
 
-    else:
+    elif dispositivo_especifico.strip():
         metadados.append(
-            "Hipótese legal específica: "
+            "Base legal / informações específicas: "
             f"{dispositivo_especifico.strip()}"
         )
 
@@ -50587,13 +50766,17 @@ def enquadramento_incluir():
     fundamento_salvar = fundamento_legal
 
     if (
-        tipo_processo == "Contratação Direta"
+        tipo_processo in (
+            "Dispensa de Licitação",
+            "Inexigibilidade",
+            "Chamamento Público / Credenciamento",
+            "Adesão à Ata de Registro de Preços"
+        )
         and dispositivo_especifico.strip()
     ):
         fundamento_salvar = (
             f"{fundamento_legal} "
-            f"Hipótese indicada: "
-            f"{dispositivo_especifico.strip()}."
+            f"Informação específica: {dispositivo_especifico.strip()}."
         )
 
     codigo = sisget_proximo_codigo(
@@ -50658,6 +50841,7 @@ def enquadramento_incluir():
         ] = None
 
         st.rerun()
+
 
 def enquadramento_localizar():
 
