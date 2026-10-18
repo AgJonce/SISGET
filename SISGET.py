@@ -49822,19 +49822,204 @@ def cadastro_enquadramento_solicitacoes():
 
 def enquadramento_incluir():
 
-    if "sisget_enquadramento_reset" not in st.session_state:
-        st.session_state[
-            "sisget_enquadramento_reset"
-        ] = 0
+    import statistics
 
-    reset = st.session_state[
-        "sisget_enquadramento_reset"
-    ]
+    if "sisget_enquadramento_reset" not in st.session_state:
+        st.session_state["sisget_enquadramento_reset"] = 0
+
+    reset = st.session_state["sisget_enquadramento_reset"]
+
+    if "sisget_mensagem_enquadramento" in st.session_state:
+        st.success(
+            st.session_state.pop(
+                "sisget_mensagem_enquadramento"
+            )
+        )
+
+    def _moeda(valor):
+        return (
+            f"R$ {float(valor or 0):,.2f}"
+            .replace(",", "X")
+            .replace(".", ",")
+            .replace("X", ".")
+        )
+
+    def _calcular_valor_cotacao(solicitacao_id_calculo):
+
+        cabecalho = _sisget_fetchone(
+            """
+            SELECT
+                c.entidade_id,
+                c.exercicio_id,
+                c.numero,
+                COALESCE(c.criterio_cotacao, ''),
+                COALESCE(c.metodologia, '')
+            FROM cotacoes c
+            WHERE
+                c.solicitacao_id = ?
+                OR EXISTS
+                (
+                    SELECT 1
+                    FROM cotacoes_solicitacoes cs
+                    WHERE cs.cotacao_id = c.id
+                      AND cs.solicitacao_id = ?
+                )
+            ORDER BY c.id DESC
+            LIMIT 1
+            """,
+            (
+                solicitacao_id_calculo,
+                solicitacao_id_calculo
+            )
+        )
+
+        if not cabecalho:
+            return {
+                "numero": None,
+                "criterio": "",
+                "metodologia": "",
+                "valor": 0.0
+            }
+
+        (
+            entidade_id_cotacao,
+            exercicio_id_cotacao,
+            numero_cotacao,
+            criterio_cotacao,
+            metodologia_cotacao
+        ) = cabecalho
+
+        linhas = _sisget_fetch(
+            """
+            SELECT
+                c.id,
+                ci.solicitacao_item_id,
+                COALESCE(ci.quantidade, 0),
+                COALESCE(ci.valor_unitario, 0),
+                COALESCE(ci.valor_total, 0)
+            FROM cotacoes c
+            INNER JOIN cotacoes_itens ci
+                ON ci.cotacao_id = c.id
+            INNER JOIN solicitacoes_itens si
+                ON si.id = ci.solicitacao_item_id
+            WHERE c.entidade_id = ?
+              AND c.exercicio_id = ?
+              AND c.numero = ?
+              AND si.solicitacao_id = ?
+            ORDER BY
+                ci.solicitacao_item_id,
+                c.id
+            """,
+            (
+                entidade_id_cotacao,
+                exercicio_id_cotacao,
+                numero_cotacao,
+                solicitacao_id_calculo
+            )
+        )
+
+        if not linhas:
+            return {
+                "numero": numero_cotacao,
+                "criterio": criterio_cotacao,
+                "metodologia": metodologia_cotacao,
+                "valor": 0.0
+            }
+
+        criterio_normalizado = str(
+            criterio_cotacao or ""
+        ).strip().lower()
+
+        metodologia_normalizada = str(
+            metodologia_cotacao or ""
+        ).strip().lower()
+
+        valor_cotacao = 0.0
+
+        if (
+            "global" in criterio_normalizado
+            and "unitário/global" not in criterio_normalizado
+            and "unitario/global" not in criterio_normalizado
+        ):
+            totais_proposta = {}
+
+            for (
+                cotacao_id,
+                item_id,
+                quantidade,
+                valor_unitario,
+                valor_total
+            ) in linhas:
+                totais_proposta[cotacao_id] = (
+                    totais_proposta.get(cotacao_id, 0.0)
+                    + float(valor_total or 0)
+                )
+
+            if totais_proposta:
+                valor_cotacao = min(
+                    totais_proposta.values()
+                )
+
+        else:
+            itens = {}
+
+            for (
+                cotacao_id,
+                item_id,
+                quantidade,
+                valor_unitario,
+                valor_total
+            ) in linhas:
+
+                if item_id not in itens:
+                    itens[item_id] = {
+                        "quantidade": float(quantidade or 0),
+                        "precos": []
+                    }
+
+                preco = float(valor_unitario or 0)
+
+                if preco > 0:
+                    itens[item_id]["precos"].append(preco)
+
+            for dados_item in itens.values():
+
+                precos = dados_item["precos"]
+
+                if not precos:
+                    continue
+
+                if (
+                    "médio" in criterio_normalizado
+                    or "medio" in criterio_normalizado
+                    or metodologia_normalizada in ("média", "media")
+                ):
+                    preco_referencia = statistics.mean(precos)
+
+                elif metodologia_normalizada == "mediana":
+                    preco_referencia = statistics.median(precos)
+
+                else:
+                    preco_referencia = min(precos)
+
+                valor_cotacao += (
+                    float(dados_item["quantidade"] or 0)
+                    * float(preco_referencia or 0)
+                )
+
+        return {
+            "numero": numero_cotacao,
+            "criterio": criterio_cotacao,
+            "metodologia": metodologia_cotacao,
+            "valor": float(valor_cotacao or 0)
+        }
 
     solicitacao_id = sisget_selecionar_solicitacao(
-        "Solicitação para Licitação *",
-        f"enquadramento_sol_{reset}",
-        "LICITACAO"
+        label="Solicitação para Licitação *",
+        key=f"enquadramento_sol_{reset}",
+        tipo_solicitacao="LICITACAO",
+        etapa_atual="ENQUADRAMENTO",
+        somente_ativas=True
     )
 
     if not solicitacao_id:
@@ -49855,130 +50040,624 @@ def enquadramento_incluir():
         )
         return
 
+    solicitacao = _sisget_fetchone(
+        """
+        SELECT
+            codigo,
+            numero,
+            objeto,
+            tipo,
+            prioridade
+        FROM solicitacoes
+        WHERE id = ?
+          AND ativo = TRUE
+        """,
+        (solicitacao_id,)
+    )
+
+    if not solicitacao:
+        st.error("❌ Solicitação não encontrada.")
+        return
+
+    (
+        codigo_solicitacao,
+        numero_solicitacao,
+        objeto_solicitacao,
+        tipo_objeto_solicitacao,
+        prioridade_solicitacao
+    ) = solicitacao
+
+    dados_cotacao = _calcular_valor_cotacao(
+        solicitacao_id
+    )
+
+    valor_cotado = float(
+        dados_cotacao["valor"] or 0
+    )
+
+    total_fichas = _sisget_fetchone(
+        """
+        SELECT COALESCE(SUM(valor_vinculado), 0)
+        FROM solicitacoes_fichas
+        WHERE solicitacao_id = ?
+        """,
+        (solicitacao_id,)
+    )
+
+    valor_fichas = float(
+        total_fichas[0] or 0
+    ) if total_fichas else 0.0
+
+    financeiro = _sisget_fetchone(
+        """
+        SELECT valor_validado
+        FROM solicitacoes_financeiro
+        WHERE solicitacao_id = ?
+        ORDER BY id DESC
+        LIMIT 1
+        """,
+        (solicitacao_id,)
+    )
+
+    valor_financeiro = float(
+        financeiro[0] or 0
+    ) if financeiro else 0.0
+
+    st.markdown("### 📋 Resumo da Contratação")
+
+    c1, c2, c3 = st.columns(3)
+
+    c1.metric(
+        "Valor Cotado",
+        _moeda(valor_cotado)
+    )
+
+    c2.metric(
+        "Vinculado em Fichas",
+        _moeda(valor_fichas)
+    )
+
+    c3.metric(
+        "Validado pelo Financeiro",
+        _moeda(valor_financeiro)
+    )
+
+    st.text_area(
+        "Objeto",
+        value=str(objeto_solicitacao or ""),
+        disabled=True,
+        height=90,
+        key=f"enquadramento_objeto_{solicitacao_id}_{reset}"
+    )
+
+    if dados_cotacao["numero"]:
+        st.caption(
+            f"Cotação nº {dados_cotacao['numero']} | "
+            f"Critério da pesquisa: {dados_cotacao['criterio'] or '-'} | "
+            f"Metodologia: {dados_cotacao['metodologia'] or '-'}"
+        )
+
+    if valor_cotado <= 0:
+        st.warning(
+            "⚠️ Não foi possível identificar o valor cotado "
+            "desta solicitação."
+        )
+
+    st.markdown("### ⚖️ Enquadramento")
+
+    tipo_processo = st.selectbox(
+        "Tipo do Processo *",
+        [
+            "Licitação",
+            "Contratação Direta"
+        ],
+        key=f"enq_tipo_processo_{solicitacao_id}_{reset}"
+    )
+
+    tipos_objeto = [
+        "Aquisição de bens",
+        "Serviço",
+        "Serviço comum de engenharia",
+        "Serviço especial de engenharia",
+        "Obra",
+        "Locação",
+        "Tecnologia da Informação",
+        "Serviço técnico especializado",
+        "Outro"
+    ]
+
+    indice_objeto = 0
+
+    texto_tipo = str(
+        tipo_objeto_solicitacao or ""
+    ).lower()
+
+    if "obra" in texto_tipo:
+        indice_objeto = tipos_objeto.index("Obra")
+    elif "serv" in texto_tipo:
+        indice_objeto = tipos_objeto.index("Serviço")
+
+    tipo_objeto = st.selectbox(
+        "Tipo do Objeto *",
+        tipos_objeto,
+        index=indice_objeto,
+        key=f"enq_tipo_objeto_{solicitacao_id}_{reset}"
+    )
+
+    natureza_objeto = st.text_input(
+        "Natureza / Característica do Objeto *",
+        placeholder=(
+            "Ex.: bem comum, serviço contínuo, "
+            "serviço intelectual, obra especial..."
+        ),
+        key=f"enq_natureza_{solicitacao_id}_{reset}"
+    )
+
+    modalidade = ""
+    criterio = ""
+    modo = ""
+    forma = ""
+    srp = False
+    fundamento_legal = ""
+    dispositivo_especifico = ""
+    casas_decimais = 2
+    intervalo_minimo = 0.0
+    peso_tecnica = None
+    peso_preco = None
+
+    if tipo_processo == "Licitação":
+
+        modalidade = st.selectbox(
+            "Modalidade *",
+            [
+                "Pregão",
+                "Concorrência",
+                "Concurso",
+                "Leilão",
+                "Diálogo competitivo"
+            ],
+            key=f"enq_modalidade_{solicitacao_id}_{reset}"
+        )
+
+        if modalidade == "Pregão":
+            criterios = [
+                "Menor preço",
+                "Maior desconto"
+            ]
+
+        elif modalidade == "Leilão":
+            criterios = [
+                "Maior lance"
+            ]
+
+        elif modalidade == "Concurso":
+            criterios = [
+                "Melhor técnica ou conteúdo artístico"
+            ]
+
+        else:
+            criterios = [
+                "Menor preço",
+                "Maior desconto",
+                "Melhor técnica ou conteúdo artístico",
+                "Técnica e preço",
+                "Maior retorno econômico"
+            ]
+
+        criterio = st.selectbox(
+            "Critério de Julgamento *",
+            criterios,
+            key=f"enq_criterio_{solicitacao_id}_{reset}_{modalidade}"
+        )
+
+        if criterio in (
+            "Menor preço",
+            "Maior desconto"
+        ):
+            modos = [
+                "Aberto",
+                "Aberto e fechado",
+                "Fechado e aberto"
+            ]
+
+        elif criterio in (
+            "Técnica e preço",
+            "Melhor técnica ou conteúdo artístico"
+        ):
+            modos = [
+                "Fechado"
+            ]
+
+        elif criterio == "Maior lance":
+            modos = [
+                "Aberto"
+            ]
+
+        else:
+            modos = [
+                "Aberto",
+                "Fechado"
+            ]
+
+        modo = st.selectbox(
+            "Modo de Disputa *",
+            modos,
+            key=f"enq_modo_{solicitacao_id}_{reset}_{criterio}"
+        )
+
+        forma = st.selectbox(
+            "Forma da Sessão *",
+            [
+                "Eletrônica",
+                "Presencial"
+            ],
+            key=f"enq_forma_{solicitacao_id}_{reset}"
+        )
+
+        srp = st.checkbox(
+            "Sistema de Registro de Preços - SRP",
+            key=f"enq_srp_{solicitacao_id}_{reset}"
+        )
+
+        d1, d2 = st.columns(2)
+
+        casas_decimais = d1.number_input(
+            "Casas decimais no julgamento",
+            min_value=0,
+            max_value=6,
+            value=2,
+            step=1,
+            help=(
+                "Precisão para percentuais, notas e lances "
+                "utilizados no julgamento."
+            ),
+            key=f"enq_decimais_{solicitacao_id}_{reset}"
+        )
+
+        intervalo_minimo = d2.number_input(
+            "Intervalo mínimo entre lances",
+            min_value=0.0,
+            value=0.0,
+            step=0.01,
+            format="%.4f",
+            key=f"enq_intervalo_{solicitacao_id}_{reset}"
+        )
+
+        if criterio == "Técnica e preço":
+
+            st.markdown("#### 📊 Ponderação Técnica x Preço")
+
+            p1, p2 = st.columns(2)
+
+            peso_tecnica = p1.number_input(
+                "Peso da Técnica (%)",
+                min_value=0.0,
+                max_value=100.0,
+                value=70.0,
+                step=1.0,
+                format="%.2f",
+                key=f"enq_peso_tecnica_{solicitacao_id}_{reset}"
+            )
+
+            peso_preco = p2.number_input(
+                "Peso do Preço (%)",
+                min_value=0.0,
+                max_value=100.0,
+                value=30.0,
+                step=1.0,
+                format="%.2f",
+                key=f"enq_peso_preco_{solicitacao_id}_{reset}"
+            )
+
+            if abs(
+                float(peso_tecnica)
+                + float(peso_preco)
+                - 100.0
+            ) > 0.005:
+                st.warning(
+                    "⚠️ Técnica + Preço deve totalizar 100%."
+                )
+
+        artigo_modalidade = {
+            "Pregão": "art. 28, I, c/c art. 29",
+            "Concorrência": "art. 28, II",
+            "Concurso": "art. 28, III",
+            "Leilão": "art. 28, IV",
+            "Diálogo competitivo": "art. 28, V"
+        }
+
+        artigo_criterio = {
+            "Menor preço": "art. 33, I, c/c art. 34",
+            "Maior desconto": "art. 33, II, c/c art. 34, § 2º",
+            "Melhor técnica ou conteúdo artístico": (
+                "art. 33, III, c/c art. 35"
+            ),
+            "Técnica e preço": (
+                "art. 33, IV, c/c art. 36"
+            ),
+            "Maior lance": "art. 33, V",
+            "Maior retorno econômico": (
+                "art. 33, VI, c/c art. 39"
+            )
+        }
+
+        fundamento_legal = (
+            "Lei nº 14.133/2021, "
+            f"{artigo_modalidade[modalidade]}; "
+            f"{artigo_criterio[criterio]}; "
+            "art. 56."
+        )
+
+        st.text_input(
+            "Fundamento Legal",
+            value=fundamento_legal,
+            disabled=True,
+            key=f"enq_fundamento_{solicitacao_id}_{reset}_{modalidade}_{criterio}"
+        )
+
+        if modalidade == "Pregão":
+            st.info(
+                "ℹ️ Pregão: utilize para objeto com padrões de "
+                "desempenho e qualidade objetivamente definidos "
+                "por especificações usuais de mercado."
+            )
+
+        if forma == "Presencial":
+            st.warning(
+                "⚠️ Registre na justificativa a motivação "
+                "para a forma presencial."
+            )
+
+    else:
+
+        modalidade = st.selectbox(
+            "Hipótese de Contratação Direta *",
+            [
+                "Inexigibilidade",
+                "Dispensa"
+            ],
+            key=f"enq_direta_{solicitacao_id}_{reset}"
+        )
+
+        if modalidade == "Inexigibilidade":
+            fundamento_legal = (
+                "Lei nº 14.133/2021, art. 74."
+            )
+        else:
+            fundamento_legal = (
+                "Lei nº 14.133/2021, art. 75."
+            )
+
+        dispositivo_especifico = st.text_input(
+            "Inciso / alínea / hipótese específica *",
+            placeholder="Ex.: art. 75, II ou art. 74, I",
+            key=f"enq_dispositivo_{solicitacao_id}_{reset}"
+        )
+
+        forma = st.selectbox(
+            "Forma do Procedimento",
+            [
+                "Eletrônica",
+                "Presencial",
+                "Não se aplica"
+            ],
+            key=f"enq_forma_direta_{solicitacao_id}_{reset}"
+        )
+
+        criterio = "Não se aplica"
+        modo = "Não se aplica"
+        srp = False
+
+        st.text_input(
+            "Fundamento Legal",
+            value=fundamento_legal,
+            disabled=True,
+            key=f"enq_fundamento_direta_{solicitacao_id}_{reset}_{modalidade}"
+        )
+
+        st.caption(
+            "Informe o dispositivo concreto. "
+            "O sistema não presume automaticamente "
+            "a hipótese de dispensa ou inexigibilidade."
+        )
+
+    justificativa = st.text_area(
+        "Justificativa do Enquadramento *",
+        height=160,
+        placeholder=(
+            "Justifique a escolha do procedimento, modalidade, "
+            "critério, modo de disputa e demais parâmetros."
+        ),
+        key=f"enq_justificativa_{solicitacao_id}_{reset}"
+    )
+
+    st.markdown("### ✅ Resumo do Enquadramento")
+
+    r1, r2, r3 = st.columns(3)
+
+    r1.metric(
+        "Valor de Referência",
+        _moeda(valor_cotado)
+    )
+
+    r2.write(
+        f"**Procedimento:** {tipo_processo}"
+    )
+    r2.write(
+        f"**Modalidade/Hipótese:** {modalidade}"
+    )
+
+    r3.write(
+        f"**Critério:** {criterio}"
+    )
+    r3.write(
+        f"**Modo:** {modo}"
+    )
+
+    salvar = st.button(
+        "💾 Salvar Enquadramento",
+        type="primary",
+        use_container_width=True,
+        key=f"enq_salvar_{solicitacao_id}_{reset}"
+    )
+
+    if not salvar:
+        return
+
+    if not natureza_objeto.strip():
+        st.warning(
+            "⚠️ Informe a natureza/característica do objeto."
+        )
+        return
+
+    if not justificativa.strip():
+        st.warning(
+            "⚠️ Informe a justificativa do enquadramento."
+        )
+        return
+
+    if (
+        tipo_processo == "Contratação Direta"
+        and not dispositivo_especifico.strip()
+    ):
+        st.warning(
+            "⚠️ Informe o inciso/alínea ou hipótese legal "
+            "da contratação direta."
+        )
+        return
+
+    if (
+        criterio == "Técnica e preço"
+        and abs(
+            float(peso_tecnica or 0)
+            + float(peso_preco or 0)
+            - 100.0
+        ) > 0.005
+    ):
+        st.warning(
+            "⚠️ Técnica + Preço deve totalizar 100%."
+        )
+        return
+
+    metadados = [
+        "",
+        "=== PARÂMETROS DO ENQUADRAMENTO ===",
+        f"Valor cotado: {_moeda(valor_cotado)}",
+        f"Valor vinculado em fichas: {_moeda(valor_fichas)}",
+        f"Valor validado pelo financeiro: {_moeda(valor_financeiro)}",
+        f"Tipo do processo: {tipo_processo}",
+        f"Modalidade/Hipótese: {modalidade}",
+        f"Critério de julgamento: {criterio}",
+        f"Modo de disputa: {modo}",
+        f"Forma: {forma}",
+        f"SRP: {'Sim' if srp else 'Não'}"
+    ]
+
+    if tipo_processo == "Licitação":
+
+        metadados.append(
+            f"Casas decimais no julgamento: {int(casas_decimais)}"
+        )
+
+        metadados.append(
+            "Intervalo mínimo entre lances: "
+            f"{float(intervalo_minimo):.{int(casas_decimais)}f}"
+        )
+
+        if criterio == "Técnica e preço":
+            metadados.append(
+                f"Peso da técnica: {float(peso_tecnica):.2f}%"
+            )
+            metadados.append(
+                f"Peso do preço: {float(peso_preco):.2f}%"
+            )
+
+    else:
+        metadados.append(
+            "Hipótese legal específica: "
+            f"{dispositivo_especifico.strip()}"
+        )
+
+    justificativa_salvar = (
+        justificativa.strip()
+        + "\n"
+        + "\n".join(metadados)
+    )
+
+    fundamento_salvar = fundamento_legal
+
+    if (
+        tipo_processo == "Contratação Direta"
+        and dispositivo_especifico.strip()
+    ):
+        fundamento_salvar = (
+            f"{fundamento_legal} "
+            f"Hipótese indicada: "
+            f"{dispositivo_especifico.strip()}."
+        )
+
     codigo = sisget_proximo_codigo(
         "solicitacoes_enquadramento",
         tamanho=6
     )
 
-    with st.form(
-        f"form_enquadramento_incluir_{reset}_{solicitacao_id}"
+    if _sisget_salvar(
+        """
+        INSERT INTO solicitacoes_enquadramento
+        (
+            codigo,
+            solicitacao_id,
+            tipo_processo,
+            tipo_objeto,
+            natureza_objeto,
+            modalidade,
+            criterio_julgamento,
+            modo_disputa,
+            forma,
+            registro_precos,
+            fundamento_legal,
+            justificativa
+        )
+        VALUES
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            codigo,
+            solicitacao_id,
+            tipo_processo,
+            tipo_objeto,
+            natureza_objeto.strip(),
+            modalidade,
+            criterio,
+            modo,
+            forma,
+            bool(srp),
+            fundamento_salvar,
+            justificativa_salvar
+        )
     ):
-        st.text_input(
-            "Código",
-            value=codigo,
-            disabled=True
+
+        st.session_state[
+            "sisget_mensagem_enquadramento"
+        ] = (
+            "✅ Enquadramento salvo com sucesso. "
+            "A solicitação permanece em ENQUADRAMENTO "
+            "até a assinatura."
         )
 
-        tipo_processo = st.selectbox(
-            "Tipo do Processo *",
-            [
-                "Licitação",
-                "Contratação Direta"
-            ]
-        )
+        st.session_state[
+            "sisget_enquadramento_reset"
+        ] += 1
 
-        tipo_objeto = st.selectbox(
-            "Tipo do Objeto *",
-            [
-                "Aquisição de bens",
-                "Serviço",
-                "Serviço de engenharia",
-                "Obra",
-                "Locação",
-                "Tecnologia da Informação",
-                "Outro"
-            ]
-        )
+        st.session_state[
+            "sisget_tela_solicitacoes_enquadramento"
+        ] = "principal"
 
-        natureza_objeto = st.text_input(
-            "Natureza do Objeto"
-        )
+        st.session_state[
+            "sisget_id_solicitacoes_enquadramento"
+        ] = None
 
-        modalidade = st.text_input(
-            "Modalidade / Forma *"
-        )
-
-        criterio = st.text_input(
-            "Critério de Julgamento"
-        )
-
-        modo = st.text_input(
-            "Modo de Disputa"
-        )
-
-        forma = st.selectbox(
-            "Forma",
-            [
-                "Eletrônica",
-                "Presencial",
-                "Não se aplica"
-            ]
-        )
-
-        srp = st.checkbox(
-            "Sistema de Registro de Preços - SRP"
-        )
-
-        fundamento = st.text_input(
-            "Fundamento Legal"
-        )
-
-        justificativa = st.text_area(
-            "Justificativa *"
-        )
-
-        salvar = st.form_submit_button(
-            "💾 Salvar Enquadramento",
-            type="primary",
-            use_container_width=True
-        )
-
-    if salvar:
-        codigo = sisget_proximo_codigo(
-            "solicitacoes_enquadramento",
-            tamanho=6
-        )
-
-        if _sisget_salvar(
-            """
-            INSERT INTO solicitacoes_enquadramento
-            (
-                codigo,
-                solicitacao_id,
-                tipo_processo,
-                tipo_objeto,
-                natureza_objeto,
-                modalidade,
-                criterio_julgamento,
-                modo_disputa,
-                forma,
-                registro_precos,
-                fundamento_legal,
-                justificativa
-            )
-            VALUES
-            (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                codigo,
-                solicitacao_id,
-                tipo_processo,
-                tipo_objeto,
-                natureza_objeto.strip() or None,
-                modalidade.strip(),
-                criterio.strip() or None,
-                modo.strip() or None,
-                forma,
-                srp,
-                fundamento.strip() or None,
-                justificativa.strip()
-            )
-        ):
-            st.session_state[
-                "sisget_enquadramento_reset"
-            ] += 1
-            st.rerun()
-
+        st.rerun()
 
 def enquadramento_localizar():
 
