@@ -35310,13 +35310,19 @@ def solicitacao_compra_incluir():
 
 def solicitacao_licitacao_incluir():
 
-    sisget_solicitacao_incluir_base(
-        "LICITACAO",
-        "",
-        "sisget_solicitacao_licitacao_reset",
-        "SOLICITACAO"
+    from datetime import datetime
+
+    # ========================================================
+    # TÍTULO - EXIBIDO UMA ÚNICA VEZ
+    # ========================================================
+
+    st.subheader(
+        "⚖️ Nova Solicitação para Licitação"
     )
 
+    # ========================================================
+    # RESET
+    # ========================================================
 
     reset = st.session_state.setdefault(
         "sisget_solicitacao_licitacao_reset",
@@ -36242,6 +36248,112 @@ def solicitacao_licitacao_incluir():
             return
 
         # ====================================================
+        # EXERCÍCIO DA ENTIDADE
+        # ====================================================
+
+        exercicio = int(
+            ano
+        )
+
+        registro_exercicio = _sisget_fetchone(
+            """
+            SELECT
+                id,
+                ano
+
+            FROM exercicios
+
+            WHERE entidade_id = ?
+              AND ano = ?
+              AND ativo = TRUE
+              AND encerrado = FALSE
+
+            LIMIT 1
+            """,
+            (
+                entidade_id_salvar,
+                exercicio
+            )
+        )
+
+        if not registro_exercicio:
+
+            st.error(
+                f"❌ A entidade selecionada não possui "
+                f"o exercício {exercicio} ativo e aberto."
+            )
+
+            return
+
+        exercicio_id = registro_exercicio[
+            0
+        ]
+
+        exercicio = int(
+            registro_exercicio[
+                1
+            ]
+        )
+
+        # ====================================================
+        # CÓDIGO DA SOLICITAÇÃO
+        # ====================================================
+
+        codigo = (
+            f"LIC-{exercicio}-"
+            f"{str(numero).zfill(6)}"
+        )
+
+        # ====================================================
+        # TIPO ACEITO PELA TABELA solicitacoes
+        # ====================================================
+
+        mapa_tipo_banco = {
+            "Aquisição de Material": "Material",
+            "Contratação de Serviço": "Servico",
+            "Obra / Serviço de Engenharia": "Obra",
+            "Tecnologia da Informação": "Servico",
+            "Manutenção": "Servico",
+            "Outros": "Outro"
+        }
+
+        tipo_banco = mapa_tipo_banco.get(
+            tipo,
+            "Outro"
+        )
+
+        # ====================================================
+        # OBSERVAÇÃO
+        # A ESTRUTURA ATUAL NÃO USA titulo/descricao/solicitante
+        # COMO COLUNAS DA TABELA solicitacoes.
+        # O TÍTULO É GRAVADO EM objeto E A DESCRIÇÃO FICA AQUI.
+        # ====================================================
+
+        partes_observacao = []
+
+        if descricao.strip():
+
+            partes_observacao.append(
+                "Descrição da Necessidade:\n"
+                + descricao.strip()
+            )
+
+        if solicitante.strip():
+
+            partes_observacao.append(
+                "Solicitante informado:\n"
+                + solicitante.strip()
+            )
+
+        observacao_salvar = (
+            "\n\n".join(
+                partes_observacao
+            )
+            if partes_observacao
+            else None
+        )
+
+        # ====================================================
         # STATUS / ETAPA
         # ====================================================
 
@@ -36269,74 +36381,102 @@ def solicitacao_licitacao_incluir():
                 """
                 INSERT INTO solicitacoes
                 (
-                    numero,
-
-                    orgao_id,
                     entidade_id,
+                    exercicio_id,
+                    orgao_id,
+
                     unidade_orcamentaria_id,
                     unidade_administrativa_id,
                     setor_id,
 
+                    numero,
+                    data_solicitacao,
+
                     tipo,
-                    prioridade,
-
-                    titulo,
-                    descricao,
+                    objeto,
                     justificativa,
+                    prioridade,
+                    situacao,
 
-                    solicitante,
+                    observacao,
+
+                    codigo,
+                    exercicio,
+                    tipo_solicitacao,
+
+                    solicitante_usuario_id,
+
+                    data_necessidade,
 
                     status,
                     etapa_atual,
-                    tipo_solicitacao,
-                    data_solicitacao
+                    ativo
                 )
                 VALUES
                 (
-                    ?,
+                    ?, ?, ?,
+
+                    ?, ?, ?,
+
+                    ?, ?,
 
                     ?, ?, ?, ?, ?,
 
-                    ?, ?,
+                    ?,
 
                     ?, ?, ?,
 
                     ?,
 
-                    ?, ?, ?, ?
+                    ?,
+
+                    ?, ?, TRUE
                 )
 
                 RETURNING id
                 """,
                 (
-                    numero,
-
-                    orgao_id_salvar,
                     entidade_id_salvar,
+                    exercicio_id,
+                    orgao_id_salvar,
+
                     uo_id_salvar,
                     ua_id,
                     setor_id,
 
-                    tipo,
-                    prioridade,
+                    str(
+                        numero
+                    ),
+
+                    data_solicitacao,
+
+                    tipo_banco,
 
                     titulo.strip(),
 
-                    descricao.strip()
-                    or None,
-
                     justificativa.strip(),
 
-                    solicitante.strip()
-                    or None,
+                    prioridade,
 
-                    status_salvar,
+                    "Em elaboracao",
 
-                    etapa_salvar,
+                    observacao_salvar,
+
+                    codigo,
+
+                    exercicio,
 
                     "LICITACAO",
 
-                    data_solicitacao
+                    st.session_state.get(
+                        "usuario_id"
+                    ),
+
+                    data_solicitacao,
+
+                    status_salvar,
+
+                    etapa_salvar
                 )
             )
 
@@ -36394,6 +36534,23 @@ def solicitacao_licitacao_incluir():
             # ITENS
             # =================================================
 
+            primeiro_codigo_item = sisget_proximo_codigo(
+                "solicitacoes_itens",
+                campo="codigo",
+                tamanho=6
+            )
+
+            try:
+
+                numero_codigo_item = int(
+                    primeiro_codigo_item
+                )
+
+            except Exception:
+
+                numero_codigo_item = 1
+
+
             for numero_item, item in enumerate(
                 itens,
                 start=1
@@ -36407,6 +36564,12 @@ def solicitacao_licitacao_incluir():
                     item[
                         "valor_unitario"
                     ]
+                )
+
+                codigo_item = str(
+                    numero_codigo_item
+                ).zfill(
+                    6
                 )
 
                 cursor.execute(
@@ -36450,11 +36613,11 @@ def solicitacao_licitacao_incluir():
 
                         valor_total_item,
 
-                        item[
-                            "codigo"
-                        ]
+                        codigo_item
                     )
                 )
+
+                numero_codigo_item += 1
             # =================================================
             # HISTÓRICO
             # =================================================
@@ -36574,10 +36737,6 @@ def solicitacao_licitacao_incluir():
         # ====================================================
 
         st.rerun()
-
-
-# ============================================================
-# LOCALIZAR / ALTERAR / EXCLUIR / IMPRIMIR SOLICITAÇÕES
 # ============================================================
 
 def sisget_solicitacao_localizar_tipo(
