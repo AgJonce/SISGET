@@ -51348,7 +51348,9 @@ def tr_incluir():
             prioridade,
             tipo,
             observacao,
-            entidade_id
+            entidade_id,
+            unidade_administrativa_id,
+            setor_id
         FROM solicitacoes
         WHERE id = ?
           AND ativo = TRUE
@@ -51368,80 +51370,119 @@ def tr_incluir():
         prioridade_solicitacao,
         tipo_solicitacao_objeto,
         observacao_solicitacao,
-        entidade_id_solicitacao
+        entidade_id_solicitacao,
+        unidade_administrativa_id_solicitacao,
+        setor_id_solicitacao
     ) = solicitacao
 
     # ========================================================
-    # RESPONSÁVEIS DO CADASTRO BÁSICO
+    # SETOR SOLICITANTE / UNIDADE ADMINISTRATIVA
     # ========================================================
 
-    responsaveis_cadastro = _sisget_fetch(
-        """
-        SELECT
-            id,
-            tipo_responsavel,
-            nome,
-            cpf,
-            cargo,
-            email,
-            telefone
-        FROM entidades_responsaveis
-        WHERE entidade_id = ?
-          AND ativo = TRUE
-        ORDER BY
-            CASE
-                WHEN tipo_responsavel = 'GESTOR' THEN 1
-                WHEN tipo_responsavel = 'AUTORIDADE' THEN 2
-                WHEN tipo_responsavel = 'AUTORIZADOR' THEN 3
-                ELSE 9
-            END,
-            nome
-        """,
-        (entidade_id_solicitacao,)
-    )
+    setor_solicitante = None
 
-    mapa_responsaveis = {}
-    gestor_padrao = None
+    if setor_id_solicitacao:
 
-    for (
-        responsavel_id,
-        tipo_responsavel,
-        nome_responsavel,
-        cpf_responsavel,
-        cargo_responsavel,
-        email_responsavel,
-        telefone_responsavel
-    ) in responsaveis_cadastro:
+        setor_solicitante = _sisget_fetchone(
+            """
+            SELECT
+                s.codigo,
+                s.nome,
+                COALESCE(
+                    s.sigla,
+                    ''
+                ),
+                a.codigo,
+                a.nome
 
-        partes = [
-            str(nome_responsavel or "").strip()
-        ]
+            FROM setores s
 
-        if cargo_responsavel:
-            partes.append(str(cargo_responsavel).strip())
+            INNER JOIN unidades_administrativas a
+                ON a.id = s.unidade_administrativa_id
 
-        if tipo_responsavel:
-            partes.append(str(tipo_responsavel).strip())
-
-        rotulo_responsavel = " | ".join(
-            parte for parte in partes if parte
+            WHERE s.id = ?
+            """,
+            (
+                setor_id_solicitacao,
+            )
         )
 
-        mapa_responsaveis[rotulo_responsavel] = {
-            "id": responsavel_id,
-            "tipo": tipo_responsavel,
-            "nome": nome_responsavel or "",
-            "cpf": cpf_responsavel or "",
-            "cargo": cargo_responsavel or "",
-            "email": email_responsavel or "",
-            "telefone": telefone_responsavel or ""
-        }
+    if setor_solicitante:
 
-        if (
-            gestor_padrao is None
-            and str(tipo_responsavel or "").strip().upper() == "GESTOR"
-        ):
-            gestor_padrao = rotulo_responsavel
+        (
+            setor_codigo,
+            setor_nome,
+            setor_sigla,
+            ua_codigo_setor,
+            ua_nome_setor
+        ) = setor_solicitante
+
+    else:
+
+        setor_codigo = ""
+        setor_nome = ""
+        setor_sigla = ""
+
+        unidade_solicitante = _sisget_fetchone(
+            """
+            SELECT
+                codigo,
+                nome
+
+            FROM unidades_administrativas
+
+            WHERE id = ?
+            """,
+            (
+                unidade_administrativa_id_solicitacao,
+            )
+        )
+
+        if unidade_solicitante:
+
+            (
+                ua_codigo_setor,
+                ua_nome_setor
+            ) = unidade_solicitante
+
+        else:
+
+            ua_codigo_setor = ""
+            ua_nome_setor = ""
+
+    rotulo_setor_solicitante = (
+        (
+            f"{setor_codigo} - {setor_nome}"
+            if setor_codigo
+            else str(
+                setor_nome
+                or ""
+            )
+        )
+    )
+
+    if setor_sigla:
+
+        rotulo_setor_solicitante += (
+            f" ({setor_sigla})"
+        )
+
+    if not rotulo_setor_solicitante:
+
+        rotulo_setor_solicitante = (
+            "Sem setor específico informado na solicitação"
+        )
+
+    rotulo_unidade_solicitante = (
+        (
+            f"{ua_codigo_setor} - {ua_nome_setor}"
+            if ua_codigo_setor
+            else str(
+                ua_nome_setor
+                or ""
+            )
+        )
+    )
 
     dfd = _sisget_fetchone(
         """
@@ -51900,60 +51941,52 @@ def tr_incluir():
         st.markdown("### 6. Gestão e Fiscalização")
 
         st.caption(
-            "Os responsáveis abaixo são carregados do Cadastro Básico da Entidade."
+            "O setor abaixo é o setor solicitante definido na própria Solicitação."
         )
-
-        opcoes_responsaveis = ["Não definido"] + list(mapa_responsaveis.keys())
-
-        indice_gestor = 0
-        if gestor_padrao in opcoes_responsaveis:
-            indice_gestor = opcoes_responsaveis.index(gestor_padrao)
 
         gf1, gf2 = st.columns(2)
 
-        gestor_previsto = gf1.selectbox(
-            "Gestor responsável *",
-            opcoes_responsaveis,
-            index=indice_gestor
+        gf1.text_input(
+            "Setor Solicitante",
+            value=rotulo_setor_solicitante,
+            disabled=True
         )
 
-        fiscal_previsto = gf2.selectbox(
-            "Fiscal responsável",
-            opcoes_responsaveis,
-            index=0
+        gf2.text_input(
+            "Unidade Administrativa",
+            value=rotulo_unidade_solicitante,
+            disabled=True
         )
 
-        if gestor_previsto != "Não definido":
-            dados_gestor = mapa_responsaveis.get(gestor_previsto, {})
+        if setor_id_solicitacao:
+
             st.info(
-                f"👤 Gestor: {dados_gestor.get('nome', '-')} | "
-                f"Cargo: {dados_gestor.get('cargo', '-') or '-'} | "
-                f"CPF: {dados_gestor.get('cpf', '-') or '-'} | "
-                f"E-mail: {dados_gestor.get('email', '-') or '-'}"
+                f"🏢 A gestão e o acompanhamento desta contratação "
+                f"ficarão vinculados ao setor solicitante: "
+                f"{rotulo_setor_solicitante}."
             )
 
-        if fiscal_previsto != "Não definido":
-            dados_fiscal = mapa_responsaveis.get(fiscal_previsto, {})
-            st.info(
-                f"🔎 Fiscal: {dados_fiscal.get('nome', '-')} | "
-                f"Cargo: {dados_fiscal.get('cargo', '-') or '-'} | "
-                f"CPF: {dados_fiscal.get('cpf', '-') or '-'} | "
-                f"E-mail: {dados_fiscal.get('email', '-') or '-'}"
-            )
+        else:
 
-        if not mapa_responsaveis:
             st.warning(
-                "⚠️ Não existem responsáveis ativos cadastrados para esta entidade no Cadastro Básico."
+                "⚠️ A solicitação não possui setor específico vinculado. "
+                "O TR ficará relacionado à Unidade Administrativa solicitante."
             )
 
         gestao = st.text_area(
             "Modelo de Gestão e Fiscalização",
             value=(
-                "A execução será acompanhada e fiscalizada pelos responsáveis designados pela Administração, "
-                "com registro das ocorrências, verificação do cumprimento das obrigações, controle dos prazos, "
-                "atestação do recebimento e comunicação formal de eventuais irregularidades."
+                f"A gestão e a fiscalização da contratação serão acompanhadas "
+                f"pelo setor solicitante {rotulo_setor_solicitante}, "
+                f"vinculado à Unidade Administrativa "
+                f"{rotulo_unidade_solicitante or '-'}, "
+                "observando as atribuições definidas pela Administração. "
+                "O setor deverá acompanhar a execução, registrar ocorrências, "
+                "verificar o cumprimento das obrigações, controlar prazos, "
+                "atestar o recebimento e comunicar formalmente eventuais "
+                "irregularidades."
             ),
-            height=180
+            height=190
         )
 
         st.markdown("### 7. Medição, Recebimento e Pagamento")
@@ -52155,12 +52188,6 @@ def tr_incluir():
         )
         return
 
-    if mapa_responsaveis and gestor_previsto == "Não definido":
-        st.warning(
-            "⚠️ Selecione o gestor responsável cadastrado no Cadastro Básico."
-        )
-        return
-
     if not confirmar:
         st.warning("⚠️ Confirme a revisão do Termo de Referência.")
         return
@@ -52182,42 +52209,19 @@ def tr_incluir():
         f"Impactos / providências:\n{impactos}" if _texto(impactos) else ""
     )
 
-    dados_gestor_salvar = (
-        mapa_responsaveis.get(gestor_previsto, {})
-        if gestor_previsto != "Não definido"
-        else {}
-    )
-
-    dados_fiscal_salvar = (
-        mapa_responsaveis.get(fiscal_previsto, {})
-        if fiscal_previsto != "Não definido"
-        else {}
-    )
-
-    texto_gestor = ""
-    if dados_gestor_salvar:
-        texto_gestor = (
-            f"Gestor responsável: {dados_gestor_salvar.get('nome', '')}; "
-            f"Cargo: {dados_gestor_salvar.get('cargo', '') or '-'}; "
-            f"CPF: {dados_gestor_salvar.get('cpf', '') or '-'}; "
-            f"E-mail: {dados_gestor_salvar.get('email', '') or '-'}; "
-            f"Telefone: {dados_gestor_salvar.get('telefone', '') or '-'}."
-        )
-
-    texto_fiscal = ""
-    if dados_fiscal_salvar:
-        texto_fiscal = (
-            f"Fiscal responsável: {dados_fiscal_salvar.get('nome', '')}; "
-            f"Cargo: {dados_fiscal_salvar.get('cargo', '') or '-'}; "
-            f"CPF: {dados_fiscal_salvar.get('cpf', '') or '-'}; "
-            f"E-mail: {dados_fiscal_salvar.get('email', '') or '-'}; "
-            f"Telefone: {dados_fiscal_salvar.get('telefone', '') or '-'}."
-        )
-
     gestao_salvar = _juntar_blocos(
         gestao,
-        texto_gestor,
-        texto_fiscal
+        (
+            f"Setor solicitante: {rotulo_setor_solicitante}."
+        ),
+        (
+            f"Unidade Administrativa solicitante: "
+            f"{rotulo_unidade_solicitante}."
+            if _texto(
+                rotulo_unidade_solicitante
+            )
+            else ""
+        )
     )
 
     pagamento_salvar = _juntar_blocos(
@@ -52316,6 +52320,7 @@ def tr_incluir():
         st.session_state["sisget_tela_solicitacoes_tr"] = "principal"
         st.session_state["sisget_id_solicitacoes_tr"] = None
         st.rerun()
+
 
 
 def tr_localizar():
