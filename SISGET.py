@@ -51927,10 +51927,47 @@ def tr_incluir():
         )
 
         st.markdown("### 5. Modelo de Execução")
-        e1, e2, e3 = st.columns(3)
-        prazo_execucao = e1.text_input("Prazo de execução/entrega", placeholder="Ex.: 30 dias")
-        local_execucao = e2.text_input("Local de execução/entrega")
-        vigencia = e3.text_input("Prazo de vigência", placeholder="Ex.: 12 meses")
+
+        e1, e2 = st.columns(2)
+
+        prazo_execucao = e1.text_input(
+            "Prazo de execução/entrega",
+            placeholder="Ex.: 30 dias"
+        )
+
+        local_execucao = e2.text_input(
+            "Local de execução/entrega"
+        )
+
+        v1, v2 = st.columns(
+            [1, 1]
+        )
+
+        tipo_vigencia = v1.selectbox(
+            "Unidade do prazo de vigência *",
+            [
+                "Meses",
+                "Dias"
+            ],
+            key=(
+                f"tr_tipo_vigencia_"
+                f"{solicitacao_id}_"
+                f"{reset}"
+            )
+        )
+
+        prazo_vigencia = v2.number_input(
+            "Prazo de vigência *",
+            min_value=1,
+            value=12,
+            step=1,
+            format="%d",
+            key=(
+                f"tr_prazo_vigencia_"
+                f"{solicitacao_id}_"
+                f"{reset}"
+            )
+        )
 
         execucao = st.text_area(
             "Modelo de Execução *",
@@ -52204,7 +52241,11 @@ def tr_incluir():
         execucao,
         f"Prazo de execução/entrega: {prazo_execucao}." if _texto(prazo_execucao) else "",
         f"Local de execução/entrega: {local_execucao}." if _texto(local_execucao) else "",
-        f"Prazo de vigência: {vigencia}." if _texto(vigencia) else "",
+        (
+            f"Prazo de vigência: "
+            f"{int(prazo_vigencia)} "
+            f"{'mês' if tipo_vigencia == 'Meses' and int(prazo_vigencia) == 1 else 'meses' if tipo_vigencia == 'Meses' else 'dia' if int(prazo_vigencia) == 1 else 'dias'}."
+        ),
         f"Parcelamento / formação de lotes:\n{parcelamento}" if _texto(parcelamento) else "",
         f"Impactos / providências:\n{impactos}" if _texto(impactos) else ""
     )
@@ -52320,7 +52361,6 @@ def tr_incluir():
         st.session_state["sisget_tela_solicitacoes_tr"] = "principal"
         st.session_state["sisget_id_solicitacoes_tr"] = None
         st.rerun()
-
 
 
 def tr_localizar():
