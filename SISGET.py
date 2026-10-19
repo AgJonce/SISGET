@@ -51347,7 +51347,8 @@ def tr_incluir():
             justificativa,
             prioridade,
             tipo,
-            observacao
+            observacao,
+            entidade_id
         FROM solicitacoes
         WHERE id = ?
           AND ativo = TRUE
@@ -51366,8 +51367,81 @@ def tr_incluir():
         justificativa_solicitacao,
         prioridade_solicitacao,
         tipo_solicitacao_objeto,
-        observacao_solicitacao
+        observacao_solicitacao,
+        entidade_id_solicitacao
     ) = solicitacao
+
+    # ========================================================
+    # RESPONSÁVEIS DO CADASTRO BÁSICO
+    # ========================================================
+
+    responsaveis_cadastro = _sisget_fetch(
+        """
+        SELECT
+            id,
+            tipo_responsavel,
+            nome,
+            cpf,
+            cargo,
+            email,
+            telefone
+        FROM entidades_responsaveis
+        WHERE entidade_id = ?
+          AND ativo = TRUE
+        ORDER BY
+            CASE
+                WHEN tipo_responsavel = 'GESTOR' THEN 1
+                WHEN tipo_responsavel = 'AUTORIDADE' THEN 2
+                WHEN tipo_responsavel = 'AUTORIZADOR' THEN 3
+                ELSE 9
+            END,
+            nome
+        """,
+        (entidade_id_solicitacao,)
+    )
+
+    mapa_responsaveis = {}
+    gestor_padrao = None
+
+    for (
+        responsavel_id,
+        tipo_responsavel,
+        nome_responsavel,
+        cpf_responsavel,
+        cargo_responsavel,
+        email_responsavel,
+        telefone_responsavel
+    ) in responsaveis_cadastro:
+
+        partes = [
+            str(nome_responsavel or "").strip()
+        ]
+
+        if cargo_responsavel:
+            partes.append(str(cargo_responsavel).strip())
+
+        if tipo_responsavel:
+            partes.append(str(tipo_responsavel).strip())
+
+        rotulo_responsavel = " | ".join(
+            parte for parte in partes if parte
+        )
+
+        mapa_responsaveis[rotulo_responsavel] = {
+            "id": responsavel_id,
+            "tipo": tipo_responsavel,
+            "nome": nome_responsavel or "",
+            "cpf": cpf_responsavel or "",
+            "cargo": cargo_responsavel or "",
+            "email": email_responsavel or "",
+            "telefone": telefone_responsavel or ""
+        }
+
+        if (
+            gestor_padrao is None
+            and str(tipo_responsavel or "").strip().upper() == "GESTOR"
+        ):
+            gestor_padrao = rotulo_responsavel
 
     dfd = _sisget_fetchone(
         """
@@ -51529,16 +51603,105 @@ def tr_incluir():
         reserva_financeira = 0
         parecer_financeiro = ""
 
-    ficha_total = _sisget_fetchone(
+    # ========================================================
+    # FICHAS ORÇAMENTÁRIAS VINCULADAS
+    # ========================================================
+
+    fichas_detalhes = _sisget_fetch(
         """
-        SELECT COALESCE(SUM(valor_vinculado), 0)
-        FROM solicitacoes_fichas
-        WHERE solicitacao_id = ?
+        SELECT
+            f.id,
+            f.exercicio,
+            f.numero_ficha,
+            COALESCE(f.descricao, ''),
+            COALESCE(u.codigo, ''),
+            COALESCE(u.nome, ''),
+            COALESCE(f.funcao, ''),
+            COALESCE(f.subfuncao, ''),
+            COALESCE(f.programa, ''),
+            COALESCE(f.acao, ''),
+            COALESCE(f.natureza_despesa, ''),
+            COALESCE(fr.codigo, ''),
+            COALESCE(SUM(sf.valor_vinculado), 0),
+            COALESCE(f.valor_atual, 0),
+            COALESCE(f.valor_reservado, 0)
+        FROM solicitacoes_fichas sf
+        INNER JOIN fichas_orcamentarias f
+            ON f.id = sf.ficha_orcamentaria_id
+        INNER JOIN unidades_orcamentarias u
+            ON u.id = f.unidade_orcamentaria_id
+        LEFT JOIN fontes_recursos fr
+            ON fr.id = f.fonte_recurso_id
+        WHERE sf.solicitacao_id = ?
+        GROUP BY
+            f.id,
+            f.exercicio,
+            f.numero_ficha,
+            f.descricao,
+            u.codigo,
+            u.nome,
+            f.funcao,
+            f.subfuncao,
+            f.programa,
+            f.acao,
+            f.natureza_despesa,
+            fr.codigo,
+            f.valor_atual,
+            f.valor_reservado
+        ORDER BY
+            f.exercicio DESC,
+            f.numero_ficha
         """,
         (solicitacao_id,)
     )
 
-    valor_fichas = float((ficha_total[0] if ficha_total else 0) or 0)
+    valor_fichas = sum(
+        float(ficha[12] or 0)
+        for ficha in fichas_detalhes
+    )
+
+    linhas_fichas_adequacao = []
+
+    for ficha in fichas_detalhes:
+        (
+            ficha_id,
+            ficha_exercicio,
+            ficha_numero,
+            ficha_descricao,
+            uo_codigo,
+            uo_nome,
+            ficha_funcao,
+            ficha_subfuncao,
+            ficha_programa,
+            ficha_acao,
+            ficha_natureza,
+            ficha_fonte,
+            ficha_valor_vinculado,
+            ficha_valor_atual,
+            ficha_valor_reservado
+        ) = ficha
+
+        classificacao = ".".join(
+            parte
+            for parte in [
+                str(ficha_funcao or "").strip(),
+                str(ficha_subfuncao or "").strip(),
+                str(ficha_programa or "").strip(),
+                str(ficha_acao or "").strip()
+            ]
+            if parte
+        )
+
+        linhas_fichas_adequacao.append(
+            _juntar_blocos(
+                f"Ficha {ficha_numero} / {ficha_exercicio} - {ficha_descricao or 'Sem descrição'}",
+                f"Unidade Orçamentária: {uo_codigo} - {uo_nome}",
+                f"Classificação Funcional/Programática: {classificacao or '-'}",
+                f"Natureza da Despesa: {ficha_natureza or '-'}",
+                f"Fonte de Recurso: {ficha_fonte or '-'}",
+                f"Valor vinculado nesta solicitação: {_moeda(ficha_valor_vinculado)}"
+            )
+        )
 
     itens = _sisget_fetch(
         """
@@ -51650,7 +51813,9 @@ def tr_incluir():
     )
 
     adequacao_base = _juntar_blocos(
-        f"Valor vinculado às fichas orçamentárias: {_moeda(valor_fichas)}.",
+        "DOTAÇÃO(ÕES) ORÇAMENTÁRIA(S) VINCULADA(S):",
+        "\n\n".join(linhas_fichas_adequacao),
+        f"Total vinculado às fichas orçamentárias: {_moeda(valor_fichas)}.",
         f"Valor validado pelo Financeiro: {_moeda(valor_validado_financeiro)}.",
         f"Cota financeira: {_moeda(cota_financeira)}." if float(cota_financeira or 0) > 0 else "",
         f"Reserva financeira: {_moeda(reserva_financeira)}." if float(reserva_financeira or 0) > 0 else "",
@@ -51733,13 +51898,62 @@ def tr_incluir():
         )
 
         st.markdown("### 6. Gestão e Fiscalização")
+
+        st.caption(
+            "Os responsáveis abaixo são carregados do Cadastro Básico da Entidade."
+        )
+
+        opcoes_responsaveis = ["Não definido"] + list(mapa_responsaveis.keys())
+
+        indice_gestor = 0
+        if gestor_padrao in opcoes_responsaveis:
+            indice_gestor = opcoes_responsaveis.index(gestor_padrao)
+
         gf1, gf2 = st.columns(2)
-        gestor_previsto = gf1.text_input("Gestor responsável / unidade gestora")
-        fiscal_previsto = gf2.text_input("Fiscal responsável / unidade fiscalizadora")
+
+        gestor_previsto = gf1.selectbox(
+            "Gestor responsável *",
+            opcoes_responsaveis,
+            index=indice_gestor
+        )
+
+        fiscal_previsto = gf2.selectbox(
+            "Fiscal responsável",
+            opcoes_responsaveis,
+            index=0
+        )
+
+        if gestor_previsto != "Não definido":
+            dados_gestor = mapa_responsaveis.get(gestor_previsto, {})
+            st.info(
+                f"👤 Gestor: {dados_gestor.get('nome', '-')} | "
+                f"Cargo: {dados_gestor.get('cargo', '-') or '-'} | "
+                f"CPF: {dados_gestor.get('cpf', '-') or '-'} | "
+                f"E-mail: {dados_gestor.get('email', '-') or '-'}"
+            )
+
+        if fiscal_previsto != "Não definido":
+            dados_fiscal = mapa_responsaveis.get(fiscal_previsto, {})
+            st.info(
+                f"🔎 Fiscal: {dados_fiscal.get('nome', '-')} | "
+                f"Cargo: {dados_fiscal.get('cargo', '-') or '-'} | "
+                f"CPF: {dados_fiscal.get('cpf', '-') or '-'} | "
+                f"E-mail: {dados_fiscal.get('email', '-') or '-'}"
+            )
+
+        if not mapa_responsaveis:
+            st.warning(
+                "⚠️ Não existem responsáveis ativos cadastrados para esta entidade no Cadastro Básico."
+            )
+
         gestao = st.text_area(
             "Modelo de Gestão e Fiscalização",
-            height=160,
-            placeholder="Defina rotinas de acompanhamento, registros, comunicação, fiscalização e recebimento."
+            value=(
+                "A execução será acompanhada e fiscalizada pelos responsáveis designados pela Administração, "
+                "com registro das ocorrências, verificação do cumprimento das obrigações, controle dos prazos, "
+                "atestação do recebimento e comunicação formal de eventuais irregularidades."
+            ),
+            height=180
         )
 
         st.markdown("### 7. Medição, Recebimento e Pagamento")
@@ -51791,10 +52005,66 @@ def tr_incluir():
         )
 
         st.markdown("### 10. Adequação Orçamentária")
+
+        if fichas_detalhes:
+            st.caption(
+                "Informações carregadas das fichas orçamentárias vinculadas à solicitação."
+            )
+
+            for ficha in fichas_detalhes:
+                (
+                    ficha_id,
+                    ficha_exercicio,
+                    ficha_numero,
+                    ficha_descricao,
+                    uo_codigo,
+                    uo_nome,
+                    ficha_funcao,
+                    ficha_subfuncao,
+                    ficha_programa,
+                    ficha_acao,
+                    ficha_natureza,
+                    ficha_fonte,
+                    ficha_valor_vinculado,
+                    ficha_valor_atual,
+                    ficha_valor_reservado
+                ) = ficha
+
+                classificacao = ".".join(
+                    parte
+                    for parte in [
+                        str(ficha_funcao or "").strip(),
+                        str(ficha_subfuncao or "").strip(),
+                        str(ficha_programa or "").strip(),
+                        str(ficha_acao or "").strip()
+                    ]
+                    if parte
+                )
+
+                st.markdown(
+                    f"**Ficha {ficha_numero}/{ficha_exercicio} - {ficha_descricao or 'Sem descrição'}**"
+                )
+                st.caption(
+                    f"UO: {uo_codigo} - {uo_nome} | "
+                    f"Classificação: {classificacao or '-'} | "
+                    f"Natureza: {ficha_natureza or '-'} | "
+                    f"Fonte: {ficha_fonte or '-'}"
+                )
+
+                fc1, fc2, fc3 = st.columns(3)
+                fc1.metric("Vinculado", _moeda(ficha_valor_vinculado))
+                fc2.metric("Valor Atual da Ficha", _moeda(ficha_valor_atual))
+                fc3.metric("Reservado na Ficha", _moeda(ficha_valor_reservado))
+
+        else:
+            st.warning(
+                "⚠️ Nenhuma ficha orçamentária vinculada foi encontrada para esta solicitação."
+            )
+
         adequacao = st.text_area(
             "Adequação Orçamentária",
             value=adequacao_base,
-            height=180
+            height=260
         )
 
         st.markdown("### 11. Obrigações da Contratada")
@@ -51885,6 +52155,12 @@ def tr_incluir():
         )
         return
 
+    if mapa_responsaveis and gestor_previsto == "Não definido":
+        st.warning(
+            "⚠️ Selecione o gestor responsável cadastrado no Cadastro Básico."
+        )
+        return
+
     if not confirmar:
         st.warning("⚠️ Confirme a revisão do Termo de Referência.")
         return
@@ -51906,10 +52182,42 @@ def tr_incluir():
         f"Impactos / providências:\n{impactos}" if _texto(impactos) else ""
     )
 
+    dados_gestor_salvar = (
+        mapa_responsaveis.get(gestor_previsto, {})
+        if gestor_previsto != "Não definido"
+        else {}
+    )
+
+    dados_fiscal_salvar = (
+        mapa_responsaveis.get(fiscal_previsto, {})
+        if fiscal_previsto != "Não definido"
+        else {}
+    )
+
+    texto_gestor = ""
+    if dados_gestor_salvar:
+        texto_gestor = (
+            f"Gestor responsável: {dados_gestor_salvar.get('nome', '')}; "
+            f"Cargo: {dados_gestor_salvar.get('cargo', '') or '-'}; "
+            f"CPF: {dados_gestor_salvar.get('cpf', '') or '-'}; "
+            f"E-mail: {dados_gestor_salvar.get('email', '') or '-'}; "
+            f"Telefone: {dados_gestor_salvar.get('telefone', '') or '-'}."
+        )
+
+    texto_fiscal = ""
+    if dados_fiscal_salvar:
+        texto_fiscal = (
+            f"Fiscal responsável: {dados_fiscal_salvar.get('nome', '')}; "
+            f"Cargo: {dados_fiscal_salvar.get('cargo', '') or '-'}; "
+            f"CPF: {dados_fiscal_salvar.get('cpf', '') or '-'}; "
+            f"E-mail: {dados_fiscal_salvar.get('email', '') or '-'}; "
+            f"Telefone: {dados_fiscal_salvar.get('telefone', '') or '-'}."
+        )
+
     gestao_salvar = _juntar_blocos(
         gestao,
-        f"Gestor / unidade gestora: {gestor_previsto}." if _texto(gestor_previsto) else "",
-        f"Fiscal / unidade fiscalizadora: {fiscal_previsto}." if _texto(fiscal_previsto) else ""
+        texto_gestor,
+        texto_fiscal
     )
 
     pagamento_salvar = _juntar_blocos(
