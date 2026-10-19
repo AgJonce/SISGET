@@ -50237,7 +50237,8 @@ def enquadramento_incluir():
 
     grupos = [
         "Licitação",
-        "Contratação sem nova licitação"
+        "Dispensa",
+        "Adesão"
     ]
 
     grupo_processo = st.selectbox(
@@ -50462,24 +50463,28 @@ def enquadramento_incluir():
 
 
     # ========================================================
-    # CONTRATAÇÃO SEM NOVA LICITAÇÃO
+    # DISPENSA / CONTRATAÇÃO DIRETA
+    #
+    # NESTE GRUPO FICAM:
+    # - DISPENSA
+    # - INEXIGIBILIDADE
+    # - CHAMAMENTO / CREDENCIAMENTO
     # ========================================================
 
-    else:
+    elif grupo_processo == "Dispensa":
 
         tipo_processo = "Contratação Direta"
 
         subprocedimentos = [
-            "Dispensa sem adesão - Por valor",
-            "Dispensa sem adesão - Emergência/Calamidade",
-            "Dispensa sem adesão - Outra hipótese do art. 75",
+            "Dispensa - Por valor",
+            "Dispensa - Emergência/Calamidade",
+            "Dispensa - Outra hipótese do art. 75",
             "Inexigibilidade",
-            "Adesão à Ata de Registro de Preços",
             "Chamamento Público / Credenciamento"
         ]
 
         modalidade = st.selectbox(
-            "Tipo de contratação sem nova licitação *",
+            "Tipo de Dispensa / Contratação Direta *",
             subprocedimentos,
             index=0,
             key=f"enquadramento_subprocedimento_{solicitacao_id}_{reset}"
@@ -50508,7 +50513,7 @@ def enquadramento_incluir():
         # DISPENSA POR VALOR
         # ----------------------------------------------------
 
-        if modalidade == "Dispensa sem adesão - Por valor":
+        if modalidade == "Dispensa - Por valor":
 
             engenharia = (
                 "obra" in categoria_objeto.lower()
@@ -50543,19 +50548,22 @@ def enquadramento_incluir():
             )
 
             if float(valor_referencia or 0) >= limite:
+
                 st.error(
-                    "❌ O valor informado não se enquadra, por si só, na dispensa por valor deste inciso em 2026."
+                    "❌ O valor informado não se enquadra, por si só, "
+                    "na dispensa por valor deste inciso em 2026."
                 )
 
             st.warning(
-                "⚠️ Verifique o art. 75, § 1º, o somatório aplicável e a vedação ao fracionamento indevido."
+                "⚠️ Verifique o art. 75, § 1º, o somatório aplicável "
+                "e a vedação ao fracionamento indevido."
             )
 
         # ----------------------------------------------------
         # DISPENSA EMERGENCIAL
         # ----------------------------------------------------
 
-        elif modalidade == "Dispensa sem adesão - Emergência/Calamidade":
+        elif modalidade == "Dispensa - Emergência/Calamidade":
 
             criterio = st.selectbox(
                 "Critério para seleção da proposta *",
@@ -50572,14 +50580,15 @@ def enquadramento_incluir():
             )
 
             st.warning(
-                "⚠️ A motivação deve demonstrar a emergência, o risco concreto e limitar objeto/prazo ao estritamente necessário."
+                "⚠️ A motivação deve demonstrar a emergência, "
+                "o risco concreto e limitar objeto/prazo ao estritamente necessário."
             )
 
         # ----------------------------------------------------
-        # OUTRA DISPENSA
+        # OUTRAS HIPÓTESES DO ART. 75
         # ----------------------------------------------------
 
-        elif modalidade == "Dispensa sem adesão - Outra hipótese do art. 75":
+        elif modalidade == "Dispensa - Outra hipótese do art. 75":
 
             criterio = st.selectbox(
                 "Critério para seleção da proposta *",
@@ -50630,76 +50639,6 @@ def enquadramento_incluir():
             )
 
         # ----------------------------------------------------
-        # ADESÃO À ARP
-        # ----------------------------------------------------
-
-        elif modalidade == "Adesão à Ata de Registro de Preços":
-
-            criterio = "Não se aplica como critério licitatório"
-            modo = "Não se aplica"
-            forma = "Adesão à ARP"
-
-            a1, a2 = st.columns(2)
-
-            orgao_gerenciador = a1.text_input(
-                "Órgão gerenciador da Ata *",
-                key=f"enquadramento_ata_orgao_{solicitacao_id}_{reset}"
-            )
-
-            numero_ata = a2.text_input(
-                "Número da Ata *",
-                key=f"enquadramento_ata_numero_{solicitacao_id}_{reset}"
-            )
-
-            a3, a4 = st.columns(2)
-
-            processo_origem = a3.text_input(
-                "Processo / Licitação de origem *",
-                key=f"enquadramento_ata_processo_{solicitacao_id}_{reset}"
-            )
-
-            fornecedor_ata = a4.text_input(
-                "Fornecedor registrado *",
-                key=f"enquadramento_ata_fornecedor_{solicitacao_id}_{reset}"
-            )
-
-            justificativa_vantagem = st.text_area(
-                "Justificativa da vantagem da adesão *",
-                height=100,
-                key=f"enquadramento_ata_vantagem_{solicitacao_id}_{reset}"
-            )
-
-            anuencia_gerenciador = st.checkbox(
-                "Há anuência do órgão gerenciador?",
-                key=f"enquadramento_ata_anuencia_orgao_{solicitacao_id}_{reset}"
-            )
-
-            anuencia_fornecedor = st.checkbox(
-                "Há aceitação/anuência do fornecedor?",
-                key=f"enquadramento_ata_anuencia_fornecedor_{solicitacao_id}_{reset}"
-            )
-
-            compatibilidade_precos = st.checkbox(
-                "Foi demonstrada compatibilidade/vantajosidade dos preços da ata?",
-                key=f"enquadramento_ata_precos_{solicitacao_id}_{reset}"
-            )
-
-            detalhes_adesao = [
-                f"Órgão gerenciador: {orgao_gerenciador}",
-                f"Ata: {numero_ata}",
-                f"Processo de origem: {processo_origem}",
-                f"Fornecedor: {fornecedor_ata}",
-                f"Anuência do gerenciador: {'Sim' if anuencia_gerenciador else 'Não'}",
-                f"Anuência do fornecedor: {'Sim' if anuencia_fornecedor else 'Não'}",
-                f"Compatibilidade/vantajosidade dos preços: {'Sim' if compatibilidade_precos else 'Não'}",
-                f"Justificativa da vantagem: {justificativa_vantagem.strip()}"
-            ]
-
-            fundamento_legal = (
-                "Lei nº 14.133/2021, art. 86, especialmente §§ 2º e seguintes."
-            )
-
-        # ----------------------------------------------------
         # CHAMAMENTO / CREDENCIAMENTO
         # ----------------------------------------------------
 
@@ -50727,9 +50666,10 @@ def enquadramento_incluir():
             )
 
             st.info(
-                "ℹ️ No credenciamento, a lógica não é escolher um vencedor único por menor preço, mas habilitar interessados conforme condições objetivas e a hipótese legal aplicável."
+                "ℹ️ No credenciamento, a lógica não é escolher um vencedor único "
+                "por menor preço, mas habilitar interessados conforme condições "
+                "objetivas e a hipótese legal aplicável."
             )
-
 
         st.text_input(
             "Fundamento Legal",
@@ -50738,6 +50678,96 @@ def enquadramento_incluir():
             key=f"enquadramento_fundamento_direta_{solicitacao_id}_{reset}_{modalidade}"
         )
 
+
+    # ========================================================
+    # ADESÃO À ATA DE REGISTRO DE PREÇOS
+    # ========================================================
+
+    else:
+
+        tipo_processo = "Adesão à Ata de Registro de Preços"
+        modalidade = "Adesão à Ata de Registro de Preços"
+        criterio = "Não se aplica como critério licitatório"
+        modo = "Não se aplica"
+        forma = "Adesão à ARP"
+        srp = True
+
+        natureza_objeto = st.text_input(
+            "Natureza / Característica do Objeto *",
+            value=categoria_objeto,
+            key=f"enquadramento_natureza_adesao_{solicitacao_id}_{reset}"
+        )
+
+        st.markdown(
+            "### 📑 Adesão à Ata de Registro de Preços"
+        )
+
+        a1, a2 = st.columns(2)
+
+        orgao_gerenciador = a1.text_input(
+            "Órgão gerenciador da Ata *",
+            key=f"enquadramento_ata_orgao_{solicitacao_id}_{reset}"
+        )
+
+        numero_ata = a2.text_input(
+            "Número da Ata *",
+            key=f"enquadramento_ata_numero_{solicitacao_id}_{reset}"
+        )
+
+        a3, a4 = st.columns(2)
+
+        processo_origem = a3.text_input(
+            "Processo / Licitação de origem *",
+            key=f"enquadramento_ata_processo_{solicitacao_id}_{reset}"
+        )
+
+        fornecedor_ata = a4.text_input(
+            "Fornecedor registrado *",
+            key=f"enquadramento_ata_fornecedor_{solicitacao_id}_{reset}"
+        )
+
+        justificativa_vantagem = st.text_area(
+            "Justificativa da vantagem da adesão *",
+            height=100,
+            key=f"enquadramento_ata_vantagem_{solicitacao_id}_{reset}"
+        )
+
+        anuencia_gerenciador = st.checkbox(
+            "Há anuência do órgão gerenciador?",
+            key=f"enquadramento_ata_anuencia_orgao_{solicitacao_id}_{reset}"
+        )
+
+        anuencia_fornecedor = st.checkbox(
+            "Há aceitação/anuência do fornecedor?",
+            key=f"enquadramento_ata_anuencia_fornecedor_{solicitacao_id}_{reset}"
+        )
+
+        compatibilidade_precos = st.checkbox(
+            "Foi demonstrada compatibilidade/vantajosidade dos preços da ata?",
+            key=f"enquadramento_ata_precos_{solicitacao_id}_{reset}"
+        )
+
+        detalhes_adesao = [
+            f"Órgão gerenciador: {orgao_gerenciador}",
+            f"Ata: {numero_ata}",
+            f"Processo de origem: {processo_origem}",
+            f"Fornecedor: {fornecedor_ata}",
+            f"Anuência do gerenciador: {'Sim' if anuencia_gerenciador else 'Não'}",
+            f"Anuência do fornecedor: {'Sim' if anuencia_fornecedor else 'Não'}",
+            f"Compatibilidade/vantajosidade dos preços: {'Sim' if compatibilidade_precos else 'Não'}",
+            f"Justificativa da vantagem: {justificativa_vantagem.strip()}"
+        ]
+
+        fundamento_legal = (
+            "Lei nº 14.133/2021, art. 86, especialmente §§ 2º e seguintes."
+        )
+
+        st.text_input(
+            "Fundamento Legal",
+            value=fundamento_legal,
+            disabled=True,
+            key=f"enquadramento_fundamento_adesao_{solicitacao_id}_{reset}"
+        )
 
     # ========================================================
     # JUSTIFICATIVA / RESUMO
@@ -50805,7 +50835,7 @@ def enquadramento_incluir():
 
     if (
         modalidade in (
-            "Dispensa sem adesão - Outra hipótese do art. 75",
+            "Dispensa - Outra hipótese do art. 75",
             "Inexigibilidade"
         )
         and not hipotese_legal.strip()
@@ -50814,6 +50844,41 @@ def enquadramento_incluir():
             "⚠️ Informe o inciso/alínea ou fundamento legal específico."
         )
         return
+
+    if grupo_processo == "Adesão":
+
+        if not orgao_gerenciador.strip():
+            st.warning("⚠️ Informe o órgão gerenciador da Ata.")
+            return
+
+        if not numero_ata.strip():
+            st.warning("⚠️ Informe o número da Ata.")
+            return
+
+        if not processo_origem.strip():
+            st.warning("⚠️ Informe o processo/licitação de origem da Ata.")
+            return
+
+        if not fornecedor_ata.strip():
+            st.warning("⚠️ Informe o fornecedor registrado na Ata.")
+            return
+
+        if not justificativa_vantagem.strip():
+            st.warning("⚠️ Informe a justificativa da vantagem da adesão.")
+            return
+
+        if not anuencia_gerenciador:
+            st.warning("⚠️ Confirme a anuência do órgão gerenciador.")
+            return
+
+        if not anuencia_fornecedor:
+            st.warning("⚠️ Confirme a aceitação/anuência do fornecedor.")
+            return
+
+        if not compatibilidade_precos:
+            st.warning("⚠️ Confirme a compatibilidade/vantajosidade dos preços da Ata.")
+            return
+
 
     if (
         criterio == "Técnica e preço"
