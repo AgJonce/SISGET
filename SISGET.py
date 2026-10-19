@@ -1,6 +1,8 @@
 # ============================================================
 # IMPORTS
 # ============================================================
+
+import hashlib
 import requests
 import re
 import os
@@ -25376,455 +25378,85 @@ def planejamento_relatorios():
     )
 
 
-# ============================================================
-# SISCOM
-# ============================================================
-# ============================================================
-# SISGET - SISCOM
-# 📁 ABRIR PROCESSO
-# BOTÕES COM ÍCONES
-# ============================================================
-#
-# ➕ Inserir
-# 🔎 Localizar
-# 🗑️ Excluir
-# ↩️ Estornar
-# 🖨️ Imprimir
-# 📄 Parecer
-# 👥 Comissão
-# 👤 Responsáveis
-# 📣 Publicação
-# 🏛️ TCE
-#
-# Esta def é a tela principal do cadastro de processos.
-# Ela chama as rotinas completas já criadas para cada ação.
-# ============================================================
-
-
-def cadastro_siscom_processos():
+def modulo_siscom():
 
     # ========================================================
-    # PREPARAR ESTRUTURA
-    # ========================================================
-
-    if not siscom_proc_preparar_estrutura():
-
-        return
-
-
-    # ========================================================
-    # CHAVES DA TELA
-    # ========================================================
-
-    chave_tela = "sisget_tela_siscom_processos"
-
-    chave_id = "sisget_id_siscom_processos"
-
-
-    # ========================================================
-    # SESSION STATE
-    # ========================================================
-
-    if chave_tela not in st.session_state:
-
-        st.session_state[
-            chave_tela
-        ] = "principal"
-
-
-    if chave_id not in st.session_state:
-
-        st.session_state[
-            chave_id
-        ] = None
-
-
-    tela = st.session_state[
-        chave_tela
-    ]
-
-
-    # ========================================================
-    # TÍTULO
+    # SISCOM - LICITAÇÕES E COMPRAS
+    # DEF PRINCIPAL
+    #
+    # IMPORTANTE:
+    # - Esta def não cria nem altera tabelas.
+    # - Todos os CREATE / ALTER ficam no TXT do Supabase.
+    # - Cada opção chama uma def inteira e separada.
     # ========================================================
 
     st.title(
-        "📁 Abrir Processo"
+        "🛒 SISCOM - Licitações e Compras"
     )
-
 
     st.caption(
         (
-            "Cadastro de Licitação / Processo Administrativo "
-            "do módulo SISCOM."
+            "Processo licitatório completo: Cadastro de Licitação, "
+            "publicação, licitantes, sessão eletrônica ou presencial, "
+            "avaliação, julgamento e liberação para compra."
         )
     )
 
+    st.divider()
 
-    # ========================================================
-    # TELA PRINCIPAL
-    # ========================================================
-
-    if tela == "principal":
-
-        st.markdown(
-            "---"
-        )
-
-
-        # ====================================================
-        # PRIMEIRA LINHA DE BOTÕES
-        # ====================================================
-
-        botoes_linha_1 = [
-
-            (
-                "➕ Inserir",
-                "inserir",
-                True
-            ),
-
-            (
-                "🔎 Localizar",
-                "localizar",
-                False
-            ),
-
-            (
-                "🗑️ Excluir",
-                "excluir",
-                False
-            ),
-
-            (
-                "↩️ Estornar",
-                "estornar",
-                False
-            ),
-
-            (
-                "🖨️ Imprimir",
-                "imprimir",
-                False
-            )
-        ]
-
-
-        colunas = st.columns(
-            len(
-                botoes_linha_1
-            )
-        )
-
-
-        for indice, (
-            texto,
-            destino,
-            primario
-        ) in enumerate(
-            botoes_linha_1
-        ):
-
-            with colunas[
-                indice
-            ]:
-
-                if st.button(
-                    texto,
-                    key=(
-                        f"siscom_processo_"
-                        f"{destino}"
-                    ),
-                    use_container_width=True,
-                    type=(
-                        "primary"
-                        if primario
-                        else "secondary"
-                    )
-                ):
-
-                    st.session_state[
-                        chave_id
-                    ] = None
-
-                    st.session_state[
-                        chave_tela
-                    ] = destino
+    modulo = st.selectbox(
+        "SISCOM *",
+        [
+            "📊 Processos",
+            "📁 Abrir Processo",
+            "📣 Publicação / Sessão",
+            "🏢 Licitantes",
+            "🌐 Plataforma Eletrônica",
+            "🏛️ Sessão Presencial",
+            "🧠 Avaliação Técnica / Econômica",
+            "⚖️ Julgamento",
+            "🛒 Liberação para Compra"
+        ],
+        key="siscom_modulo"
+    )
 
-                    st.rerun()
+    st.divider()
 
+    if modulo == "📊 Processos":
 
-        st.write(
-            ""
-        )
+        siscom_modulo_processos()
 
+    elif modulo == "📁 Abrir Processo":
 
-        # ====================================================
-        # SEGUNDA LINHA DE BOTÕES
-        # ====================================================
+        cadastro_siscom_processos()
 
-        botoes_linha_2 = [
+    elif modulo == "📣 Publicação / Sessão":
 
-            (
-                "📄 Parecer",
-                "parecer"
-            ),
+        siscom_modulo_publicacao_sessao()
 
-            (
-                "👥 Comissão",
-                "comissao"
-            ),
+    elif modulo == "🏢 Licitantes":
 
-            (
-                "👤 Responsáveis",
-                "responsaveis"
-            ),
+        siscom_modulo_licitantes()
 
-            (
-                "📣 Publicação",
-                "publicacao"
-            ),
+    elif modulo == "🌐 Plataforma Eletrônica":
 
-            (
-                "🏛️ TCE",
-                "tce"
-            )
-        ]
+        siscom_modulo_portal_eletronico()
 
+    elif modulo == "🏛️ Sessão Presencial":
 
-        colunas = st.columns(
-            len(
-                botoes_linha_2
-            )
-        )
+        siscom_modulo_sessao_presencial()
 
+    elif modulo == "🧠 Avaliação Técnica / Econômica":
 
-        for indice, (
-            texto,
-            destino
-        ) in enumerate(
-            botoes_linha_2
-        ):
+        siscom_modulo_avaliacao()
 
-            with colunas[
-                indice
-            ]:
+    elif modulo == "⚖️ Julgamento":
 
-                if st.button(
-                    texto,
-                    key=(
-                        f"siscom_processo_"
-                        f"{destino}"
-                    ),
-                    use_container_width=True,
-                    type="secondary"
-                ):
+        siscom_modulo_julgamento()
 
-                    st.session_state[
-                        chave_id
-                    ] = None
+    elif modulo == "🛒 Liberação para Compra":
 
-                    st.session_state[
-                        chave_tela
-                    ] = destino
-
-                    st.rerun()
-
-
-        st.markdown(
-            "---"
-        )
-
-
-        # ====================================================
-        # RESUMO / DASHBOARD
-        # ====================================================
-
-        siscom_proc_resumo_dashboard()
-
-
-    # ========================================================
-    # ➕ INSERIR
-    # ========================================================
-
-    elif tela == "inserir":
-
-        siscom_proc_cabecalho(
-            "➕ Inserir Processo"
-        )
-
-
-        siscom_processo_incluir()
-
-
-    # ========================================================
-    # 🔎 LOCALIZAR
-    # ========================================================
-
-    elif tela == "localizar":
-
-        siscom_proc_cabecalho(
-            "🔎 Localizar Processo"
-        )
-
-
-        registro_id = siscom_processo_localizar()
-
-
-        if registro_id:
-
-            st.session_state[
-                chave_id
-            ] = registro_id
-
-            st.session_state[
-                chave_tela
-            ] = "alterar"
-
-            st.rerun()
-
-
-    # ========================================================
-    # ✏️ ALTERAR
-    # ========================================================
-
-    elif tela == "alterar":
-
-        registro_id = st.session_state.get(
-            chave_id
-        )
-
-
-        if not registro_id:
-
-            st.session_state[
-                chave_tela
-            ] = "localizar"
-
-            st.rerun()
-
-
-        siscom_proc_cabecalho(
-            "✏️ Alterar Processo"
-        )
-
-
-        siscom_processo_alterar(
-            registro_id
-        )
-
-
-    # ========================================================
-    # 🗑️ EXCLUIR
-    # ========================================================
-
-    elif tela == "excluir":
-
-        siscom_proc_cabecalho(
-            "🗑️ Excluir Processo"
-        )
-
-
-        siscom_processo_excluir()
-
-
-    # ========================================================
-    # ↩️ ESTORNAR
-    # ========================================================
-
-    elif tela == "estornar":
-
-        siscom_proc_cabecalho(
-            "↩️ Estornar Processo"
-        )
-
-
-        siscom_processo_estornar()
-
-
-    # ========================================================
-    # 🖨️ IMPRIMIR
-    # ========================================================
-
-    elif tela == "imprimir":
-
-        siscom_proc_cabecalho(
-            "🖨️ Imprimir Processo"
-        )
-
-
-        siscom_processo_imprimir()
-
-
-    # ========================================================
-    # 📄 PARECER
-    # ========================================================
-
-    elif tela == "parecer":
-
-        siscom_proc_cabecalho(
-            "📄 Parecer"
-        )
-
-
-        siscom_processo_parecer()
-
-
-    # ========================================================
-    # 👥 COMISSÃO
-    # ========================================================
-
-    elif tela == "comissao":
-
-        siscom_proc_cabecalho(
-            "👥 Comissão"
-        )
-
-
-        siscom_processo_comissao()
-
-
-    # ========================================================
-    # 👤 RESPONSÁVEIS
-    # ========================================================
-
-    elif tela == "responsaveis":
-
-        siscom_proc_cabecalho(
-            "👤 Responsáveis"
-        )
-
-
-        siscom_processo_responsaveis()
-
-
-    # ========================================================
-    # 📣 PUBLICAÇÃO
-    # ========================================================
-
-    elif tela == "publicacao":
-
-        siscom_proc_cabecalho(
-            "📣 Publicação"
-        )
-
-
-        siscom_processo_publicacao()
-
-
-    # ========================================================
-    # 🏛️ TCE
-    # ========================================================
-
-    elif tela == "tce":
-
-        siscom_proc_cabecalho(
-            "🏛️ Tribunal de Contas"
-        )
-
-
-        siscom_processo_tce()
-
+        siscom_modulo_compras()
 
 
 
