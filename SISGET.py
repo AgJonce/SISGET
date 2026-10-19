@@ -49824,6 +49824,20 @@ def enquadramento_incluir():
 
     import statistics
 
+
+    # ========================================================
+    # CONFIGURAÇÃO 2026 - LEI 14.133/2021
+    # Decreto nº 12.807/2025 - vigência em 2026
+    # ========================================================
+
+    LIMITE_DISPENSA_ENGENHARIA_2026 = 130984.20
+    LIMITE_DISPENSA_OUTROS_2026 = 65492.11
+
+
+    # ========================================================
+    # RESET / MENSAGEM
+    # ========================================================
+
     if "sisget_enquadramento_reset" not in st.session_state:
         st.session_state["sisget_enquadramento_reset"] = 0
 
@@ -49836,6 +49850,11 @@ def enquadramento_incluir():
             )
         )
 
+
+    # ========================================================
+    # AUXILIARES
+    # ========================================================
+
     def _moeda(valor):
         return (
             f"R$ {float(valor or 0):,.2f}"
@@ -49843,6 +49862,7 @@ def enquadramento_incluir():
             .replace(".", ",")
             .replace("X", ".")
         )
+
 
     def _calcular_valor_cotacao(solicitacao_id_calculo):
 
@@ -49882,14 +49902,14 @@ def enquadramento_incluir():
             }
 
         (
-            entidade_id_cotacao,
-            exercicio_id_cotacao,
+            entidade_cotacao,
+            exercicio_cotacao,
             numero_cotacao,
             criterio_cotacao,
             metodologia_cotacao
         ) = cabecalho
 
-        linhas = _sisget_fetch(
+        itens_cotacao = _sisget_fetch(
             """
             SELECT
                 c.id,
@@ -49906,19 +49926,17 @@ def enquadramento_incluir():
               AND c.exercicio_id = ?
               AND c.numero = ?
               AND si.solicitacao_id = ?
-            ORDER BY
-                ci.solicitacao_item_id,
-                c.id
+            ORDER BY ci.solicitacao_item_id, c.id
             """,
             (
-                entidade_id_cotacao,
-                exercicio_id_cotacao,
+                entidade_cotacao,
+                exercicio_cotacao,
                 numero_cotacao,
                 solicitacao_id_calculo
             )
         )
 
-        if not linhas:
+        if not itens_cotacao:
             return {
                 "numero": numero_cotacao,
                 "criterio": criterio_cotacao,
@@ -49941,7 +49959,7 @@ def enquadramento_incluir():
             and "unitário/global" not in criterio_normalizado
             and "unitario/global" not in criterio_normalizado
         ):
-            totais_proposta = {}
+            propostas = {}
 
             for (
                 cotacao_id,
@@ -49949,19 +49967,17 @@ def enquadramento_incluir():
                 quantidade,
                 valor_unitario,
                 valor_total
-            ) in linhas:
-                totais_proposta[cotacao_id] = (
-                    totais_proposta.get(cotacao_id, 0.0)
+            ) in itens_cotacao:
+                propostas[cotacao_id] = (
+                    propostas.get(cotacao_id, 0.0)
                     + float(valor_total or 0)
                 )
 
-            if totais_proposta:
-                valor_cotacao = min(
-                    totais_proposta.values()
-                )
+            if propostas:
+                valor_cotacao = min(propostas.values())
 
         else:
-            itens = {}
+            mapa_itens = {}
 
             for (
                 cotacao_id,
@@ -49969,10 +49985,10 @@ def enquadramento_incluir():
                 quantidade,
                 valor_unitario,
                 valor_total
-            ) in linhas:
+            ) in itens_cotacao:
 
-                if item_id not in itens:
-                    itens[item_id] = {
+                if item_id not in mapa_itens:
+                    mapa_itens[item_id] = {
                         "quantidade": float(quantidade or 0),
                         "precos": []
                     }
@@ -49980,14 +49996,17 @@ def enquadramento_incluir():
                 preco = float(valor_unitario or 0)
 
                 if preco > 0:
-                    itens[item_id]["precos"].append(preco)
+                    mapa_itens[item_id]["precos"].append(preco)
 
-            for dados_item in itens.values():
-
+            for dados_item in mapa_itens.values():
                 precos = dados_item["precos"]
 
                 if not precos:
                     continue
+
+                quantidade = float(
+                    dados_item["quantidade"] or 0
+                )
 
                 if (
                     "médio" in criterio_normalizado
@@ -50002,10 +50021,7 @@ def enquadramento_incluir():
                 else:
                     preco_referencia = min(precos)
 
-                valor_cotacao += (
-                    float(dados_item["quantidade"] or 0)
-                    * float(preco_referencia or 0)
-                )
+                valor_cotacao += quantidade * preco_referencia
 
         return {
             "numero": numero_cotacao,
@@ -50013,6 +50029,217 @@ def enquadramento_incluir():
             "metodologia": metodologia_cotacao,
             "valor": float(valor_cotacao or 0)
         }
+
+
+    def _recomendar_enquadramento(
+        categoria_objeto,
+        valor_referencia,
+        objeto_comum,
+        ha_competicao,
+        exclusividade,
+        emergencia,
+        ata_compativel,
+        adesao_vantajosa,
+        credenciamento,
+        alienacao,
+        trabalho_artistico_tecnico,
+        alta_complexidade_inovacao,
+        predominio_intelectual
+    ):
+
+        recomendacao = {
+            "grupo": "Licitação",
+            "procedimento": "Licitação",
+            "modalidade": "Concorrência",
+            "criterio": "Menor preço",
+            "fundamento": "Lei nº 14.133/2021, arts. 28 e 33.",
+            "motivo": "Há competição possível e não foi identificada hipótese preferencial de contratação sem nova licitação.",
+            "alertas": []
+        }
+
+        categoria_lower = str(
+            categoria_objeto or ""
+        ).lower()
+
+        engenharia = (
+            "obra" in categoria_lower
+            or "engenharia" in categoria_lower
+        )
+
+        limite_valor = (
+            LIMITE_DISPENSA_ENGENHARIA_2026
+            if engenharia
+            else LIMITE_DISPENSA_OUTROS_2026
+        )
+
+        # ----------------------------------------------------
+        # ADESÃO À ARP
+        # ----------------------------------------------------
+
+        if ata_compativel and adesao_vantajosa:
+            recomendacao.update({
+                "grupo": "Contratação sem nova licitação",
+                "procedimento": "Adesão à Ata de Registro de Preços",
+                "modalidade": "Adesão à ARP",
+                "criterio": "Não se aplica como critério licitatório",
+                "fundamento": "Lei nº 14.133/2021, art. 86, especialmente §§ 2º e seguintes.",
+                "motivo": "Foi informada a existência de ata compatível e vantagem na adesão, hipótese que pode evitar a realização de nova licitação se todos os requisitos forem comprovados."
+            })
+            return recomendacao
+
+        # ----------------------------------------------------
+        # INEXIGIBILIDADE
+        # ----------------------------------------------------
+
+        if exclusividade or not ha_competicao:
+            recomendacao.update({
+                "grupo": "Contratação sem nova licitação",
+                "procedimento": "Inexigibilidade",
+                "modalidade": "Inexigibilidade",
+                "criterio": "Não se aplica como critério licitatório",
+                "fundamento": "Lei nº 14.133/2021, arts. 72 e 74.",
+                "motivo": "Foi informada inviabilidade de competição/exclusividade. A hipótese concreta e a documentação do art. 74 precisam ser comprovadas."
+            })
+            return recomendacao
+
+        # ----------------------------------------------------
+        # CREDENCIAMENTO / CHAMAMENTO
+        # ----------------------------------------------------
+
+        if credenciamento:
+            recomendacao.update({
+                "grupo": "Contratação sem nova licitação",
+                "procedimento": "Chamamento Público / Credenciamento",
+                "modalidade": "Credenciamento",
+                "criterio": "Critério objetivo de distribuição/seleção do credenciamento",
+                "fundamento": "Lei nº 14.133/2021, arts. 78, I, e 79.",
+                "motivo": "Foi indicado cenário de credenciamento/chamamento em que múltiplos interessados podem ser contratados conforme regras objetivas."
+            })
+            return recomendacao
+
+        # ----------------------------------------------------
+        # DISPENSA EMERGENCIAL
+        # ----------------------------------------------------
+
+        if emergencia:
+            recomendacao.update({
+                "grupo": "Contratação sem nova licitação",
+                "procedimento": "Dispensa de Licitação",
+                "modalidade": "Dispensa sem adesão - Emergência/Calamidade",
+                "criterio": "Seleção da proposta mais vantajosa compatível com a urgência",
+                "fundamento": "Lei nº 14.133/2021, arts. 72 e 75, VIII.",
+                "motivo": "Foi informada situação emergencial. A urgência, o risco concreto e a extensão estritamente necessária da contratação devem ser demonstrados."
+            })
+            return recomendacao
+
+        # ----------------------------------------------------
+        # DISPENSA POR VALOR - 2026
+        # ----------------------------------------------------
+
+        if (
+            valor_referencia > 0
+            and valor_referencia < limite_valor
+        ):
+            inciso = "I" if engenharia else "II"
+
+            recomendacao.update({
+                "grupo": "Contratação sem nova licitação",
+                "procedimento": "Dispensa de Licitação",
+                "modalidade": "Dispensa sem adesão - Por valor",
+                "criterio": "Menor preço / Maior desconto / proposta mais vantajosa",
+                "fundamento": f"Lei nº 14.133/2021, arts. 72 e 75, {inciso}; valores atualizados para 2026 pelo Decreto nº 12.807/2025.",
+                "motivo": f"O valor de referência ({_moeda(valor_referencia)}) está abaixo do limite de 2026 aplicável ({_moeda(limite_valor)}), sujeito à verificação do art. 75, § 1º, vedação ao fracionamento e demais requisitos."
+            })
+            recomendacao["alertas"].append(
+                "A dispensa por valor não deve ser decidida apenas pelo valor desta solicitação: confira somatório anual, unidade gestora, natureza do objeto e eventual fracionamento indevido."
+            )
+            return recomendacao
+
+        # ----------------------------------------------------
+        # LEILÃO
+        # ----------------------------------------------------
+
+        if alienacao or "alienação" in categoria_lower:
+            recomendacao.update({
+                "grupo": "Licitação",
+                "procedimento": "Licitação",
+                "modalidade": "Leilão",
+                "criterio": "Maior lance",
+                "fundamento": "Lei nº 14.133/2021, arts. 28, IV, e 33, V.",
+                "motivo": "O objeto foi classificado como alienação de bens, cenário típico de leilão."
+            })
+            return recomendacao
+
+        # ----------------------------------------------------
+        # CONCURSO
+        # ----------------------------------------------------
+
+        if trabalho_artistico_tecnico:
+            recomendacao.update({
+                "grupo": "Licitação",
+                "procedimento": "Licitação",
+                "modalidade": "Concurso",
+                "criterio": "Melhor técnica ou conteúdo artístico",
+                "fundamento": "Lei nº 14.133/2021, arts. 28, III, 30 e 33, III.",
+                "motivo": "Foi informado trabalho técnico, científico ou artístico cuja seleção se aproxima da finalidade legal do concurso."
+            })
+            return recomendacao
+
+        # ----------------------------------------------------
+        # DIÁLOGO COMPETITIVO
+        # ----------------------------------------------------
+
+        if alta_complexidade_inovacao:
+            recomendacao.update({
+                "grupo": "Licitação",
+                "procedimento": "Licitação",
+                "modalidade": "Diálogo competitivo",
+                "criterio": "Critério objetivo definido após o diálogo",
+                "fundamento": "Lei nº 14.133/2021, arts. 28, V, e 32.",
+                "motivo": "Foi indicada alta complexidade/inovação e dificuldade de definir previamente a solução técnica ou jurídica."
+            })
+            return recomendacao
+
+        # ----------------------------------------------------
+        # PREGÃO
+        # ----------------------------------------------------
+
+        if objeto_comum and not predominio_intelectual:
+            recomendacao.update({
+                "grupo": "Licitação",
+                "procedimento": "Licitação",
+                "modalidade": "Pregão",
+                "criterio": "Menor preço",
+                "fundamento": "Lei nº 14.133/2021, arts. 28, I, 29 e 33, I.",
+                "motivo": "O objeto foi marcado como comum e pode ser definido por especificações usuais de mercado; em regra, o pregão é a solução preferencial."
+            })
+            return recomendacao
+
+        # ----------------------------------------------------
+        # CONCORRÊNCIA
+        # ----------------------------------------------------
+
+        criterio_concorrencia = (
+            "Técnica e preço"
+            if predominio_intelectual
+            else "Menor preço"
+        )
+
+        recomendacao.update({
+            "grupo": "Licitação",
+            "procedimento": "Licitação",
+            "modalidade": "Concorrência",
+            "criterio": criterio_concorrencia,
+            "fundamento": "Lei nº 14.133/2021, arts. 28, II, 29 e 33.",
+            "motivo": "Não foi identificada hipótese de pregão obrigatório/preferencial nem contratação sem nova licitação. A concorrência é a indicação inicial para objeto especial ou situação não enquadrada nas hipóteses anteriores."
+        })
+
+        return recomendacao
+
+
+    # ========================================================
+    # SOLICITAÇÃO - SOMENTE ENQUADRAMENTO
+    # ========================================================
 
     solicitacao_id = sisget_selecionar_solicitacao(
         label="Solicitação para Licitação *",
@@ -50024,6 +50251,7 @@ def enquadramento_incluir():
 
     if not solicitacao_id:
         return
+
 
     existe = _sisget_fetchone(
         """
@@ -50039,6 +50267,7 @@ def enquadramento_incluir():
             "⚠️ Esta solicitação já possui enquadramento."
         )
         return
+
 
     solicitacao = _sisget_fetchone(
         """
@@ -50067,6 +50296,11 @@ def enquadramento_incluir():
         prioridade_solicitacao
     ) = solicitacao
 
+
+    # ========================================================
+    # VALORES DO PROCESSO
+    # ========================================================
+
     dados_cotacao = _calcular_valor_cotacao(
         solicitacao_id
     )
@@ -50075,7 +50309,7 @@ def enquadramento_incluir():
         dados_cotacao["valor"] or 0
     )
 
-    total_fichas = _sisget_fetchone(
+    registro_fichas = _sisget_fetchone(
         """
         SELECT COALESCE(SUM(valor_vinculado), 0)
         FROM solicitacoes_fichas
@@ -50085,10 +50319,10 @@ def enquadramento_incluir():
     )
 
     valor_fichas = float(
-        total_fichas[0] or 0
-    ) if total_fichas else 0.0
+        (registro_fichas[0] if registro_fichas else 0) or 0
+    )
 
-    financeiro = _sisget_fetchone(
+    registro_financeiro = _sisget_fetchone(
         """
         SELECT valor_validado
         FROM solicitacoes_financeiro
@@ -50100,8 +50334,19 @@ def enquadramento_incluir():
     )
 
     valor_financeiro = float(
-        financeiro[0] or 0
-    ) if financeiro else 0.0
+        (registro_financeiro[0] if registro_financeiro else 0) or 0
+    )
+
+    valor_base_assistente = (
+        valor_financeiro
+        if valor_financeiro > 0
+        else valor_cotado
+    )
+
+
+    # ========================================================
+    # RESUMO
+    # ========================================================
 
     st.markdown("### 📋 Resumo da Contratação")
 
@@ -50133,168 +50378,350 @@ def enquadramento_incluir():
     if dados_cotacao["numero"]:
         st.caption(
             f"Cotação nº {dados_cotacao['numero']} | "
-            f"Critério da pesquisa: {dados_cotacao['criterio'] or '-'} | "
+            f"Critério da cotação: {dados_cotacao['criterio'] or '-'} | "
             f"Metodologia: {dados_cotacao['metodologia'] or '-'}"
         )
 
-    if valor_cotado <= 0:
-        st.warning(
-            "⚠️ Não foi possível identificar o valor cotado "
-            "desta solicitação."
+
+    # ========================================================
+    # ASSISTENTE DE ENQUADRAMENTO
+    # ========================================================
+
+    st.markdown("---")
+    st.markdown("### 🤖 Assistente de Enquadramento")
+
+    with st.chat_message("assistant"):
+        st.write(
+            "Vou cruzar o tipo do objeto, possibilidade de competição, "
+            "valor, existência de ata, emergência e características da "
+            "contratação para sugerir o caminho mais viável. A sugestão "
+            "é indicativa e deve ser confirmada pelo setor jurídico/controle."
         )
 
-    st.markdown("### ⚖️ Enquadramento")
-
-    tipo_processo = st.selectbox(
-        "Tipo do Processo / Procedimento *",
-        [
-            "Licitação",
-            "Dispensa de Licitação",
-            "Inexigibilidade",
-            "Adesão à Ata de Registro de Preços",
-            "Chamamento Público / Credenciamento"
-        ],
-        key=f"enq_tipo_processo_{solicitacao_id}_{reset}"
-    )
-
-    tipos_objeto = [
-        "Aquisição de bens",
-        "Serviço",
+    categorias = [
+        "Aquisição de bens / materiais",
+        "Serviço comum",
+        "Serviço contínuo",
+        "Serviço técnico especializado predominantemente intelectual",
         "Serviço comum de engenharia",
         "Serviço especial de engenharia",
         "Obra",
-        "Locação",
         "Tecnologia da Informação",
-        "Serviço técnico especializado",
-        "Alienação",
+        "Alienação de bens",
+        "Locação de imóvel",
+        "Trabalho técnico, científico ou artístico",
         "Outro"
     ]
 
-    indice_objeto = 0
-
-    texto_tipo = str(
-        tipo_objeto_solicitacao or ""
-    ).lower()
-
-    if "obra" in texto_tipo:
-        indice_objeto = tipos_objeto.index("Obra")
-    elif "serv" in texto_tipo:
-        indice_objeto = tipos_objeto.index("Serviço")
-
-    tipo_objeto = st.selectbox(
-        "Tipo do Objeto *",
-        tipos_objeto,
-        index=indice_objeto,
-        key=f"enq_tipo_objeto_{solicitacao_id}_{reset}"
+    categoria_objeto = st.selectbox(
+        "1. Qual é a natureza principal do objeto? *",
+        categorias,
+        key=f"assist_categoria_{solicitacao_id}_{reset}"
     )
 
-    natureza_objeto = st.text_input(
-        "Natureza / Característica do Objeto *",
-        placeholder=(
-            "Ex.: bem comum, serviço contínuo, "
-            "serviço intelectual, obra especial..."
+    valor_referencia = st.number_input(
+        "2. Valor de referência para o enquadramento (R$)",
+        min_value=0.0,
+        value=float(valor_base_assistente),
+        step=0.01,
+        format="%.2f",
+        key=f"assist_valor_{solicitacao_id}_{reset}"
+    )
+
+    q1, q2 = st.columns(2)
+
+    objeto_comum = q1.checkbox(
+        "O objeto é comum e pode ser descrito por padrões usuais de mercado?",
+        value=(
+            "comum" in categoria_objeto.lower()
+            or categoria_objeto == "Aquisição de bens / materiais"
         ),
-        key=f"enq_natureza_{solicitacao_id}_{reset}"
+        key=f"assist_comum_{solicitacao_id}_{reset}"
     )
 
+    ha_competicao = q2.checkbox(
+        "Há possibilidade real de competição entre fornecedores?",
+        value=True,
+        key=f"assist_competicao_{solicitacao_id}_{reset}"
+    )
+
+    q3, q4 = st.columns(2)
+
+    exclusividade = q3.checkbox(
+        "Existe exclusividade ou inviabilidade de competição comprovável?",
+        value=False,
+        key=f"assist_exclusividade_{solicitacao_id}_{reset}"
+    )
+
+    emergencia = q4.checkbox(
+        "Existe emergência/calamidade com risco de prejuízo ou interrupção?",
+        value=False,
+        key=f"assist_emergencia_{solicitacao_id}_{reset}"
+    )
+
+    q5, q6 = st.columns(2)
+
+    ata_compativel = q5.checkbox(
+        "Existe Ata de Registro de Preços vigente e compatível?",
+        value=False,
+        key=f"assist_ata_{solicitacao_id}_{reset}"
+    )
+
+    adesao_vantajosa = q6.checkbox(
+        "A adesão à ata foi demonstrada como vantajosa?",
+        value=False,
+        disabled=not ata_compativel,
+        key=f"assist_adesao_{solicitacao_id}_{reset}"
+    )
+
+    q7, q8 = st.columns(2)
+
+    credenciamento = q7.checkbox(
+        "O caso comporta credenciamento/chamamento de vários interessados?",
+        value=False,
+        key=f"assist_credenciamento_{solicitacao_id}_{reset}"
+    )
+
+    predominio_intelectual = q8.checkbox(
+        "Há predominância intelectual relevante na avaliação da proposta?",
+        value=(
+            "intelectual" in categoria_objeto.lower()
+        ),
+        key=f"assist_intelectual_{solicitacao_id}_{reset}"
+    )
+
+    q9, q10 = st.columns(2)
+
+    alienacao = q9.checkbox(
+        "Trata-se de alienação/venda de bens?",
+        value=(categoria_objeto == "Alienação de bens"),
+        key=f"assist_alienacao_{solicitacao_id}_{reset}"
+    )
+
+    trabalho_artistico_tecnico = q10.checkbox(
+        "O objetivo é selecionar trabalho técnico, científico ou artístico com prêmio/remuneração?",
+        value=(categoria_objeto == "Trabalho técnico, científico ou artístico"),
+        key=f"assist_concurso_{solicitacao_id}_{reset}"
+    )
+
+    alta_complexidade_inovacao = st.checkbox(
+        "A solução é altamente complexa/inovadora e a Administração não consegue definir previamente a solução técnica/jurídica adequada?",
+        value=False,
+        key=f"assist_dialogo_{solicitacao_id}_{reset}"
+    )
+
+
+    recomendacao = _recomendar_enquadramento(
+        categoria_objeto=categoria_objeto,
+        valor_referencia=float(valor_referencia or 0),
+        objeto_comum=objeto_comum,
+        ha_competicao=ha_competicao,
+        exclusividade=exclusividade,
+        emergencia=emergencia,
+        ata_compativel=ata_compativel,
+        adesao_vantajosa=adesao_vantajosa,
+        credenciamento=credenciamento,
+        alienacao=alienacao,
+        trabalho_artistico_tecnico=trabalho_artistico_tecnico,
+        alta_complexidade_inovacao=alta_complexidade_inovacao,
+        predominio_intelectual=predominio_intelectual
+    )
+
+    with st.chat_message("assistant"):
+        st.markdown(
+            f"**Sugestão inicial:** {recomendacao['procedimento']}"
+        )
+        st.write(
+            f"**Modalidade/forma:** {recomendacao['modalidade']}"
+        )
+        st.write(
+            f"**Critério indicado:** {recomendacao['criterio']}"
+        )
+        st.write(
+            f"**Por quê:** {recomendacao['motivo']}"
+        )
+        st.caption(
+            f"Fundamento sugerido: {recomendacao['fundamento']}"
+        )
+
+        for alerta in recomendacao["alertas"]:
+            st.warning(alerta)
+
+
+    # ========================================================
+    # LIMITES DE DISPENSA 2026
+    # ========================================================
+
+    with st.expander("📌 Limites de dispensa por valor - 2026"):
+        st.write(
+            f"**Art. 75, I - obras, serviços de engenharia e manutenção de veículos:** {_moeda(LIMITE_DISPENSA_ENGENHARIA_2026)}"
+        )
+        st.write(
+            f"**Art. 75, II - demais compras e serviços:** {_moeda(LIMITE_DISPENSA_OUTROS_2026)}"
+        )
+        st.caption(
+            "Os limites são parâmetros de 2026. A análise deve considerar também o art. 75, § 1º, o somatório aplicável e a vedação ao fracionamento indevido."
+        )
+
+
+    # ========================================================
+    # ENQUADRAMENTO DEFINITIVO
+    # ========================================================
+
+    st.markdown("---")
+    st.markdown("### ⚖️ Enquadramento Definitivo")
+
+    grupos = [
+        "Licitação",
+        "Contratação sem nova licitação"
+    ]
+
+    indice_grupo = (
+        grupos.index(recomendacao["grupo"])
+        if recomendacao["grupo"] in grupos
+        else 0
+    )
+
+    grupo_processo = st.selectbox(
+        "Grupo do Procedimento *",
+        grupos,
+        index=indice_grupo,
+        key=f"enquadramento_grupo_{solicitacao_id}_{reset}"
+    )
+
+
+    tipo_processo = ""
     modalidade = ""
-    criterio = "Não se aplica"
-    modo = "Não se aplica"
-    forma = "Não se aplica"
+    criterio = ""
+    modo = ""
+    forma = ""
     srp = False
     fundamento_legal = ""
-    dispositivo_especifico = ""
+    hipotese_legal = ""
+    natureza_objeto = ""
     casas_decimais = 2
     intervalo_minimo = 0.0
     peso_tecnica = None
     peso_preco = None
+    detalhes_adesao = []
+
 
     # ========================================================
-    # LICITAÇÃO - LEI 14.133/2021
+    # LICITAÇÃO
     # ========================================================
 
-    if tipo_processo == "Licitação":
+    if grupo_processo == "Licitação":
+
+        tipo_processo = "Licitação"
+
+        modalidades = [
+            "Pregão",
+            "Concorrência",
+            "Concurso",
+            "Leilão",
+            "Diálogo competitivo"
+        ]
+
+        modalidade_recomendada = recomendacao["modalidade"]
+
+        indice_modalidade = (
+            modalidades.index(modalidade_recomendada)
+            if modalidade_recomendada in modalidades
+            else 0
+        )
 
         modalidade = st.selectbox(
             "Modalidade *",
-            [
-                "Pregão",
-                "Concorrência",
-                "Concurso",
-                "Leilão",
-                "Diálogo competitivo"
-            ],
-            key=f"enq_modalidade_{solicitacao_id}_{reset}"
+            modalidades,
+            index=indice_modalidade,
+            key=f"enquadramento_modalidade_{solicitacao_id}_{reset}"
         )
 
-        # Todos os critérios do art. 33 da Lei 14.133/2021.
-        criterios = [
-            "Menor preço",
-            "Maior desconto",
-            "Melhor técnica ou conteúdo artístico",
-            "Técnica e preço",
-            "Maior lance",
-            "Maior retorno econômico"
-        ]
+        # Critérios viáveis por modalidade/procedimento.
+        if modalidade == "Pregão":
+            criterios_disponiveis = [
+                "Menor preço",
+                "Maior desconto"
+            ]
+
+        elif modalidade == "Concurso":
+            criterios_disponiveis = [
+                "Melhor técnica ou conteúdo artístico"
+            ]
+
+        elif modalidade == "Leilão":
+            criterios_disponiveis = [
+                "Maior lance"
+            ]
+
+        elif modalidade == "Concorrência":
+            criterios_disponiveis = [
+                "Menor preço",
+                "Maior desconto",
+                "Melhor técnica ou conteúdo artístico",
+                "Técnica e preço",
+                "Maior retorno econômico"
+            ]
+
+        else:
+            criterios_disponiveis = [
+                "Menor preço",
+                "Maior desconto",
+                "Melhor técnica ou conteúdo artístico",
+                "Técnica e preço",
+                "Maior lance",
+                "Maior retorno econômico"
+            ]
+
+        criterio_recomendado = recomendacao["criterio"]
+
+        indice_criterio = (
+            criterios_disponiveis.index(criterio_recomendado)
+            if criterio_recomendado in criterios_disponiveis
+            else 0
+        )
 
         criterio = st.selectbox(
             "Critério de Julgamento *",
-            criterios,
-            key=f"enq_criterio_{solicitacao_id}_{reset}_{modalidade}"
+            criterios_disponiveis,
+            index=indice_criterio,
+            key=f"enquadramento_criterio_{solicitacao_id}_{reset}_{modalidade}"
         )
 
-        # Avisos de compatibilidade sem esconder critérios.
-        if modalidade == "Pregão" and criterio not in (
-            "Menor preço",
-            "Maior desconto"
-        ):
-            st.warning(
-                "⚠️ No Pregão, confira a compatibilidade do critério selecionado. "
-                "A regra geral da Lei nº 14.133/2021 vincula o pregão a bens e "
-                "serviços comuns e aos critérios de menor preço ou maior desconto."
-            )
-
-        if modalidade == "Leilão" and criterio != "Maior lance":
-            st.warning(
-                "⚠️ Para Leilão, o critério típico é Maior Lance."
-            )
-
-        if modalidade == "Concurso" and criterio != "Melhor técnica ou conteúdo artístico":
-            st.warning(
-                "⚠️ Para Concurso, confira a adequação do critério; normalmente "
-                "o julgamento envolve melhor técnica ou conteúdo artístico."
-            )
-
+        # Modo de disputa compatível com o critério selecionado.
         if criterio in (
             "Menor preço",
             "Maior desconto"
         ):
-            modos = [
+            modos_disputa = [
                 "Aberto",
                 "Aberto e fechado",
                 "Fechado e aberto"
             ]
+
         elif criterio in (
             "Técnica e preço",
             "Melhor técnica ou conteúdo artístico"
         ):
-            modos = [
+            modos_disputa = [
                 "Fechado"
             ]
+
         elif criterio == "Maior lance":
-            modos = [
+            modos_disputa = [
                 "Aberto"
             ]
+
         else:
-            modos = [
+            modos_disputa = [
                 "Aberto",
                 "Fechado"
             ]
 
         modo = st.selectbox(
             "Modo de Disputa *",
-            modos,
-            key=f"enq_modo_{solicitacao_id}_{reset}_{criterio}"
+            modos_disputa,
+            key=f"enquadramento_modo_{solicitacao_id}_{reset}_{criterio}"
         )
 
         forma = st.selectbox(
@@ -50303,42 +50730,41 @@ def enquadramento_incluir():
                 "Eletrônica",
                 "Presencial"
             ],
-            key=f"enq_forma_{solicitacao_id}_{reset}"
+            key=f"enquadramento_forma_{solicitacao_id}_{reset}"
         )
 
         srp = st.checkbox(
             "Sistema de Registro de Preços - SRP",
-            key=f"enq_srp_{solicitacao_id}_{reset}"
+            key=f"enquadramento_srp_{solicitacao_id}_{reset}"
         )
 
-        d1, d2 = st.columns(2)
+        natureza_objeto = st.text_input(
+            "Natureza / Característica do Objeto *",
+            value=categoria_objeto,
+            key=f"enquadramento_natureza_{solicitacao_id}_{reset}"
+        )
 
-        casas_decimais = d1.number_input(
+        col_decimal, col_intervalo = st.columns(2)
+
+        casas_decimais = col_decimal.number_input(
             "Casas decimais no julgamento",
             min_value=0,
             max_value=6,
             value=2,
             step=1,
-            help=(
-                "Precisão para percentuais, notas e lances "
-                "utilizados no julgamento."
-            ),
-            key=f"enq_decimais_{solicitacao_id}_{reset}"
+            key=f"enquadramento_decimais_{solicitacao_id}_{reset}"
         )
 
-        intervalo_minimo = d2.number_input(
+        intervalo_minimo = col_intervalo.number_input(
             "Intervalo mínimo entre lances",
             min_value=0.0,
             value=0.0,
             step=0.01,
             format="%.4f",
-            key=f"enq_intervalo_{solicitacao_id}_{reset}"
+            key=f"enquadramento_intervalo_{solicitacao_id}_{reset}"
         )
 
         if criterio == "Técnica e preço":
-
-            st.markdown("#### 📊 Ponderação Técnica x Preço")
-
             p1, p2 = st.columns(2)
 
             peso_tecnica = p1.number_input(
@@ -50348,7 +50774,7 @@ def enquadramento_incluir():
                 value=70.0,
                 step=1.0,
                 format="%.2f",
-                key=f"enq_peso_tecnica_{solicitacao_id}_{reset}"
+                key=f"enquadramento_peso_tecnica_{solicitacao_id}_{reset}"
             )
 
             peso_preco = p2.number_input(
@@ -50358,39 +50784,30 @@ def enquadramento_incluir():
                 value=30.0,
                 step=1.0,
                 format="%.2f",
-                key=f"enq_peso_preco_{solicitacao_id}_{reset}"
+                key=f"enquadramento_peso_preco_{solicitacao_id}_{reset}"
             )
 
-            if abs(
-                float(peso_tecnica)
-                + float(peso_preco)
-                - 100.0
-            ) > 0.005:
-                st.warning(
-                    "⚠️ Técnica + Preço deve totalizar 100%."
-                )
-
         artigo_modalidade = {
-            "Pregão": "art. 28, I, c/c art. 29",
-            "Concorrência": "art. 28, II",
-            "Concurso": "art. 28, III",
-            "Leilão": "art. 28, IV",
-            "Diálogo competitivo": "art. 28, V"
+            "Pregão": "arts. 28, I, e 29",
+            "Concorrência": "arts. 28, II, e 29",
+            "Concurso": "arts. 28, III, e 30",
+            "Leilão": "arts. 28, IV, e 31",
+            "Diálogo competitivo": "arts. 28, V, e 32"
         }
 
         artigo_criterio = {
-            "Menor preço": "art. 33, I, c/c art. 34",
-            "Maior desconto": "art. 33, II, c/c art. 34, § 2º",
-            "Melhor técnica ou conteúdo artístico": "art. 33, III, c/c art. 35",
-            "Técnica e preço": "art. 33, IV, c/c art. 36",
+            "Menor preço": "arts. 33, I, e 34",
+            "Maior desconto": "arts. 33, II, e 34",
+            "Melhor técnica ou conteúdo artístico": "arts. 33, III, e 35",
+            "Técnica e preço": "arts. 33, IV, e 36",
             "Maior lance": "art. 33, V",
-            "Maior retorno econômico": "art. 33, VI, c/c art. 39"
+            "Maior retorno econômico": "arts. 33, VI, e 39"
         }
 
         fundamento_legal = (
             "Lei nº 14.133/2021, "
-            f"{artigo_modalidade[modalidade]}; "
-            f"{artigo_criterio[criterio]}; "
+            f"{artigo_modalidade.get(modalidade, 'art. 28')}; "
+            f"{artigo_criterio.get(criterio, 'art. 33')}; "
             "art. 56."
         )
 
@@ -50398,234 +50815,308 @@ def enquadramento_incluir():
             "Fundamento Legal",
             value=fundamento_legal,
             disabled=True,
-            key=f"enq_fundamento_{solicitacao_id}_{reset}_{modalidade}_{criterio}"
+            key=f"enquadramento_fundamento_licitacao_{solicitacao_id}_{reset}_{modalidade}_{criterio}"
         )
 
-        if forma == "Presencial":
-            st.warning(
-                "⚠️ Registre na justificativa a motivação para a forma presencial."
-            )
 
     # ========================================================
-    # DISPENSA DE LICITAÇÃO
-    # ========================================================
-
-    elif tipo_processo == "Dispensa de Licitação":
-
-        modalidade = "Dispensa de Licitação"
-        criterio = st.selectbox(
-            "Critério de seleção / julgamento",
-            [
-                "Menor preço",
-                "Maior desconto",
-                "Melhor técnica ou conteúdo artístico",
-                "Técnica e preço",
-                "Maior lance",
-                "Maior retorno econômico",
-                "Não se aplica"
-            ],
-            index=0,
-            key=f"enq_criterio_dispensa_{solicitacao_id}_{reset}"
-        )
-
-        dispositivo_especifico = st.text_input(
-            "Inciso / alínea / hipótese específica da Dispensa *",
-            placeholder="Ex.: art. 75, II",
-            key=f"enq_dispositivo_dispensa_{solicitacao_id}_{reset}"
-        )
-
-        forma = st.selectbox(
-            "Forma do Procedimento",
-            [
-                "Eletrônica",
-                "Presencial",
-                "Não se aplica"
-            ],
-            key=f"enq_forma_dispensa_{solicitacao_id}_{reset}"
-        )
-
-        fundamento_legal = "Lei nº 14.133/2021, arts. 72 e 75."
-        modo = "Não se aplica"
-        srp = False
-
-        st.text_input(
-            "Fundamento Legal",
-            value=fundamento_legal,
-            disabled=True,
-            key=f"enq_fundamento_dispensa_{solicitacao_id}_{reset}"
-        )
-
-    # ========================================================
-    # INEXIGIBILIDADE
-    # ========================================================
-
-    elif tipo_processo == "Inexigibilidade":
-
-        modalidade = "Inexigibilidade"
-        criterio = "Não se aplica"
-        modo = "Não se aplica"
-        forma = "Não se aplica"
-        srp = False
-
-        dispositivo_especifico = st.text_input(
-            "Inciso / alínea / hipótese específica da Inexigibilidade *",
-            placeholder="Ex.: art. 74, I",
-            key=f"enq_dispositivo_inexigibilidade_{solicitacao_id}_{reset}"
-        )
-
-        fundamento_legal = "Lei nº 14.133/2021, arts. 72 e 74."
-
-        st.text_input(
-            "Fundamento Legal",
-            value=fundamento_legal,
-            disabled=True,
-            key=f"enq_fundamento_inexigibilidade_{solicitacao_id}_{reset}"
-        )
-
-    # ========================================================
-    # ADESÃO À ATA DE REGISTRO DE PREÇOS
-    # ========================================================
-
-    elif tipo_processo == "Adesão à Ata de Registro de Preços":
-
-        modalidade = "Adesão à Ata de Registro de Preços"
-        criterio = "Não se aplica"
-        modo = "Não se aplica"
-        forma = "Não se aplica"
-        srp = True
-
-        st.info(
-            "ℹ️ Adesão como órgão não participante: registre a vantagem da adesão, "
-            "a compatibilidade dos preços com o mercado e as anuências necessárias."
-        )
-
-        a1, a2 = st.columns(2)
-
-        orgao_gerenciador = a1.text_input(
-            "Órgão Gerenciador *",
-            key=f"enq_adesao_orgao_{solicitacao_id}_{reset}"
-        )
-
-        numero_ata = a2.text_input(
-            "Número da Ata de Registro de Preços *",
-            key=f"enq_adesao_ata_{solicitacao_id}_{reset}"
-        )
-
-        a3, a4 = st.columns(2)
-
-        processo_origem = a3.text_input(
-            "Processo / Licitação de Origem",
-            key=f"enq_adesao_processo_{solicitacao_id}_{reset}"
-        )
-
-        vigencia_ata = a4.text_input(
-            "Vigência da Ata",
-            placeholder="Ex.: 01/01/2026 a 31/12/2026",
-            key=f"enq_adesao_vigencia_{solicitacao_id}_{reset}"
-        )
-
-        compatibilidade_precos = st.checkbox(
-            "Foi demonstrada a compatibilidade dos preços registrados com o mercado",
-            key=f"enq_adesao_compatibilidade_{solicitacao_id}_{reset}"
-        )
-
-        anuencia_gerenciador = st.checkbox(
-            "Há consulta/aceitação do órgão gerenciador",
-            key=f"enq_adesao_anuencia_gerenciador_{solicitacao_id}_{reset}"
-        )
-
-        anuencia_fornecedor = st.checkbox(
-            "Há aceitação do fornecedor beneficiário da ata",
-            key=f"enq_adesao_anuencia_fornecedor_{solicitacao_id}_{reset}"
-        )
-
-        fundamento_legal = "Lei nº 14.133/2021, art. 86, especialmente § 2º."
-        dispositivo_especifico = (
-            f"Órgão gerenciador: {orgao_gerenciador.strip() or '-'}; "
-            f"Ata: {numero_ata.strip() or '-'}; "
-            f"Processo de origem: {processo_origem.strip() or '-'}; "
-            f"Vigência: {vigencia_ata.strip() or '-'}; "
-            f"Compatibilidade de preços: {'Sim' if compatibilidade_precos else 'Não'}; "
-            f"Anuência gerenciador: {'Sim' if anuencia_gerenciador else 'Não'}; "
-            f"Anuência fornecedor: {'Sim' if anuencia_fornecedor else 'Não'}"
-        )
-
-        st.text_input(
-            "Fundamento Legal",
-            value=fundamento_legal,
-            disabled=True,
-            key=f"enq_fundamento_adesao_{solicitacao_id}_{reset}"
-        )
-
-    # ========================================================
-    # CHAMAMENTO PÚBLICO / CREDENCIAMENTO
+    # CONTRATAÇÃO SEM NOVA LICITAÇÃO
     # ========================================================
 
     else:
 
-        modalidade = "Chamamento Público / Credenciamento"
-        modo = "Não se aplica"
+        tipo_processo = "Contratação Direta"
+
+        subprocedimentos = [
+            "Dispensa sem adesão - Por valor",
+            "Dispensa sem adesão - Emergência/Calamidade",
+            "Dispensa sem adesão - Outra hipótese do art. 75",
+            "Inexigibilidade",
+            "Adesão à Ata de Registro de Preços",
+            "Chamamento Público / Credenciamento"
+        ]
+
+        sub_recomendado = recomendacao["modalidade"]
+
+        indice_sub = (
+            subprocedimentos.index(sub_recomendado)
+            if sub_recomendado in subprocedimentos
+            else 0
+        )
+
+        modalidade = st.selectbox(
+            "Tipo de contratação sem nova licitação *",
+            subprocedimentos,
+            index=indice_sub,
+            key=f"enquadramento_subprocedimento_{solicitacao_id}_{reset}"
+        )
+
+        natureza_objeto = st.text_input(
+            "Natureza / Característica do Objeto *",
+            value=categoria_objeto,
+            key=f"enquadramento_natureza_direta_{solicitacao_id}_{reset}"
+        )
+
         forma = st.selectbox(
-            "Forma do Chamamento",
+            "Forma do procedimento",
             [
                 "Eletrônica",
                 "Presencial",
-                "Híbrida"
+                "Não se aplica"
             ],
-            key=f"enq_forma_chamamento_{solicitacao_id}_{reset}"
+            key=f"enquadramento_forma_direta_{solicitacao_id}_{reset}"
         )
 
-        criterio = st.selectbox(
-            "Critério de Seleção / Julgamento *",
-            [
-                "Credenciamento sem competição",
-                "Menor preço",
-                "Maior desconto",
-                "Melhor técnica ou conteúdo artístico",
-                "Técnica e preço",
-                "Maior lance",
-                "Maior retorno econômico",
-                "Ordem de inscrição",
-                "Sorteio",
-                "Critério definido no edital"
-            ],
-            key=f"enq_criterio_chamamento_{solicitacao_id}_{reset}"
-        )
+        srp = False
+        modo = "Não se aplica"
 
-        dispositivo_especifico = st.text_input(
-            "Base legal / hipótese específica do Chamamento *",
-            placeholder=(
-                "Ex.: Lei nº 14.133/2021, art. 79 (credenciamento) "
-                "ou legislação específica aplicável"
-            ),
-            key=f"enq_dispositivo_chamamento_{solicitacao_id}_{reset}"
-        )
+        # ----------------------------------------------------
+        # DISPENSA POR VALOR
+        # ----------------------------------------------------
 
-        fundamento_legal = (
-            "Lei nº 14.133/2021, arts. 78, I, e 79, quando se tratar de credenciamento; "
-            "ou legislação específica indicada no processo."
-        )
+        if modalidade == "Dispensa sem adesão - Por valor":
 
-        st.warning(
-            "⚠️ 'Chamamento Público' pode ter fundamento em legislação específica. "
-            "Quando for credenciamento da Lei nº 14.133/2021, use o art. 79; "
-            "em outros casos, informe a base legal concreta."
-        )
+            engenharia = (
+                "obra" in categoria_objeto.lower()
+                or "engenharia" in categoria_objeto.lower()
+            )
+
+            limite = (
+                LIMITE_DISPENSA_ENGENHARIA_2026
+                if engenharia
+                else LIMITE_DISPENSA_OUTROS_2026
+            )
+
+            inciso = "I" if engenharia else "II"
+
+            criterio = st.selectbox(
+                "Critério para seleção da proposta *",
+                [
+                    "Menor preço",
+                    "Maior desconto",
+                    "Proposta mais vantajosa - justificativa técnica"
+                ],
+                key=f"enquadramento_criterio_dispensa_valor_{solicitacao_id}_{reset}"
+            )
+
+            fundamento_legal = (
+                f"Lei nº 14.133/2021, arts. 72 e 75, {inciso}; "
+                "Decreto nº 12.807/2025 (valores vigentes em 2026)."
+            )
+
+            st.info(
+                f"Limite de referência para 2026: {_moeda(limite)}."
+            )
+
+            if float(valor_referencia or 0) >= limite:
+                st.error(
+                    "❌ O valor informado não se enquadra, por si só, na dispensa por valor deste inciso em 2026."
+                )
+
+            st.warning(
+                "⚠️ Verifique o art. 75, § 1º, o somatório aplicável e a vedação ao fracionamento indevido."
+            )
+
+        # ----------------------------------------------------
+        # DISPENSA EMERGENCIAL
+        # ----------------------------------------------------
+
+        elif modalidade == "Dispensa sem adesão - Emergência/Calamidade":
+
+            criterio = st.selectbox(
+                "Critério para seleção da proposta *",
+                [
+                    "Menor preço compatível com a urgência",
+                    "Maior desconto",
+                    "Proposta mais vantajosa compatível com a emergência"
+                ],
+                key=f"enquadramento_criterio_dispensa_emergencia_{solicitacao_id}_{reset}"
+            )
+
+            fundamento_legal = (
+                "Lei nº 14.133/2021, arts. 72 e 75, VIII."
+            )
+
+            st.warning(
+                "⚠️ A motivação deve demonstrar a emergência, o risco concreto e limitar objeto/prazo ao estritamente necessário."
+            )
+
+        # ----------------------------------------------------
+        # OUTRA DISPENSA
+        # ----------------------------------------------------
+
+        elif modalidade == "Dispensa sem adesão - Outra hipótese do art. 75":
+
+            criterio = st.selectbox(
+                "Critério para seleção da proposta *",
+                [
+                    "Menor preço",
+                    "Maior desconto",
+                    "Proposta mais vantajosa - justificativa técnica"
+                ],
+                key=f"enquadramento_criterio_dispensa_outra_{solicitacao_id}_{reset}"
+            )
+
+            hipotese_legal = st.text_input(
+                "Inciso / alínea específica do art. 75 *",
+                placeholder="Ex.: art. 75, IV, c",
+                key=f"enquadramento_hipotese_dispensa_{solicitacao_id}_{reset}"
+            )
+
+            fundamento_legal = (
+                "Lei nº 14.133/2021, arts. 72 e 75."
+            )
+
+        # ----------------------------------------------------
+        # INEXIGIBILIDADE
+        # ----------------------------------------------------
+
+        elif modalidade == "Inexigibilidade":
+
+            criterio = st.selectbox(
+                "Forma de escolha / justificativa da contratação *",
+                [
+                    "Exclusividade / fornecedor exclusivo",
+                    "Profissional do setor artístico",
+                    "Serviço técnico especializado com notória especialização",
+                    "Aquisição ou locação de imóvel com características singulares",
+                    "Outra hipótese legal do art. 74"
+                ],
+                key=f"enquadramento_criterio_inex_{solicitacao_id}_{reset}"
+            )
+
+            hipotese_legal = st.text_input(
+                "Inciso / fundamento específico do art. 74 *",
+                placeholder="Ex.: art. 74, I",
+                key=f"enquadramento_hipotese_inex_{solicitacao_id}_{reset}"
+            )
+
+            fundamento_legal = (
+                "Lei nº 14.133/2021, arts. 72 e 74."
+            )
+
+        # ----------------------------------------------------
+        # ADESÃO À ARP
+        # ----------------------------------------------------
+
+        elif modalidade == "Adesão à Ata de Registro de Preços":
+
+            criterio = "Não se aplica como critério licitatório"
+            modo = "Não se aplica"
+            forma = "Adesão à ARP"
+
+            a1, a2 = st.columns(2)
+
+            orgao_gerenciador = a1.text_input(
+                "Órgão gerenciador da Ata *",
+                key=f"enquadramento_ata_orgao_{solicitacao_id}_{reset}"
+            )
+
+            numero_ata = a2.text_input(
+                "Número da Ata *",
+                key=f"enquadramento_ata_numero_{solicitacao_id}_{reset}"
+            )
+
+            a3, a4 = st.columns(2)
+
+            processo_origem = a3.text_input(
+                "Processo / Licitação de origem *",
+                key=f"enquadramento_ata_processo_{solicitacao_id}_{reset}"
+            )
+
+            fornecedor_ata = a4.text_input(
+                "Fornecedor registrado *",
+                key=f"enquadramento_ata_fornecedor_{solicitacao_id}_{reset}"
+            )
+
+            justificativa_vantagem = st.text_area(
+                "Justificativa da vantagem da adesão *",
+                height=100,
+                key=f"enquadramento_ata_vantagem_{solicitacao_id}_{reset}"
+            )
+
+            anuencia_gerenciador = st.checkbox(
+                "Há anuência do órgão gerenciador?",
+                key=f"enquadramento_ata_anuencia_orgao_{solicitacao_id}_{reset}"
+            )
+
+            anuencia_fornecedor = st.checkbox(
+                "Há aceitação/anuência do fornecedor?",
+                key=f"enquadramento_ata_anuencia_fornecedor_{solicitacao_id}_{reset}"
+            )
+
+            compatibilidade_precos = st.checkbox(
+                "Foi demonstrada compatibilidade/vantajosidade dos preços da ata?",
+                key=f"enquadramento_ata_precos_{solicitacao_id}_{reset}"
+            )
+
+            detalhes_adesao = [
+                f"Órgão gerenciador: {orgao_gerenciador}",
+                f"Ata: {numero_ata}",
+                f"Processo de origem: {processo_origem}",
+                f"Fornecedor: {fornecedor_ata}",
+                f"Anuência do gerenciador: {'Sim' if anuencia_gerenciador else 'Não'}",
+                f"Anuência do fornecedor: {'Sim' if anuencia_fornecedor else 'Não'}",
+                f"Compatibilidade/vantajosidade dos preços: {'Sim' if compatibilidade_precos else 'Não'}",
+                f"Justificativa da vantagem: {justificativa_vantagem.strip()}"
+            ]
+
+            fundamento_legal = (
+                "Lei nº 14.133/2021, art. 86, especialmente §§ 2º e seguintes."
+            )
+
+        # ----------------------------------------------------
+        # CHAMAMENTO / CREDENCIAMENTO
+        # ----------------------------------------------------
+
+        else:
+
+            criterio = st.selectbox(
+                "Regra objetiva do credenciamento/chamamento *",
+                [
+                    "Contratação paralela e não excludente",
+                    "Seleção a critério de terceiros",
+                    "Mercados fluidos",
+                    "Outra regra objetiva prevista no edital"
+                ],
+                key=f"enquadramento_criterio_credenciamento_{solicitacao_id}_{reset}"
+            )
+
+            hipotese_legal = st.text_input(
+                "Base específica / regulamento do chamamento",
+                placeholder="Ex.: arts. 78, I, e 79 da Lei 14.133/2021",
+                key=f"enquadramento_hipotese_credenciamento_{solicitacao_id}_{reset}"
+            )
+
+            fundamento_legal = (
+                "Lei nº 14.133/2021, arts. 78, I, e 79."
+            )
+
+            st.info(
+                "ℹ️ No credenciamento, a lógica não é escolher um vencedor único por menor preço, mas habilitar interessados conforme condições objetivas e a hipótese legal aplicável."
+            )
+
 
         st.text_input(
-            "Fundamento Legal de Referência",
+            "Fundamento Legal",
             value=fundamento_legal,
             disabled=True,
-            key=f"enq_fundamento_chamamento_{solicitacao_id}_{reset}"
+            key=f"enquadramento_fundamento_direta_{solicitacao_id}_{reset}_{modalidade}"
         )
+
+
+    # ========================================================
+    # JUSTIFICATIVA / RESUMO
+    # ========================================================
+
     justificativa = st.text_area(
         "Justificativa do Enquadramento *",
-        height=160,
+        height=170,
         placeholder=(
-            "Justifique a escolha do procedimento, modalidade, "
-            "critério, modo de disputa e demais parâmetros."
+            "Fundamente a escolha do procedimento, modalidade ou hipótese, "
+            "critério, vantajosidade, adequação ao objeto e demais elementos."
         ),
-        key=f"enq_justificativa_{solicitacao_id}_{reset}"
+        key=f"enquadramento_justificativa_{solicitacao_id}_{reset}"
     )
 
     st.markdown("### ✅ Resumo do Enquadramento")
@@ -50634,11 +51125,11 @@ def enquadramento_incluir():
 
     r1.metric(
         "Valor de Referência",
-        _moeda(valor_cotado)
+        _moeda(valor_referencia)
     )
 
     r2.write(
-        f"**Procedimento:** {tipo_processo}"
+        f"**Grupo:** {grupo_processo}"
     )
     r2.write(
         f"**Modalidade/Hipótese:** {modalidade}"
@@ -50651,11 +51142,16 @@ def enquadramento_incluir():
         f"**Modo:** {modo}"
     )
 
+
+    # ========================================================
+    # SALVAR
+    # ========================================================
+
     salvar = st.button(
         "💾 Salvar Enquadramento",
         type="primary",
         use_container_width=True,
-        key=f"enq_salvar_{solicitacao_id}_{reset}"
+        key=f"enquadramento_salvar_{solicitacao_id}_{reset}"
     )
 
     if not salvar:
@@ -50674,36 +51170,16 @@ def enquadramento_incluir():
         return
 
     if (
-        tipo_processo in (
-            "Dispensa de Licitação",
-            "Inexigibilidade",
-            "Chamamento Público / Credenciamento"
+        modalidade in (
+            "Dispensa sem adesão - Outra hipótese do art. 75",
+            "Inexigibilidade"
         )
-        and not dispositivo_especifico.strip()
+        and not hipotese_legal.strip()
     ):
         st.warning(
-            "⚠️ Informe o dispositivo ou a hipótese legal específica do procedimento."
+            "⚠️ Informe o inciso/alínea ou fundamento legal específico."
         )
         return
-
-    if tipo_processo == "Adesão à Ata de Registro de Preços":
-        if not orgao_gerenciador.strip() or not numero_ata.strip():
-            st.warning(
-                "⚠️ Informe o Órgão Gerenciador e o Número da Ata."
-            )
-            return
-
-        if not compatibilidade_precos:
-            st.warning(
-                "⚠️ Confirme a demonstração de compatibilidade dos preços com o mercado."
-            )
-            return
-
-        if not anuencia_gerenciador or not anuencia_fornecedor:
-            st.warning(
-                "⚠️ Confirme as anuências do órgão gerenciador e do fornecedor."
-            )
-            return
 
     if (
         criterio == "Técnica e preço"
@@ -50714,48 +51190,70 @@ def enquadramento_incluir():
         ) > 0.005
     ):
         st.warning(
-            "⚠️ Técnica + Preço deve totalizar 100%."
+            "⚠️ Os pesos de Técnica e Preço devem totalizar 100%."
         )
         return
 
+
+    # ========================================================
+    # METADADOS DO ASSISTENTE
+    # Salvos na justificativa, sem alterar o banco.
+    # ========================================================
+
     metadados = [
         "",
-        "=== PARÂMETROS DO ENQUADRAMENTO ===",
+        "=== ASSISTENTE DE ENQUADRAMENTO ===",
         f"Valor cotado: {_moeda(valor_cotado)}",
         f"Valor vinculado em fichas: {_moeda(valor_fichas)}",
         f"Valor validado pelo financeiro: {_moeda(valor_financeiro)}",
-        f"Tipo do processo: {tipo_processo}",
+        f"Valor usado no enquadramento: {_moeda(valor_referencia)}",
+        f"Categoria do objeto: {categoria_objeto}",
+        f"Objeto comum: {'Sim' if objeto_comum else 'Não'}",
+        f"Há competição: {'Sim' if ha_competicao else 'Não'}",
+        f"Exclusividade/inviabilidade: {'Sim' if exclusividade else 'Não'}",
+        f"Emergência: {'Sim' if emergencia else 'Não'}",
+        f"Ata compatível: {'Sim' if ata_compativel else 'Não'}",
+        f"Adesão vantajosa: {'Sim' if adesao_vantajosa else 'Não'}",
+        f"Credenciamento/chamamento: {'Sim' if credenciamento else 'Não'}",
+        f"Predominância intelectual: {'Sim' if predominio_intelectual else 'Não'}",
+        f"Sugestão do assistente: {recomendacao['procedimento']} / {recomendacao['modalidade']} / {recomendacao['criterio']}",
+        f"Motivo da sugestão: {recomendacao['motivo']}",
+        "",
+        "=== ENQUADRAMENTO DEFINITIVO ===",
+        f"Grupo: {grupo_processo}",
+        f"Tipo do processo salvo: {tipo_processo}",
         f"Modalidade/Hipótese: {modalidade}",
-        f"Critério de julgamento: {criterio}",
+        f"Critério: {criterio}",
         f"Modo de disputa: {modo}",
         f"Forma: {forma}",
         f"SRP: {'Sim' if srp else 'Não'}"
     ]
 
-    if tipo_processo == "Licitação":
-
+    if grupo_processo == "Licitação":
         metadados.append(
-            f"Casas decimais no julgamento: {int(casas_decimais)}"
+            f"Casas decimais: {int(casas_decimais)}"
         )
-
         metadados.append(
-            "Intervalo mínimo entre lances: "
-            f"{float(intervalo_minimo):.{int(casas_decimais)}f}"
+            f"Intervalo mínimo: {float(intervalo_minimo):.{int(casas_decimais)}f}"
         )
 
         if criterio == "Técnica e preço":
             metadados.append(
-                f"Peso da técnica: {float(peso_tecnica):.2f}%"
+                f"Peso técnica: {float(peso_tecnica):.2f}%"
             )
             metadados.append(
-                f"Peso do preço: {float(peso_preco):.2f}%"
+                f"Peso preço: {float(peso_preco):.2f}%"
             )
 
-    elif dispositivo_especifico.strip():
+    if hipotese_legal.strip():
         metadados.append(
-            "Base legal / informações específicas: "
-            f"{dispositivo_especifico.strip()}"
+            f"Hipótese legal específica: {hipotese_legal.strip()}"
         )
+
+    if detalhes_adesao:
+        metadados.append("")
+        metadados.append("=== DADOS DA ADESÃO À ARP ===")
+        metadados.extend(detalhes_adesao)
 
     justificativa_salvar = (
         justificativa.strip()
@@ -50765,18 +51263,10 @@ def enquadramento_incluir():
 
     fundamento_salvar = fundamento_legal
 
-    if (
-        tipo_processo in (
-            "Dispensa de Licitação",
-            "Inexigibilidade",
-            "Chamamento Público / Credenciamento",
-            "Adesão à Ata de Registro de Preços"
-        )
-        and dispositivo_especifico.strip()
-    ):
+    if hipotese_legal.strip():
         fundamento_salvar = (
             f"{fundamento_legal} "
-            f"Informação específica: {dispositivo_especifico.strip()}."
+            f"Hipótese indicada: {hipotese_legal.strip()}."
         )
 
     codigo = sisget_proximo_codigo(
@@ -50808,7 +51298,7 @@ def enquadramento_incluir():
             codigo,
             solicitacao_id,
             tipo_processo,
-            tipo_objeto,
+            categoria_objeto,
             natureza_objeto.strip(),
             modalidade,
             criterio,
@@ -50819,13 +51309,11 @@ def enquadramento_incluir():
             justificativa_salvar
         )
     ):
-
         st.session_state[
             "sisget_mensagem_enquadramento"
         ] = (
             "✅ Enquadramento salvo com sucesso. "
-            "A solicitação permanece em ENQUADRAMENTO "
-            "até a assinatura."
+            "A solicitação permanece em ENQUADRAMENTO até a assinatura."
         )
 
         st.session_state[
