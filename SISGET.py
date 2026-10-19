@@ -25381,15 +25381,1343 @@ def planejamento_relatorios():
 # ============================================================
 def modulo_siscom():
 
-    modulo_em_desenvolvimento(
-        "SISCOM - Licitações e Compras",
-        "🛒"
+    import hashlib
+    import secrets
+    from datetime import datetime
+
+    # ============================================================
+    # SISCOM - LICITAÇÕES E COMPRAS
+    # ============================================================
+
+    def _texto(valor):
+        return str(valor or "").strip()
+
+    def _moeda(valor):
+        return (
+            f"R$ {float(valor or 0):,.2f}"
+            .replace(",", "X")
+            .replace(".", ",")
+            .replace("X", ".")
+        )
+
+    def _hash(chave):
+        return hashlib.sha256(
+            _texto(chave).encode("utf-8")
+        ).hexdigest()
+
+    def _preparar_estrutura():
+
+        comandos = [
+            """
+            CREATE TABLE IF NOT EXISTS siscom_processos
+            (
+                id BIGSERIAL PRIMARY KEY,
+                codigo VARCHAR(20) NOT NULL UNIQUE,
+                solicitacao_id BIGINT NOT NULL UNIQUE,
+                tr_id BIGINT,
+                cotacao_numero VARCHAR(60),
+                numero_processo VARCHAR(60) NOT NULL,
+                numero_edital VARCHAR(60),
+                grupo_procedimento VARCHAR(60),
+                modalidade VARCHAR(100),
+                criterio_julgamento VARCHAR(120),
+                modo_disputa VARCHAR(80),
+                forma_sessao VARCHAR(30),
+                tipo_julgamento VARCHAR(30) DEFAULT 'POR_ITEM',
+                peso_tecnica NUMERIC(10,4) DEFAULT 70,
+                peso_preco NUMERIC(10,4) DEFAULT 30,
+                objeto TEXT,
+                valor_referencia NUMERIC(18,4) DEFAULT 0,
+                data_publicacao TIMESTAMP,
+                inicio_sessao TIMESTAMP,
+                fim_sessao TIMESTAMP,
+                status VARCHAR(40) NOT NULL DEFAULT 'PREPARACAO',
+                observacao TEXT,
+                criado_por BIGINT,
+                criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                atualizado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS siscom_licitantes
+            (
+                id BIGSERIAL PRIMARY KEY,
+                processo_id BIGINT NOT NULL,
+                fornecedor_id BIGINT NOT NULL,
+                credenciado BOOLEAN NOT NULL DEFAULT TRUE,
+                habilitado BOOLEAN,
+                motivo_inabilitacao TEXT,
+                chave_acesso_hash VARCHAR(64),
+                criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                atualizado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (processo_id, fornecedor_id)
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS siscom_propostas
+            (
+                id BIGSERIAL PRIMARY KEY,
+                processo_id BIGINT NOT NULL,
+                licitante_id BIGINT NOT NULL,
+                solicitacao_item_id BIGINT,
+                tipo_evento VARCHAR(30) NOT NULL DEFAULT 'PROPOSTA',
+                rodada INTEGER NOT NULL DEFAULT 1,
+                valor_unitario NUMERIC(18,6) DEFAULT 0,
+                valor_total NUMERIC(18,4) DEFAULT 0,
+                desconto_percentual NUMERIC(12,6) DEFAULT 0,
+                retorno_economico NUMERIC(18,4) DEFAULT 0,
+                conteudo_tecnico TEXT,
+                observacao TEXT,
+                registrada_por BIGINT,
+                registrada_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS siscom_avaliacoes
+            (
+                id BIGSERIAL PRIMARY KEY,
+                processo_id BIGINT NOT NULL,
+                licitante_id BIGINT NOT NULL,
+                solicitacao_item_id BIGINT,
+                nota_tecnica NUMERIC(12,6) DEFAULT 0,
+                nota_preco NUMERIC(12,6) DEFAULT 0,
+                retorno_economico NUMERIC(18,4) DEFAULT 0,
+                observacao TEXT,
+                avaliado_por BIGINT,
+                avaliado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (processo_id, licitante_id, solicitacao_item_id)
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS siscom_resultados
+            (
+                id BIGSERIAL PRIMARY KEY,
+                processo_id BIGINT NOT NULL,
+                solicitacao_item_id BIGINT,
+                licitante_id BIGINT NOT NULL,
+                fornecedor_id BIGINT NOT NULL,
+                colocacao INTEGER NOT NULL,
+                valor_julgado NUMERIC(18,6) DEFAULT 0,
+                desconto_percentual NUMERIC(12,6) DEFAULT 0,
+                nota_tecnica NUMERIC(12,6) DEFAULT 0,
+                nota_preco NUMERIC(12,6) DEFAULT 0,
+                nota_final NUMERIC(12,6) DEFAULT 0,
+                retorno_economico NUMERIC(18,4) DEFAULT 0,
+                vencedor BOOLEAN NOT NULL DEFAULT FALSE,
+                julgado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS siscom_compras_liberadas
+            (
+                id BIGSERIAL PRIMARY KEY,
+                processo_id BIGINT NOT NULL,
+                solicitacao_id BIGINT NOT NULL,
+                solicitacao_item_id BIGINT,
+                fornecedor_id BIGINT NOT NULL,
+                quantidade NUMERIC(18,6) DEFAULT 0,
+                valor_unitario NUMERIC(18,6) DEFAULT 0,
+                valor_total NUMERIC(18,4) DEFAULT 0,
+                status VARCHAR(30) NOT NULL DEFAULT 'LIBERADA',
+                liberado_por BIGINT,
+                liberado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (processo_id, solicitacao_item_id, fornecedor_id)
+            )
+            """
+        ]
+
+        try:
+            for comando in comandos:
+                cursor.execute(comando)
+            conn.commit()
+            return True
+        except Exception as erro:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            st.error(f"❌ Erro ao preparar SISCOM: {erro}")
+            return False
+
+    def _proximo_codigo():
+        r = _sisget_fetchone(
+            """
+            SELECT COALESCE(
+                MAX(
+                    CAST(
+                        NULLIF(
+                            REGEXP_REPLACE(COALESCE(codigo,''),'[^0-9]','','g'),
+                            ''
+                        ) AS INTEGER
+                    )
+                ),
+                0
+            )
+            FROM siscom_processos
+            """
+        )
+        return str(int((r[0] if r else 0) or 0) + 1).zfill(6)
+
+    def _cotacao_cabecalho(solicitacao_id):
+        return _sisget_fetchone(
+            """
+            SELECT
+                c.entidade_id,
+                c.exercicio_id,
+                c.numero,
+                COALESCE(c.criterio_cotacao,''),
+                COALESCE(c.metodologia,'')
+            FROM cotacoes c
+            WHERE c.solicitacao_id = ?
+               OR EXISTS
+               (
+                    SELECT 1
+                    FROM cotacoes_solicitacoes cs
+                    WHERE cs.cotacao_id = c.id
+                      AND cs.solicitacao_id = ?
+               )
+            ORDER BY c.id DESC
+            LIMIT 1
+            """,
+            (solicitacao_id, solicitacao_id)
+        )
+
+    def _valor_cotacao(solicitacao_id):
+
+        cab = _cotacao_cabecalho(solicitacao_id)
+        if not cab:
+            return 0.0, None
+
+        entidade_id, exercicio_id, numero, criterio, metodologia = cab
+
+        dados = _sisget_fetch(
+            """
+            SELECT
+                c.id,
+                ci.solicitacao_item_id,
+                COALESCE(ci.quantidade,0),
+                COALESCE(ci.valor_unitario,0),
+                COALESCE(ci.valor_total,0)
+            FROM cotacoes c
+            INNER JOIN cotacoes_itens ci
+                ON ci.cotacao_id = c.id
+            INNER JOIN solicitacoes_itens si
+                ON si.id = ci.solicitacao_item_id
+            WHERE c.entidade_id = ?
+              AND c.exercicio_id = ?
+              AND c.numero = ?
+              AND si.solicitacao_id = ?
+            ORDER BY c.id, ci.solicitacao_item_id
+            """,
+            (entidade_id, exercicio_id, numero, solicitacao_id)
+        )
+
+        if not dados:
+            return 0.0, numero
+
+        criterio_norm = _texto(criterio).lower()
+        metodologia_norm = _texto(metodologia).lower()
+
+        if "global" in criterio_norm and "unitário/global" not in criterio_norm and "unitario/global" not in criterio_norm:
+            totais = {}
+            for cotacao_id, _, _, _, valor_total in dados:
+                totais[cotacao_id] = totais.get(cotacao_id, 0.0) + float(valor_total or 0)
+            return (min(totais.values()) if totais else 0.0), numero
+
+        mapa = {}
+        for _, item_id, quantidade, valor_unitario, _ in dados:
+            mapa.setdefault(item_id, {"quantidade": float(quantidade or 0), "precos": []})
+            if float(valor_unitario or 0) > 0:
+                mapa[item_id]["precos"].append(float(valor_unitario))
+
+        total = 0.0
+        for item in mapa.values():
+            precos = item["precos"]
+            if not precos:
+                continue
+            if "médio" in criterio_norm or "medio" in criterio_norm or metodologia_norm in ("média", "media"):
+                preco = sum(precos) / len(precos)
+            elif metodologia_norm == "mediana":
+                precos_ordenados = sorted(precos)
+                meio = len(precos_ordenados) // 2
+                if len(precos_ordenados) % 2:
+                    preco = precos_ordenados[meio]
+                else:
+                    preco = (precos_ordenados[meio - 1] + precos_ordenados[meio]) / 2
+            else:
+                preco = min(precos)
+            total += item["quantidade"] * preco
+
+        return total, numero
+
+    def _itens(solicitacao_id):
+        return _sisget_fetch(
+            """
+            SELECT
+                si.id,
+                si.numero_item,
+                p.codigo,
+                COALESCE(NULLIF(TRIM(p.produto),''), NULLIF(TRIM(p.descricao),''), 'Produto sem descrição'),
+                COALESCE(si.quantidade,0),
+                COALESCE(si.valor_estimado_unitario,0)
+            FROM solicitacoes_itens si
+            INNER JOIN produtos p
+                ON p.id = si.produto_id
+            WHERE si.solicitacao_id = ?
+            ORDER BY si.numero_item, si.id
+            """,
+            (solicitacao_id,)
+        )
+
+    def _processos():
+        return _sisget_fetch(
+            """
+            SELECT
+                id, codigo, solicitacao_id, tr_id, cotacao_numero,
+                numero_processo, numero_edital, grupo_procedimento,
+                modalidade, criterio_julgamento, modo_disputa,
+                forma_sessao, tipo_julgamento, peso_tecnica,
+                peso_preco, objeto, valor_referencia, data_publicacao,
+                inicio_sessao, fim_sessao, status, observacao
+            FROM siscom_processos
+            ORDER BY id DESC
+            """
+        )
+
+    def _processo(processo_id):
+        return _sisget_fetchone(
+            """
+            SELECT
+                id, codigo, solicitacao_id, tr_id, cotacao_numero,
+                numero_processo, numero_edital, grupo_procedimento,
+                modalidade, criterio_julgamento, modo_disputa,
+                forma_sessao, tipo_julgamento, peso_tecnica,
+                peso_preco, objeto, valor_referencia, data_publicacao,
+                inicio_sessao, fim_sessao, status, observacao
+            FROM siscom_processos
+            WHERE id = ?
+            """,
+            (processo_id,)
+        )
+
+    def _selecionar_processo(chave, somente_abertos=False):
+
+        dados = _processos()
+        if somente_abertos:
+            dados = [r for r in dados if _texto(r[20]).upper() not in ("CANCELADO", "LIBERADO_COMPRA")]
+
+        if not dados:
+            st.info("Nenhum processo SISCOM disponível.")
+            return None
+
+        mapa = {}
+        for r in dados:
+            rotulo = (
+                f"{r[1]} | Processo {r[5] or '-'} | "
+                f"Edital {r[6] or '-'} | {r[20]} | {r[15] or ''}"
+            )
+            mapa[rotulo] = r[0]
+
+        escolha = st.selectbox("Processo SISCOM *", list(mapa.keys()), key=chave)
+        return mapa[escolha]
+
+    def _abrir_processo():
+
+        st.subheader("📁 Abrir Processo SISCOM")
+
+        solicitacoes = _sisget_fetch(
+            """
+            SELECT s.id, s.codigo, s.numero, s.objeto
+            FROM solicitacoes s
+            WHERE s.tipo_solicitacao = 'LICITACAO'
+              AND s.ativo = TRUE
+              AND UPPER(TRIM(COALESCE(s.etapa_atual,''))) = 'CONCLUIDO'
+              AND EXISTS (SELECT 1 FROM solicitacoes_tr tr WHERE tr.solicitacao_id = s.id)
+              AND EXISTS (SELECT 1 FROM solicitacoes_enquadramento e WHERE e.solicitacao_id = s.id)
+              AND NOT EXISTS (SELECT 1 FROM siscom_processos sp WHERE sp.solicitacao_id = s.id)
+            ORDER BY s.id DESC
+            """
+        )
+
+        if not solicitacoes:
+            st.info("Não existem solicitações concluídas aguardando abertura no SISCOM.")
+            return
+
+        mapa = {
+            f"{codigo or numero} | {objeto or ''}": solicitacao_id
+            for solicitacao_id, codigo, numero, objeto in solicitacoes
+        }
+
+        rotulo = st.selectbox("Solicitação concluída *", list(mapa.keys()), key="siscom_solicitacao_nova")
+        solicitacao_id = mapa[rotulo]
+
+        base = _sisget_fetchone(
+            """
+            SELECT
+                s.objeto,
+                tr.id,
+                tr.codigo,
+                e.tipo_processo,
+                e.modalidade,
+                e.criterio_julgamento,
+                e.modo_disputa,
+                e.forma,
+                e.registro_precos,
+                e.fundamento_legal
+            FROM solicitacoes s
+            INNER JOIN solicitacoes_tr tr ON tr.solicitacao_id = s.id
+            INNER JOIN solicitacoes_enquadramento e ON e.solicitacao_id = s.id
+            WHERE s.id = ?
+            ORDER BY tr.id DESC, e.id DESC
+            LIMIT 1
+            """,
+            (solicitacao_id,)
+        )
+
+        if not base:
+            st.error("Não foi possível carregar TR e enquadramento.")
+            return
+
+        objeto, tr_id, tr_codigo, grupo, modalidade, criterio, modo, forma, srp, fundamento = base
+        valor_referencia, cotacao_numero = _valor_cotacao(solicitacao_id)
+
+        d1, d2, d3 = st.columns(3)
+        d1.metric("TR vinculado", str(tr_codigo or tr_id))
+        d2.metric("Cotação vinculada", str(cotacao_numero or "Não localizada"))
+        d3.metric("Valor de referência", _moeda(valor_referencia))
+
+        st.text_area("Objeto", value=_texto(objeto), disabled=True, height=100)
+        st.info(f"Enquadramento: {grupo or '-'} | {modalidade or '-'} | {criterio or '-'} | {modo or '-'}")
+
+        with st.form("siscom_form_abrir_processo"):
+            st.text_input("Código SISCOM", value=_proximo_codigo(), disabled=True)
+            c1, c2 = st.columns(2)
+            numero_processo = c1.text_input("Número do Processo *")
+            numero_edital = c2.text_input("Número do Edital / Aviso")
+
+            forma_padrao = "Eletrônica" if "eletr" in _texto(forma).lower() else "Presencial"
+            forma_sessao = st.selectbox(
+                "Forma da Sessão *",
+                ["Eletrônica", "Presencial"],
+                index=0 if forma_padrao == "Eletrônica" else 1
+            )
+
+            tipo_julgamento = st.selectbox("Julgamento *", ["Por item", "Global"])
+
+            p1, p2 = st.columns(2)
+            peso_tecnica = p1.number_input("Peso Técnica (%)", min_value=0.0, max_value=100.0, value=70.0)
+            peso_preco = p2.number_input("Peso Preço (%)", min_value=0.0, max_value=100.0, value=30.0)
+
+            observacao = st.text_area("Observações")
+            salvar = st.form_submit_button("✅ Criar Processo SISCOM", type="primary", use_container_width=True)
+
+        if salvar:
+            if not numero_processo.strip():
+                st.warning("Informe o número do processo.")
+                return
+
+            if "técnica e preço" in _texto(criterio).lower() or "tecnica e preço" in _texto(criterio).lower():
+                if abs((float(peso_tecnica) + float(peso_preco)) - 100.0) > 0.001:
+                    st.warning("Os pesos Técnica + Preço devem totalizar 100%.")
+                    return
+
+            if _sisget_salvar(
+                """
+                INSERT INTO siscom_processos
+                (
+                    codigo, solicitacao_id, tr_id, cotacao_numero,
+                    numero_processo, numero_edital, grupo_procedimento,
+                    modalidade, criterio_julgamento, modo_disputa,
+                    forma_sessao, tipo_julgamento, peso_tecnica,
+                    peso_preco, objeto, valor_referencia, status,
+                    observacao, criado_por
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PREPARACAO', ?, ?)
+                """,
+                (
+                    _proximo_codigo(), solicitacao_id, tr_id, cotacao_numero,
+                    numero_processo.strip(), numero_edital.strip() or None,
+                    grupo, modalidade, criterio, modo, forma_sessao,
+                    "POR_ITEM" if tipo_julgamento == "Por item" else "GLOBAL",
+                    float(peso_tecnica), float(peso_preco), objeto,
+                    float(valor_referencia or 0), observacao.strip() or None,
+                    st.session_state.get("usuario_id")
+                )
+            ):
+                st.success("✅ Processo SISCOM criado com TR e cotação vinculados.")
+                st.rerun()
+
+    def _publicacao_sessao():
+
+        st.subheader("📣 Publicação / Sessão")
+        processo_id = _selecionar_processo("siscom_pub_proc", somente_abertos=True)
+        if not processo_id:
+            return
+
+        p = _processo(processo_id)
+        if not p:
+            return
+
+        st.info(f"Processo {p[5] or '-'} | {p[8] or '-'} | {p[9] or '-'} | Status: {p[20]}")
+
+        c1, c2 = st.columns(2)
+        data_inicio = c1.date_input("Data da sessão", value=p[18].date() if p[18] else datetime.now().date())
+        hora_inicio = c2.time_input("Hora de início", value=p[18].time() if p[18] else datetime.now().replace(minute=0, second=0, microsecond=0).time())
+
+        c3, c4 = st.columns(2)
+        data_fim = c3.date_input("Data de encerramento", value=p[19].date() if p[19] else data_inicio)
+        hora_fim = c4.time_input("Hora de encerramento", value=p[19].time() if p[19] else datetime.now().replace(minute=0, second=0, microsecond=0).time())
+
+        forma = st.selectbox(
+            "Forma da sessão",
+            ["Eletrônica", "Presencial"],
+            index=0 if _texto(p[11]).lower().startswith("eletr") else 1
+        )
+
+        if st.button("📣 Publicar", type="primary", use_container_width=True):
+            inicio = datetime.combine(data_inicio, hora_inicio)
+            fim = datetime.combine(data_fim, hora_fim)
+            if fim <= inicio:
+                st.warning("O encerramento deve ser posterior ao início.")
+                return
+            if _sisget_salvar(
+                """
+                UPDATE siscom_processos
+                SET forma_sessao = ?, data_publicacao = CURRENT_TIMESTAMP,
+                    inicio_sessao = ?, fim_sessao = ?, status = 'PUBLICADO',
+                    atualizado_em = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (forma, inicio, fim, processo_id)
+            ):
+                st.rerun()
+
+        if p[20] in ("PUBLICADO", "SESSAO_ABERTA"):
+            if st.button("▶️ Abrir Sessão", use_container_width=True):
+                if _sisget_salvar(
+                    "UPDATE siscom_processos SET status='SESSAO_ABERTA', atualizado_em=CURRENT_TIMESTAMP WHERE id=?",
+                    (processo_id,)
+                ):
+                    st.rerun()
+
+        if p[20] == "SESSAO_ABERTA":
+            if st.button("⏹️ Encerrar Sessão e enviar para Julgamento", type="primary", use_container_width=True):
+                if _sisget_salvar(
+                    "UPDATE siscom_processos SET status='JULGAMENTO', fim_sessao=CURRENT_TIMESTAMP, atualizado_em=CURRENT_TIMESTAMP WHERE id=?",
+                    (processo_id,)
+                ):
+                    st.rerun()
+
+    def _licitantes():
+
+        st.subheader("🏢 Licitantes")
+        processo_id = _selecionar_processo("siscom_licit_proc", somente_abertos=True)
+        if not processo_id:
+            return
+
+        fornecedores = _sisget_fetch(
+            """
+            SELECT f.id, f.codigo, f.cpf_cnpj, f.razao_social
+            FROM fornecedores f
+            WHERE f.ativo = TRUE
+              AND NOT EXISTS
+              (
+                SELECT 1 FROM siscom_licitantes l
+                WHERE l.processo_id = ? AND l.fornecedor_id = f.id
+              )
+            ORDER BY f.razao_social
+            """,
+            (processo_id,)
+        )
+
+        if fornecedores:
+            mapa = {
+                f"{codigo} | {cpf_cnpj or '-'} | {razao}": fornecedor_id
+                for fornecedor_id, codigo, cpf_cnpj, razao in fornecedores
+            }
+            rotulo = st.selectbox("Fornecedor para adicionar", list(mapa.keys()))
+
+            if st.button("➕ Adicionar Licitante", type="primary", use_container_width=True):
+                chave = secrets.token_hex(4).upper()
+                if _sisget_salvar(
+                    """
+                    INSERT INTO siscom_licitantes
+                    (processo_id, fornecedor_id, credenciado, chave_acesso_hash)
+                    VALUES (?, ?, TRUE, ?)
+                    ON CONFLICT (processo_id, fornecedor_id) DO NOTHING
+                    """,
+                    (processo_id, mapa[rotulo], _hash(chave))
+                ):
+                    st.session_state["siscom_chave_nova"] = (rotulo, chave)
+                    st.rerun()
+
+        if "siscom_chave_nova" in st.session_state:
+            nome, chave = st.session_state.pop("siscom_chave_nova")
+            st.success(f"✅ {nome}\n\nChave de acesso ao portal: `{chave}`")
+
+        dados = _sisget_fetch(
+            """
+            SELECT l.id, f.razao_social, f.cpf_cnpj, l.habilitado, COALESCE(l.motivo_inabilitacao,'')
+            FROM siscom_licitantes l
+            INNER JOIN fornecedores f ON f.id = l.fornecedor_id
+            WHERE l.processo_id = ?
+            ORDER BY f.razao_social
+            """,
+            (processo_id,)
+        )
+
+        for licitante_id, razao, documento, habilitado, motivo in dados:
+            with st.expander(f"{razao} | {documento or '-'}"):
+                if habilitado is True:
+                    st.success("✅ Habilitado")
+                elif habilitado is False:
+                    st.error(f"❌ Inabilitado: {motivo}")
+                else:
+                    st.info("Habilitação pendente")
+
+                motivo_novo = st.text_input("Motivo da inabilitação", key=f"motivo_{licitante_id}")
+                b1, b2, b3 = st.columns(3)
+
+                if b1.button("✅ Habilitar", key=f"hab_{licitante_id}"):
+                    _sisget_salvar(
+                        "UPDATE siscom_licitantes SET habilitado=TRUE, motivo_inabilitacao=NULL, atualizado_em=CURRENT_TIMESTAMP WHERE id=?",
+                        (licitante_id,)
+                    )
+                    st.rerun()
+
+                if b2.button("❌ Inabilitar", key=f"inab_{licitante_id}"):
+                    if not motivo_novo.strip():
+                        st.warning("Informe o motivo.")
+                    else:
+                        _sisget_salvar(
+                            "UPDATE siscom_licitantes SET habilitado=FALSE, motivo_inabilitacao=?, atualizado_em=CURRENT_TIMESTAMP WHERE id=?",
+                            (motivo_novo.strip(), licitante_id)
+                        )
+                        st.rerun()
+
+                if b3.button("🔑 Nova chave", key=f"chave_{licitante_id}"):
+                    chave = secrets.token_hex(4).upper()
+                    if _sisget_salvar(
+                        "UPDATE siscom_licitantes SET chave_acesso_hash=?, atualizado_em=CURRENT_TIMESTAMP WHERE id=?",
+                        (_hash(chave), licitante_id)
+                    ):
+                        st.success(f"Nova chave: `{chave}`")
+
+    def _form_propostas(processo_id, portal_licitante_id=None):
+
+        p = _processo(processo_id)
+        if not p:
+            return
+
+        itens = _itens(p[2])
+
+        if portal_licitante_id:
+            licitante_id = portal_licitante_id
+            tipo_evento = "LANCE" if p[20] == "SESSAO_ABERTA" else "PROPOSTA"
+        else:
+            licitantes = _sisget_fetch(
+                """
+                SELECT l.id, f.razao_social, f.cpf_cnpj
+                FROM siscom_licitantes l
+                INNER JOIN fornecedores f ON f.id = l.fornecedor_id
+                WHERE l.processo_id = ? AND l.credenciado=TRUE
+                ORDER BY f.razao_social
+                """,
+                (processo_id,)
+            )
+            if not licitantes:
+                st.warning("Adicione licitantes ao processo.")
+                return
+            mapa = {f"{razao} | {doc or '-'}": lid for lid, razao, doc in licitantes}
+            rotulo = st.selectbox("Licitante *", list(mapa.keys()), key=f"prop_lic_{processo_id}")
+            licitante_id = mapa[rotulo]
+            tipo_evento = st.selectbox("Tipo de registro", ["PROPOSTA", "LANCE"], key=f"tipo_prop_{processo_id}")
+
+        atual = _sisget_fetchone(
+            "SELECT COALESCE(MAX(rodada),0) FROM siscom_propostas WHERE processo_id=? AND licitante_id=?",
+            (processo_id, licitante_id)
+        )
+        rodada = int((atual[0] if atual else 0) or 0) + 1
+
+        entradas = []
+        for item_id, numero_item, codigo_produto, descricao, quantidade, valor_estimado in itens:
+            with st.expander(f"Item {numero_item or '-'} | {codigo_produto or ''} {descricao}", expanded=True):
+                c1, c2 = st.columns(2)
+                valor = c1.number_input(
+                    "Valor unitário",
+                    min_value=0.0,
+                    value=0.0,
+                    step=0.01,
+                    format="%.6f",
+                    key=f"v_{processo_id}_{licitante_id}_{item_id}_{rodada}"
+                )
+                desconto = c2.number_input(
+                    "Desconto (%)",
+                    min_value=0.0,
+                    max_value=100.0,
+                    value=0.0,
+                    step=0.01,
+                    key=f"d_{processo_id}_{licitante_id}_{item_id}_{rodada}"
+                )
+                retorno = st.number_input(
+                    "Retorno econômico",
+                    min_value=0.0,
+                    value=0.0,
+                    step=0.01,
+                    key=f"r_{processo_id}_{licitante_id}_{item_id}_{rodada}"
+                )
+                tecnico = st.text_area(
+                    "Conteúdo / Proposta Técnica",
+                    key=f"t_{processo_id}_{licitante_id}_{item_id}_{rodada}"
+                )
+                entradas.append((item_id, float(quantidade or 0), float(valor), float(desconto), float(retorno), tecnico))
+
+        if st.button("💾 Registrar Proposta / Lance", type="primary", use_container_width=True, key=f"salvar_prop_{processo_id}_{licitante_id}_{rodada}"):
+            try:
+                for item_id, quantidade, valor, desconto, retorno, tecnico in entradas:
+                    cursor.execute(
+                        """
+                        INSERT INTO siscom_propostas
+                        (
+                            processo_id, licitante_id, solicitacao_item_id,
+                            tipo_evento, rodada, valor_unitario, valor_total,
+                            desconto_percentual, retorno_economico,
+                            conteudo_tecnico, registrada_por
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            processo_id, licitante_id, item_id, tipo_evento,
+                            rodada, valor, quantidade * valor, desconto,
+                            retorno, tecnico.strip() or None,
+                            None if portal_licitante_id else st.session_state.get("usuario_id")
+                        )
+                    )
+                conn.commit()
+                st.success("✅ Registro efetuado.")
+                st.rerun()
+            except Exception as erro:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+                st.error(f"❌ Erro ao registrar: {erro}")
+
+    def _sessao_presencial():
+
+        st.subheader("🏛️ Sessão Presencial")
+        processo_id = _selecionar_processo("siscom_pres_proc", somente_abertos=True)
+        if not processo_id:
+            return
+        p = _processo(processo_id)
+        if _texto(p[11]).lower() != "presencial":
+            st.warning("Este processo está configurado como eletrônico.")
+            return
+        st.info(f"Status: {p[20]}")
+        _form_propostas(processo_id)
+
+    def _portal_eletronico():
+
+        st.subheader("🌐 Plataforma Eletrônica do Licitante")
+        st.caption("Área para fornecedor credenciado enviar proposta e lances.")
+
+        sessao = st.session_state.get("siscom_portal")
+
+        if not sessao:
+            with st.form("siscom_login_fornecedor"):
+                documento = st.text_input("CPF/CNPJ *")
+                chave = st.text_input("Chave de acesso *", type="password")
+                entrar = st.form_submit_button("🔐 Entrar", type="primary", use_container_width=True)
+
+            if entrar:
+                doc = "".join(c for c in documento if c.isdigit())
+                r = _sisget_fetchone(
+                    """
+                    SELECT
+                        l.id, l.processo_id, l.fornecedor_id,
+                        f.razao_social, p.forma_sessao, p.status
+                    FROM siscom_licitantes l
+                    INNER JOIN fornecedores f ON f.id = l.fornecedor_id
+                    INNER JOIN siscom_processos p ON p.id = l.processo_id
+                    WHERE REGEXP_REPLACE(COALESCE(f.cpf_cnpj,''),'[^0-9]','','g') = ?
+                      AND l.chave_acesso_hash = ?
+                      AND l.credenciado = TRUE
+                    ORDER BY l.id DESC
+                    LIMIT 1
+                    """,
+                    (doc, _hash(chave))
+                )
+
+                if not r:
+                    st.error("CPF/CNPJ ou chave inválidos.")
+                    return
+
+                if _texto(r[4]).lower() != "eletrônica".lower():
+                    st.warning("O processo desse acesso é presencial.")
+                    return
+
+                st.session_state["siscom_portal"] = {
+                    "licitante_id": r[0],
+                    "processo_id": r[1],
+                    "fornecedor_id": r[2],
+                    "razao_social": r[3]
+                }
+                st.rerun()
+            return
+
+        if st.button("🚪 Sair do Portal"):
+            st.session_state.pop("siscom_portal", None)
+            st.rerun()
+
+        processo_id = sessao["processo_id"]
+        licitante_id = sessao["licitante_id"]
+        p = _processo(processo_id)
+
+        st.success(f"Fornecedor: {sessao['razao_social']}")
+        st.info(f"Processo {p[5] or '-'} | Critério: {p[9] or '-'} | Status: {p[20]}")
+
+        if p[20] not in ("PUBLICADO", "SESSAO_ABERTA"):
+            st.warning("O processo não está recebendo proposta/lance.")
+            return
+
+        _form_propostas(processo_id, portal_licitante_id=licitante_id)
+
+        historico = _sisget_dataframe(
+            """
+            SELECT
+                sp.rodada AS "Rodada",
+                sp.tipo_evento AS "Tipo",
+                si.numero_item AS "Item",
+                sp.valor_unitario AS "Valor Unitário",
+                sp.desconto_percentual AS "Desconto %",
+                sp.registrada_em AS "Data/Hora"
+            FROM siscom_propostas sp
+            LEFT JOIN solicitacoes_itens si ON si.id = sp.solicitacao_item_id
+            WHERE sp.processo_id = ? AND sp.licitante_id = ?
+            ORDER BY sp.id DESC
+            """,
+            (processo_id, licitante_id)
+        )
+        if not historico.empty:
+            st.dataframe(historico, use_container_width=True, hide_index=True)
+
+    def _avaliacao():
+
+        st.subheader("🧠 Avaliação Técnica / Econômica")
+        processo_id = _selecionar_processo("siscom_av_proc", somente_abertos=True)
+        if not processo_id:
+            return
+
+        p = _processo(processo_id)
+        itens = _itens(p[2])
+        licitantes = _sisget_fetch(
+            """
+            SELECT l.id, f.razao_social
+            FROM siscom_licitantes l
+            INNER JOIN fornecedores f ON f.id = l.fornecedor_id
+            WHERE l.processo_id = ? AND COALESCE(l.habilitado,TRUE)=TRUE
+            ORDER BY f.razao_social
+            """,
+            (processo_id,)
+        )
+
+        if not licitantes:
+            st.info("Nenhum licitante disponível para avaliação.")
+            return
+
+        mapa = {nome: lid for lid, nome in licitantes}
+        nome = st.selectbox("Licitante *", list(mapa.keys()))
+        licitante_id = mapa[nome]
+
+        for item_id, numero_item, codigo, descricao, quantidade, valor_est in itens:
+            atual = _sisget_fetchone(
+                """
+                SELECT nota_tecnica, nota_preco, retorno_economico, observacao
+                FROM siscom_avaliacoes
+                WHERE processo_id=? AND licitante_id=? AND solicitacao_item_id=?
+                """,
+                (processo_id, licitante_id, item_id)
+            )
+
+            with st.expander(f"Item {numero_item} | {descricao}", expanded=True):
+                c1, c2, c3 = st.columns(3)
+                nt = c1.number_input("Nota técnica", min_value=0.0, max_value=100.0, value=float((atual[0] if atual else 0) or 0), key=f"nt_{processo_id}_{licitante_id}_{item_id}")
+                np = c2.number_input("Nota preço", min_value=0.0, max_value=100.0, value=float((atual[1] if atual else 0) or 0), key=f"np_{processo_id}_{licitante_id}_{item_id}")
+                re = c3.number_input("Retorno econômico", min_value=0.0, value=float((atual[2] if atual else 0) or 0), key=f"re_{processo_id}_{licitante_id}_{item_id}")
+                obs = st.text_area("Observação", value=_texto(atual[3]) if atual else "", key=f"obs_av_{processo_id}_{licitante_id}_{item_id}")
+
+                if st.button("💾 Salvar avaliação", key=f"sav_av_{processo_id}_{licitante_id}_{item_id}"):
+                    if _sisget_salvar(
+                        """
+                        INSERT INTO siscom_avaliacoes
+                        (processo_id, licitante_id, solicitacao_item_id, nota_tecnica, nota_preco, retorno_economico, observacao, avaliado_por)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT (processo_id, licitante_id, solicitacao_item_id)
+                        DO UPDATE SET
+                            nota_tecnica=EXCLUDED.nota_tecnica,
+                            nota_preco=EXCLUDED.nota_preco,
+                            retorno_economico=EXCLUDED.retorno_economico,
+                            observacao=EXCLUDED.observacao,
+                            avaliado_por=EXCLUDED.avaliado_por,
+                            avaliado_em=CURRENT_TIMESTAMP
+                        """,
+                        (processo_id, licitante_id, item_id, float(nt), float(np), float(re), obs.strip() or None, st.session_state.get("usuario_id"))
+                    ):
+                        st.success("Avaliação salva.")
+
+    def _melhores_ofertas(processo_id, criterio):
+
+        dados = _sisget_fetch(
+            """
+            SELECT
+                sp.licitante_id,
+                l.fornecedor_id,
+                sp.solicitacao_item_id,
+                COALESCE(sp.valor_unitario,0),
+                COALESCE(sp.valor_total,0),
+                COALESCE(sp.desconto_percentual,0),
+                COALESCE(sp.retorno_economico,0),
+                sp.id
+            FROM siscom_propostas sp
+            INNER JOIN siscom_licitantes l ON l.id = sp.licitante_id
+            WHERE sp.processo_id = ?
+              AND COALESCE(l.habilitado,TRUE)=TRUE
+            ORDER BY sp.id
+            """,
+            (processo_id,)
+        )
+
+        crit = _texto(criterio).lower()
+        mapa = {}
+
+        for licitante_id, fornecedor_id, item_id, valor, total, desconto, retorno, proposta_id in dados:
+            candidato = {
+                "licitante_id": licitante_id,
+                "fornecedor_id": fornecedor_id,
+                "item_id": item_id,
+                "valor_unitario": float(valor or 0),
+                "valor_total": float(total or 0),
+                "desconto": float(desconto or 0),
+                "retorno": float(retorno or 0),
+                "id": proposta_id
+            }
+            chave = (licitante_id, item_id)
+            atual = mapa.get(chave)
+
+            if atual is None:
+                mapa[chave] = candidato
+                continue
+
+            if "maior desconto" in crit:
+                melhor = candidato["desconto"] > atual["desconto"]
+            elif "maior lance" in crit:
+                melhor = candidato["valor_unitario"] > atual["valor_unitario"]
+            elif "maior retorno" in crit:
+                melhor = candidato["retorno"] > atual["retorno"]
+            else:
+                novo = candidato["valor_unitario"]
+                antigo = atual["valor_unitario"]
+                melhor = novo > 0 and (antigo <= 0 or novo < antigo)
+
+            if melhor:
+                mapa[chave] = candidato
+
+        return list(mapa.values())
+
+    def _processar_julgamento(processo_id):
+
+        p = _processo(processo_id)
+        if not p:
+            return False, "Processo não encontrado."
+
+        criterio = _texto(p[9])
+        crit = criterio.lower()
+        tipo = _texto(p[12]).upper()
+        peso_t = float(p[13] or 70)
+        peso_p = float(p[14] or 30)
+        ofertas = _melhores_ofertas(processo_id, criterio)
+
+        if not ofertas:
+            return False, "Não existem propostas/lances válidos."
+
+        avaliacoes = _sisget_fetch(
+            """
+            SELECT licitante_id, solicitacao_item_id,
+                   COALESCE(nota_tecnica,0), COALESCE(nota_preco,0), COALESCE(retorno_economico,0)
+            FROM siscom_avaliacoes
+            WHERE processo_id = ?
+            """,
+            (processo_id,)
+        )
+        av = {
+            (r[0], r[1]): {
+                "t": float(r[2] or 0),
+                "p": float(r[3] or 0),
+                "r": float(r[4] or 0)
+            }
+            for r in avaliacoes
+        }
+
+        def ordenar(ranking):
+            if "maior desconto" in crit:
+                ranking.sort(key=lambda x: x["desconto"], reverse=True)
+            elif "melhor técnica" in crit or "melhor tecnica" in crit:
+                ranking.sort(key=lambda x: x["nota_tecnica"], reverse=True)
+            elif "técnica e preço" in crit or "tecnica e preço" in crit:
+                ranking.sort(key=lambda x: x["nota_final"], reverse=True)
+            elif "maior lance" in crit:
+                ranking.sort(key=lambda x: x["valor"], reverse=True)
+            elif "maior retorno" in crit:
+                ranking.sort(key=lambda x: x["retorno_final"], reverse=True)
+            else:
+                ranking.sort(key=lambda x: x["valor"] if x["valor"] > 0 else float("inf"))
+            return ranking
+
+        try:
+            cursor.execute("DELETE FROM siscom_resultados WHERE processo_id=?", (processo_id,))
+
+            if tipo == "GLOBAL":
+                grupos = {}
+                for o in ofertas:
+                    lid = o["licitante_id"]
+                    g = grupos.setdefault(lid, {
+                        "licitante_id": lid,
+                        "fornecedor_id": o["fornecedor_id"],
+                        "valor": 0.0,
+                        "desconto": 0.0,
+                        "nota_tecnica": 0.0,
+                        "nota_preco": 0.0,
+                        "retorno_final": 0.0,
+                        "qtd": 0
+                    })
+                    a = av.get((lid, o["item_id"]), {})
+                    g["valor"] += o["valor_total"]
+                    g["desconto"] += o["desconto"]
+                    g["nota_tecnica"] += float(a.get("t", 0))
+                    g["nota_preco"] += float(a.get("p", 0))
+                    g["retorno_final"] += max(o["retorno"], float(a.get("r", 0)))
+                    g["qtd"] += 1
+
+                ranking = list(grupos.values())
+                for g in ranking:
+                    q = max(g["qtd"], 1)
+                    g["desconto"] /= q
+                    g["nota_tecnica"] /= q
+                    g["nota_preco"] /= q
+                    g["nota_final"] = ((g["nota_tecnica"] * peso_t) + (g["nota_preco"] * peso_p)) / 100
+
+                ordenar(ranking)
+                for pos, g in enumerate(ranking, 1):
+                    cursor.execute(
+                        """
+                        INSERT INTO siscom_resultados
+                        (processo_id, solicitacao_item_id, licitante_id, fornecedor_id, colocacao,
+                         valor_julgado, desconto_percentual, nota_tecnica, nota_preco, nota_final,
+                         retorno_economico, vencedor)
+                        VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (processo_id, g["licitante_id"], g["fornecedor_id"], pos, g["valor"], g["desconto"], g["nota_tecnica"], g["nota_preco"], g["nota_final"], g["retorno_final"], pos == 1)
+                    )
+
+            else:
+                for item in _itens(p[2]):
+                    item_id = item[0]
+                    ranking = []
+                    for o in ofertas:
+                        if o["item_id"] != item_id:
+                            continue
+                        a = av.get((o["licitante_id"], item_id), {})
+                        nt = float(a.get("t", 0))
+                        np = float(a.get("p", 0))
+                        retorno = max(o["retorno"], float(a.get("r", 0)))
+                        ranking.append({
+                            "licitante_id": o["licitante_id"],
+                            "fornecedor_id": o["fornecedor_id"],
+                            "valor": o["valor_unitario"],
+                            "desconto": o["desconto"],
+                            "nota_tecnica": nt,
+                            "nota_preco": np,
+                            "nota_final": ((nt * peso_t) + (np * peso_p)) / 100,
+                            "retorno_final": retorno
+                        })
+                    ordenar(ranking)
+                    for pos, g in enumerate(ranking, 1):
+                        cursor.execute(
+                            """
+                            INSERT INTO siscom_resultados
+                            (processo_id, solicitacao_item_id, licitante_id, fornecedor_id, colocacao,
+                             valor_julgado, desconto_percentual, nota_tecnica, nota_preco, nota_final,
+                             retorno_economico, vencedor)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            """,
+                            (processo_id, item_id, g["licitante_id"], g["fornecedor_id"], pos, g["valor"], g["desconto"], g["nota_tecnica"], g["nota_preco"], g["nota_final"], g["retorno_final"], pos == 1)
+                        )
+
+            cursor.execute(
+                "UPDATE siscom_processos SET status='JULGADO', atualizado_em=CURRENT_TIMESTAMP WHERE id=?",
+                (processo_id,)
+            )
+            conn.commit()
+            return True, "Julgamento processado."
+
+        except Exception as erro:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            return False, str(erro)
+
+    def _julgamento():
+
+        st.subheader("⚖️ Julgamento do Processo")
+        processo_id = _selecionar_processo("siscom_julg_proc", somente_abertos=True)
+        if not processo_id:
+            return
+        p = _processo(processo_id)
+        st.info(f"Critério: {p[9] or '-'} | Tipo: {'Por item' if p[12]=='POR_ITEM' else 'Global'} | Status: {p[20]}")
+
+        if st.button("⚙️ Processar Julgamento", type="primary", use_container_width=True):
+            ok, msg = _processar_julgamento(processo_id)
+            (st.success if ok else st.error)(msg)
+            if ok:
+                st.rerun()
+
+        df = _sisget_dataframe(
+            """
+            SELECT
+                r.colocacao AS "Colocação",
+                COALESCE(si.numero_item::TEXT,'GLOBAL') AS "Item",
+                f.razao_social AS "Licitante",
+                r.valor_julgado AS "Valor Julgado",
+                r.desconto_percentual AS "Desconto %",
+                r.nota_tecnica AS "Nota Técnica",
+                r.nota_preco AS "Nota Preço",
+                r.nota_final AS "Nota Final",
+                r.retorno_economico AS "Retorno Econômico",
+                CASE WHEN r.vencedor THEN '🏆 VENCEDOR' ELSE '' END AS "Resultado"
+            FROM siscom_resultados r
+            INNER JOIN fornecedores f ON f.id = r.fornecedor_id
+            LEFT JOIN solicitacoes_itens si ON si.id = r.solicitacao_item_id
+            WHERE r.processo_id = ?
+            ORDER BY r.solicitacao_item_id NULLS FIRST, r.colocacao
+            """,
+            (processo_id,)
+        )
+        if not df.empty:
+            st.dataframe(df, use_container_width=True, hide_index=True)
+
+        if p[20] == "JULGADO":
+            if st.button("🏆 Adjudicar Resultado", type="primary", use_container_width=True):
+                if _sisget_salvar(
+                    "UPDATE siscom_processos SET status='ADJUDICADO', atualizado_em=CURRENT_TIMESTAMP WHERE id=?",
+                    (processo_id,)
+                ):
+                    st.rerun()
+
+        if p[20] == "ADJUDICADO":
+            if st.button("✅ Homologar Processo", type="primary", use_container_width=True):
+                if _sisget_salvar(
+                    "UPDATE siscom_processos SET status='HOMOLOGADO', atualizado_em=CURRENT_TIMESTAMP WHERE id=?",
+                    (processo_id,)
+                ):
+                    st.rerun()
+
+    def _liberar_compra(processo_id):
+
+        p = _processo(processo_id)
+        if not p or p[20] != "HOMOLOGADO":
+            return False, "Somente processo homologado pode ser liberado para compra."
+
+        solicitacao_id = p[2]
+        vencedores = _sisget_fetch(
+            "SELECT solicitacao_item_id, fornecedor_id, valor_julgado FROM siscom_resultados WHERE processo_id=? AND vencedor=TRUE",
+            (processo_id,)
+        )
+        if not vencedores:
+            return False, "Nenhum vencedor encontrado."
+
+        try:
+            itens = {i[0]: i for i in _itens(solicitacao_id)}
+
+            if p[12] == "GLOBAL":
+                fornecedor_id = vencedores[0][1]
+                ofertas = _melhores_ofertas(processo_id, p[9])
+                mapa_ofertas = {(o["fornecedor_id"], o["item_id"]): o for o in ofertas}
+                lista = []
+                for item_id, item in itens.items():
+                    oferta = mapa_ofertas.get((fornecedor_id, item_id))
+                    if oferta:
+                        lista.append((item_id, fornecedor_id, oferta["valor_unitario"]))
+            else:
+                lista = vencedores
+
+            for item_id, fornecedor_id, valor_unitario in lista:
+                if item_id not in itens:
+                    continue
+                quantidade = float(itens[item_id][4] or 0)
+                valor_unitario = float(valor_unitario or 0)
+                cursor.execute(
+                    """
+                    INSERT INTO siscom_compras_liberadas
+                    (processo_id, solicitacao_id, solicitacao_item_id, fornecedor_id,
+                     quantidade, valor_unitario, valor_total, status, liberado_por)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'LIBERADA', ?)
+                    ON CONFLICT (processo_id, solicitacao_item_id, fornecedor_id) DO NOTHING
+                    """,
+                    (processo_id, solicitacao_id, item_id, fornecedor_id, quantidade, valor_unitario, quantidade * valor_unitario, st.session_state.get("usuario_id"))
+                )
+
+            cursor.execute(
+                "UPDATE siscom_processos SET status='LIBERADO_COMPRA', atualizado_em=CURRENT_TIMESTAMP WHERE id=?",
+                (processo_id,)
+            )
+            conn.commit()
+            return True, "Processo liberado para compra."
+
+        except Exception as erro:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            return False, str(erro)
+
+    def _compras():
+
+        st.subheader("🛒 Liberação para Compra")
+        processo_id = _selecionar_processo("siscom_compra_proc")
+        if not processo_id:
+            return
+        p = _processo(processo_id)
+        st.info(f"Processo {p[5] or '-'} | Status: {p[20]} | Referência: {_moeda(p[16])}")
+
+        vencedores = _sisget_dataframe(
+            """
+            SELECT
+                COALESCE(si.numero_item::TEXT,'GLOBAL') AS "Item",
+                f.razao_social AS "Vencedor",
+                f.cpf_cnpj AS "CPF/CNPJ",
+                r.valor_julgado AS "Valor Julgado",
+                r.desconto_percentual AS "Desconto %",
+                r.nota_final AS "Nota Final"
+            FROM siscom_resultados r
+            INNER JOIN fornecedores f ON f.id = r.fornecedor_id
+            LEFT JOIN solicitacoes_itens si ON si.id = r.solicitacao_item_id
+            WHERE r.processo_id=? AND r.vencedor=TRUE
+            ORDER BY r.solicitacao_item_id
+            """,
+            (processo_id,)
+        )
+        if not vencedores.empty:
+            st.dataframe(vencedores, use_container_width=True, hide_index=True)
+
+        if p[20] == "HOMOLOGADO":
+            if st.button("🛒 Liberar Vencedor(es) para Compra", type="primary", use_container_width=True):
+                ok, msg = _liberar_compra(processo_id)
+                (st.success if ok else st.error)(msg)
+                if ok:
+                    st.rerun()
+
+        df = _sisget_dataframe(
+            """
+            SELECT
+                s.codigo AS "Solicitação",
+                si.numero_item AS "Item",
+                pr.codigo AS "Código Produto",
+                COALESCE(NULLIF(TRIM(pr.produto),''), NULLIF(TRIM(pr.descricao),''), '') AS "Produto",
+                f.razao_social AS "Fornecedor Vencedor",
+                c.quantidade AS "Quantidade",
+                c.valor_unitario AS "Valor Unitário",
+                c.valor_total AS "Valor Total",
+                c.status AS "Situação"
+            FROM siscom_compras_liberadas c
+            INNER JOIN solicitacoes s ON s.id = c.solicitacao_id
+            LEFT JOIN solicitacoes_itens si ON si.id = c.solicitacao_item_id
+            LEFT JOIN produtos pr ON pr.id = si.produto_id
+            INNER JOIN fornecedores f ON f.id = c.fornecedor_id
+            WHERE c.processo_id = ?
+            ORDER BY si.numero_item
+            """,
+            (processo_id,)
+        )
+        if not df.empty:
+            st.markdown("### ✅ Itens liberados para compra")
+            st.dataframe(df, use_container_width=True, hide_index=True)
+
+    def _painel():
+
+        st.subheader("📊 Processos SISCOM")
+        df = _sisget_dataframe(
+            """
+            SELECT
+                p.codigo AS "Código",
+                p.numero_processo AS "Processo",
+                p.numero_edital AS "Edital",
+                p.grupo_procedimento AS "Procedimento",
+                p.modalidade AS "Modalidade / Hipótese",
+                p.criterio_julgamento AS "Critério",
+                p.forma_sessao AS "Sessão",
+                p.objeto AS "Objeto",
+                p.valor_referencia AS "Valor Referência",
+                p.status AS "Situação",
+                tr.codigo AS "TR",
+                p.cotacao_numero AS "Cotação"
+            FROM siscom_processos p
+            LEFT JOIN solicitacoes_tr tr ON tr.id = p.tr_id
+            ORDER BY p.id DESC
+            """
+        )
+        if df.empty:
+            st.info("Nenhum processo SISCOM cadastrado.")
+        else:
+            st.dataframe(df, use_container_width=True, hide_index=True)
+
+    if not _preparar_estrutura():
+        return
+
+    st.title("🛒 SISCOM - Licitações e Compras")
+    st.caption(
+        "Processo licitatório completo: TR + cotação, licitantes, sessão eletrônica ou presencial, "
+        "propostas/lances, habilitação, julgamento, adjudicação, homologação e liberação do vencedor para compra."
+    )
+    st.divider()
+
+    modulo = st.selectbox(
+        "SISCOM *",
+        [
+            "📊 Processos",
+            "📁 Abrir Processo",
+            "📣 Publicação / Sessão",
+            "🏢 Licitantes",
+            "🌐 Plataforma Eletrônica",
+            "🏛️ Sessão Presencial",
+            "🧠 Avaliação Técnica / Econômica",
+            "⚖️ Julgamento",
+            "🛒 Liberação para Compra"
+        ],
+        key="siscom_modulo"
     )
 
+    st.divider()
 
-# ============================================================
-# SISCON
-# ============================================================
+    if modulo == "📊 Processos":
+        _painel()
+    elif modulo == "📁 Abrir Processo":
+        _abrir_processo()
+    elif modulo == "📣 Publicação / Sessão":
+        _publicacao_sessao()
+    elif modulo == "🏢 Licitantes":
+        _licitantes()
+    elif modulo == "🌐 Plataforma Eletrônica":
+        _portal_eletronico()
+    elif modulo == "🏛️ Sessão Presencial":
+        _sessao_presencial()
+    elif modulo == "🧠 Avaliação Técnica / Econômica":
+        _avaliacao()
+    elif modulo == "⚖️ Julgamento":
+        _julgamento()
+    elif modulo == "🛒 Liberação para Compra":
+        _compras()
+
 
 def modulo_siscon():
 
