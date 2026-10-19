@@ -51290,14 +51290,36 @@ def tr_incluir():
     if "sisget_tr_reset" not in st.session_state:
         st.session_state["sisget_tr_reset"] = 0
 
-    reset = st.session_state[
-        "sisget_tr_reset"
-    ]
+    reset = st.session_state["sisget_tr_reset"]
+
+    if "sisget_mensagem_tr" in st.session_state:
+        st.success(st.session_state.pop("sisget_mensagem_tr"))
+
+    def _moeda(valor):
+        return (
+            f"R$ {float(valor or 0):,.2f}"
+            .replace(",", "X")
+            .replace(".", ",")
+            .replace("X", ".")
+        )
+
+    def _texto(valor):
+        return str(valor or "").strip()
+
+    def _juntar_blocos(*blocos):
+        partes = []
+        for bloco in blocos:
+            bloco = _texto(bloco)
+            if bloco:
+                partes.append(bloco)
+        return "\n\n".join(partes)
 
     solicitacao_id = sisget_selecionar_solicitacao(
-        "Solicitação para Licitação *",
-        f"tr_solicitacao_{reset}",
-        "LICITACAO"
+        label="Solicitação para Licitação *",
+        key=f"tr_solicitacao_{reset}",
+        tipo_solicitacao="LICITACAO",
+        etapa_atual="TR",
+        somente_ativas=True
     )
 
     if not solicitacao_id:
@@ -51313,150 +51335,679 @@ def tr_incluir():
     )
 
     if existe:
-        st.warning(
-            "⚠️ Esta solicitação já possui TR."
-        )
+        st.warning("⚠️ Esta solicitação já possui Termo de Referência.")
         return
 
     solicitacao = _sisget_fetchone(
         """
-        SELECT objeto
+        SELECT
+            codigo,
+            numero,
+            objeto,
+            justificativa,
+            prioridade,
+            tipo,
+            observacao
         FROM solicitacoes
         WHERE id = ?
+          AND ativo = TRUE
         """,
         (solicitacao_id,)
     )
 
-    objeto_base = (
-        solicitacao[0]
-        if solicitacao
-        else ""
+    if not solicitacao:
+        st.error("❌ Solicitação não encontrada.")
+        return
+
+    (
+        codigo_solicitacao,
+        numero_solicitacao,
+        objeto_base,
+        justificativa_solicitacao,
+        prioridade_solicitacao,
+        tipo_solicitacao_objeto,
+        observacao_solicitacao
+    ) = solicitacao
+
+    dfd = _sisget_fetchone(
+        """
+        SELECT
+            descricao_necessidade,
+            justificativa_demanda,
+            quantidade_preliminar,
+            previsao_contratacao,
+            alinhamento_planejamento,
+            observacoes
+        FROM solicitacoes_dfd
+        WHERE solicitacao_id = ?
+        ORDER BY id DESC
+        LIMIT 1
+        """,
+        (solicitacao_id,)
     )
+
+    if dfd:
+        (
+            dfd_necessidade,
+            dfd_justificativa,
+            dfd_quantidade,
+            dfd_previsao,
+            dfd_alinhamento,
+            dfd_observacoes
+        ) = dfd
+    else:
+        dfd_necessidade = ""
+        dfd_justificativa = ""
+        dfd_quantidade = ""
+        dfd_previsao = None
+        dfd_alinhamento = ""
+        dfd_observacoes = ""
+
+    etp = _sisget_fetchone(
+        """
+        SELECT
+            necessidade,
+            requisitos,
+            levantamento_mercado,
+            solucao_escolhida,
+            justificativa_solucao,
+            estimativa_quantidades,
+            estimativa_valor,
+            parcelamento,
+            justificativa_parcelamento,
+            impactos,
+            conclusao_viabilidade
+        FROM solicitacoes_etp
+        WHERE solicitacao_id = ?
+        ORDER BY id DESC
+        LIMIT 1
+        """,
+        (solicitacao_id,)
+    )
+
+    if etp:
+        (
+            etp_necessidade,
+            etp_requisitos,
+            etp_levantamento,
+            etp_solucao,
+            etp_justificativa_solucao,
+            etp_estimativa_quantidades,
+            etp_estimativa_valor,
+            etp_parcelamento,
+            etp_justificativa_parcelamento,
+            etp_impactos,
+            etp_viabilidade
+        ) = etp
+    else:
+        etp_necessidade = ""
+        etp_requisitos = ""
+        etp_levantamento = ""
+        etp_solucao = ""
+        etp_justificativa_solucao = ""
+        etp_estimativa_quantidades = ""
+        etp_estimativa_valor = ""
+        etp_parcelamento = ""
+        etp_justificativa_parcelamento = ""
+        etp_impactos = ""
+        etp_viabilidade = ""
+
+    enquadramento = _sisget_fetchone(
+        """
+        SELECT
+            tipo_processo,
+            tipo_objeto,
+            natureza_objeto,
+            modalidade,
+            criterio_julgamento,
+            modo_disputa,
+            forma,
+            registro_precos,
+            fundamento_legal,
+            justificativa
+        FROM solicitacoes_enquadramento
+        WHERE solicitacao_id = ?
+        ORDER BY id DESC
+        LIMIT 1
+        """,
+        (solicitacao_id,)
+    )
+
+    if enquadramento:
+        (
+            tipo_processo,
+            tipo_objeto_enquadramento,
+            natureza_objeto,
+            modalidade,
+            criterio_julgamento,
+            modo_disputa,
+            forma_procedimento,
+            registro_precos,
+            fundamento_legal,
+            justificativa_enquadramento
+        ) = enquadramento
+    else:
+        tipo_processo = ""
+        tipo_objeto_enquadramento = ""
+        natureza_objeto = ""
+        modalidade = ""
+        criterio_julgamento = ""
+        modo_disputa = ""
+        forma_procedimento = ""
+        registro_precos = False
+        fundamento_legal = ""
+        justificativa_enquadramento = ""
+
+    financeiro = _sisget_fetchone(
+        """
+        SELECT
+            valor_estimado,
+            valor_validado,
+            cota,
+            reserva,
+            parecer
+        FROM solicitacoes_financeiro
+        WHERE solicitacao_id = ?
+        ORDER BY id DESC
+        LIMIT 1
+        """,
+        (solicitacao_id,)
+    )
+
+    if financeiro:
+        (
+            valor_estimado_financeiro,
+            valor_validado_financeiro,
+            cota_financeira,
+            reserva_financeira,
+            parecer_financeiro
+        ) = financeiro
+    else:
+        valor_estimado_financeiro = 0
+        valor_validado_financeiro = 0
+        cota_financeira = 0
+        reserva_financeira = 0
+        parecer_financeiro = ""
+
+    ficha_total = _sisget_fetchone(
+        """
+        SELECT COALESCE(SUM(valor_vinculado), 0)
+        FROM solicitacoes_fichas
+        WHERE solicitacao_id = ?
+        """,
+        (solicitacao_id,)
+    )
+
+    valor_fichas = float((ficha_total[0] if ficha_total else 0) or 0)
+
+    itens = _sisget_fetch(
+        """
+        SELECT
+            si.numero_item,
+            p.codigo,
+            COALESCE(
+                NULLIF(TRIM(p.produto), ''),
+                NULLIF(TRIM(p.descricao), ''),
+                'Produto sem descrição'
+            ),
+            COALESCE(si.quantidade, 0),
+            COALESCE(si.valor_estimado_unitario, 0),
+            COALESCE(si.valor_estimado_total, 0),
+            COALESCE(si.especificacao_complementar, '')
+        FROM solicitacoes_itens si
+        INNER JOIN produtos p ON p.id = si.produto_id
+        WHERE si.solicitacao_id = ?
+        ORDER BY si.numero_item, si.id
+        """,
+        (solicitacao_id,)
+    )
+
+    valor_itens = sum(float(item[5] or 0) for item in itens)
+
+    st.markdown("### 📋 Resumo do Processo")
+
+    r1, r2, r3, r4 = st.columns(4)
+    r1.metric("Itens", len(itens))
+    r2.metric("Valor Inicial", _moeda(valor_itens))
+    r3.metric("Vinculado em Fichas", _moeda(valor_fichas))
+    r4.metric("Validado Financeiro", _moeda(valor_validado_financeiro))
+
+    st.caption(
+        f"Solicitação: {codigo_solicitacao or numero_solicitacao or solicitacao_id}"
+        f" | Prioridade: {prioridade_solicitacao or '-'}"
+        f" | Procedimento: {tipo_processo or '-'}"
+        f" | Modalidade/Hipótese: {modalidade or '-'}"
+        f" | Critério: {criterio_julgamento or '-'}"
+    )
+
+    with st.expander("📦 Itens da Solicitação", expanded=False):
+        if itens:
+            for item in itens:
+                (
+                    numero_item,
+                    codigo_produto,
+                    descricao_produto,
+                    quantidade_item,
+                    valor_unitario_item,
+                    valor_total_item,
+                    especificacao_item
+                ) = item
+
+                st.markdown(
+                    f"**{numero_item or '-'} - {codigo_produto or ''} {descricao_produto or ''}**"
+                )
+                st.caption(
+                    f"Quantidade: {float(quantidade_item or 0):,.4f}"
+                    f" | Unitário: {_moeda(valor_unitario_item)}"
+                    f" | Total: {_moeda(valor_total_item)}"
+                )
+                if especificacao_item:
+                    st.write(especificacao_item)
+        else:
+            st.info("Nenhum item encontrado.")
+
+    fundamentacao_base = _juntar_blocos(
+        f"A contratação decorre da necessidade registrada na Solicitação {codigo_solicitacao or numero_solicitacao or solicitacao_id}.",
+        f"Necessidade identificada no DFD: {_texto(dfd_necessidade)}" if _texto(dfd_necessidade) else "",
+        f"Justificativa da demanda: {_texto(dfd_justificativa)}" if _texto(dfd_justificativa) else _texto(justificativa_solicitacao),
+        f"Conclusão do ETP: {_texto(etp_viabilidade)}" if _texto(etp_viabilidade) else "",
+        f"Enquadramento: {_texto(tipo_processo)} - {_texto(modalidade)}." if _texto(tipo_processo) else "",
+        f"Fundamento legal indicado no enquadramento: {_texto(fundamento_legal)}" if _texto(fundamento_legal) else ""
+    )
+
+    solucao_base = _juntar_blocos(
+        _texto(etp_solucao),
+        f"Justificativa da solução escolhida: {_texto(etp_justificativa_solucao)}" if _texto(etp_justificativa_solucao) else ""
+    )
+
+    requisitos_base = _juntar_blocos(
+        _texto(etp_requisitos),
+        f"Natureza do objeto: {_texto(natureza_objeto)}" if _texto(natureza_objeto) else "",
+        f"Tipo do objeto: {_texto(tipo_objeto_enquadramento)}" if _texto(tipo_objeto_enquadramento) else ""
+    )
+
+    selecao_base = _juntar_blocos(
+        f"Grupo do procedimento: {_texto(tipo_processo)}" if _texto(tipo_processo) else "",
+        f"Modalidade/Hipótese: {_texto(modalidade)}" if _texto(modalidade) else "",
+        f"Critério de julgamento: {_texto(criterio_julgamento)}" if _texto(criterio_julgamento) else "",
+        f"Modo de disputa: {_texto(modo_disputa)}" if _texto(modo_disputa) else "",
+        f"Forma: {_texto(forma_procedimento)}" if _texto(forma_procedimento) else "",
+        "Sistema de Registro de Preços: Sim" if registro_precos else "Sistema de Registro de Preços: Não"
+    )
+
+    valor_referencia = (
+        float(valor_validado_financeiro or 0)
+        or float(valor_fichas or 0)
+        or float(valor_itens or 0)
+    )
+
+    estimativa_base = _juntar_blocos(
+        f"Valor de referência do processo: {_moeda(valor_referencia)}.",
+        f"Valor inicial dos itens da solicitação: {_moeda(valor_itens)}.",
+        f"Valor vinculado em fichas: {_moeda(valor_fichas)}.",
+        f"Valor validado pelo Financeiro: {_moeda(valor_validado_financeiro)}.",
+        _texto(etp_estimativa_valor)
+    )
+
+    adequacao_base = _juntar_blocos(
+        f"Valor vinculado às fichas orçamentárias: {_moeda(valor_fichas)}.",
+        f"Valor validado pelo Financeiro: {_moeda(valor_validado_financeiro)}.",
+        f"Cota financeira: {_moeda(cota_financeira)}." if float(cota_financeira or 0) > 0 else "",
+        f"Reserva financeira: {_moeda(reserva_financeira)}." if float(reserva_financeira or 0) > 0 else "",
+        f"Parecer financeiro: {_texto(parecer_financeiro)}" if _texto(parecer_financeiro) else ""
+    )
+
+    codigo = sisget_proximo_codigo("solicitacoes_tr", tamanho=6)
+
+    st.markdown("### 📑 Termo de Referência")
+    st.text_input(
+        "Código do TR",
+        value=str(codigo or ""),
+        disabled=True,
+        key=f"tr_codigo_{solicitacao_id}_{reset}"
+    )
+
+    with st.form(f"form_tr_incluir_{reset}_{solicitacao_id}"):
+
+        st.markdown("### 1. Definição do Objeto")
+        objeto = st.text_area(
+            "Objeto *",
+            value=_texto(objeto_base),
+            height=130,
+            help="Defina com precisão o que será contratado, sem restringir indevidamente a competição."
+        )
+
+        st.markdown("### 2. Fundamentação da Contratação")
+        fundamentacao = st.text_area(
+            "Fundamentação *",
+            value=fundamentacao_base,
+            height=220,
+            help="Consolida a necessidade, a justificativa, o ETP e o enquadramento já realizados."
+        )
+
+        st.markdown("### 3. Descrição da Solução")
+        solucao = st.text_area(
+            "Descrição da Solução como um todo *",
+            value=solucao_base,
+            height=200,
+            help="Descreva a solução completa necessária ao atendimento da necessidade."
+        )
+
+        st.markdown("### 4. Requisitos da Contratação")
+        requisitos = st.text_area(
+            "Requisitos *",
+            value=requisitos_base,
+            height=220
+        )
+
+        rc1, rc2, rc3 = st.columns(3)
+        garantia = rc1.selectbox(
+            "Garantia contratual",
+            ["Não exigida", "Exigida", "A definir no edital"]
+        )
+        amostra = rc2.selectbox(
+            "Amostra / Prova de conceito",
+            ["Não exigida", "Exigida", "Quando aplicável"]
+        )
+        sustentabilidade = rc3.selectbox(
+            "Critérios de sustentabilidade",
+            ["Não aplicável", "Aplicável", "A justificar"]
+        )
+
+        requisitos_adicionais = st.text_area(
+            "Requisitos adicionais",
+            height=100,
+            placeholder="Certificações, padrões mínimos, garantia, assistência técnica, sustentabilidade, amostras etc."
+        )
+
+        st.markdown("### 5. Modelo de Execução")
+        e1, e2, e3 = st.columns(3)
+        prazo_execucao = e1.text_input("Prazo de execução/entrega", placeholder="Ex.: 30 dias")
+        local_execucao = e2.text_input("Local de execução/entrega")
+        vigencia = e3.text_input("Prazo de vigência", placeholder="Ex.: 12 meses")
+
+        execucao = st.text_area(
+            "Modelo de Execução *",
+            height=180,
+            placeholder="Descreva etapas, prazos, local, forma de entrega, rotinas e condições necessárias para execução."
+        )
+
+        st.markdown("### 6. Gestão e Fiscalização")
+        gf1, gf2 = st.columns(2)
+        gestor_previsto = gf1.text_input("Gestor responsável / unidade gestora")
+        fiscal_previsto = gf2.text_input("Fiscal responsável / unidade fiscalizadora")
+        gestao = st.text_area(
+            "Modelo de Gestão e Fiscalização",
+            height=160,
+            placeholder="Defina rotinas de acompanhamento, registros, comunicação, fiscalização e recebimento."
+        )
+
+        st.markdown("### 7. Medição, Recebimento e Pagamento")
+        mp1, mp2, mp3 = st.columns(3)
+        medicao_periodicidade = mp1.selectbox(
+            "Periodicidade de medição",
+            ["Por entrega", "Mensal", "Por etapa", "Pagamento único", "Não se aplica"]
+        )
+        recebimento = mp2.selectbox(
+            "Recebimento",
+            ["Provisório e definitivo", "Definitivo", "Por etapa", "Conforme entrega"]
+        )
+        prazo_pagamento = mp3.text_input("Prazo de pagamento", placeholder="Ex.: até 30 dias")
+        pagamento = st.text_area("Regras de Medição e Pagamento", height=160)
+
+        st.markdown("### 8. Forma e Critérios de Seleção")
+        st.info(
+            f"Procedimento: {tipo_processo or '-'} | "
+            f"Modalidade/Hipótese: {modalidade or '-'} | "
+            f"Critério: {criterio_julgamento or '-'} | "
+            f"Modo: {modo_disputa or '-'}"
+        )
+
+        qualificacao_tecnica = st.text_area(
+            "Qualificação Técnica",
+            height=120,
+            placeholder="Informe somente exigências proporcionais e necessárias ao objeto."
+        )
+        qualificacao_economica = st.text_area(
+            "Qualificação Econômico-Financeira",
+            height=100,
+            placeholder="Descreva as exigências pertinentes, quando cabíveis."
+        )
+        selecao = st.text_area(
+            "Critérios de Seleção / Julgamento",
+            value=selecao_base,
+            height=180
+        )
+
+        st.markdown("### 9. Estimativa do Valor")
+        ev1, ev2, ev3 = st.columns(3)
+        ev1.metric("Itens", _moeda(valor_itens))
+        ev2.metric("Fichas", _moeda(valor_fichas))
+        ev3.metric("Financeiro", _moeda(valor_validado_financeiro))
+        estimativa = st.text_area(
+            "Estimativa do Valor da Contratação",
+            value=estimativa_base,
+            height=180
+        )
+
+        st.markdown("### 10. Adequação Orçamentária")
+        adequacao = st.text_area(
+            "Adequação Orçamentária",
+            value=adequacao_base,
+            height=180
+        )
+
+        st.markdown("### 11. Obrigações da Contratada")
+        obrigacoes_contratada = st.text_area(
+            "Obrigações da Contratada",
+            value=(
+                "Executar o objeto conforme as condições definidas neste Termo de Referência e na proposta apresentada; "
+                "manter as condições de habilitação durante a execução; responsabilizar-se pelos encargos decorrentes "
+                "da execução; comunicar ocorrências que possam comprometer os prazos ou a qualidade da contratação."
+            ),
+            height=180
+        )
+
+        st.markdown("### 12. Obrigações da Administração")
+        obrigacoes_adm = st.text_area(
+            "Obrigações da Administração",
+            value=(
+                "Disponibilizar as informações necessárias à execução; acompanhar e fiscalizar o cumprimento das obrigações; "
+                "receber o objeto quando atendidas as condições; efetuar o pagamento conforme as regras estabelecidas; "
+                "comunicar formalmente eventuais falhas ou irregularidades."
+            ),
+            height=180
+        )
+
+        st.markdown("### 13. Infrações e Sanções")
+        sancoes = st.text_area(
+            "Sanções",
+            value=(
+                "O descumprimento das obrigações poderá ensejar a aplicação das sanções previstas na legislação, "
+                "no edital/instrumento convocatório e no instrumento contratual, assegurados o contraditório e a ampla defesa."
+            ),
+            height=160
+        )
+
+        st.markdown("### 14. Informações Complementares")
+        parcelamento = st.text_area(
+            "Parcelamento / Formação de Lotes",
+            value=_juntar_blocos(
+                _texto(etp_parcelamento),
+                f"Justificativa: {_texto(etp_justificativa_parcelamento)}" if _texto(etp_justificativa_parcelamento) else ""
+            ),
+            height=120
+        )
+        impactos = st.text_area(
+            "Impactos / Providências",
+            value=_texto(etp_impactos),
+            height=120
+        )
+        observacoes_finais = st.text_area(
+            "Observações Finais",
+            value=_texto(dfd_observacoes),
+            height=100
+        )
+
+        st.markdown("---")
+        confirmar = st.checkbox(
+            "Confirmo que revisei o objeto, requisitos, execução, critérios de seleção, valores e adequação orçamentária."
+        )
+
+        salvar = st.form_submit_button(
+            "💾 Salvar Termo de Referência",
+            type="primary",
+            use_container_width=True
+        )
+
+    if not salvar:
+        return
+
+    campos_obrigatorios = {
+        "Definição do Objeto": objeto,
+        "Fundamentação": fundamentacao,
+        "Descrição da Solução": solucao,
+        "Requisitos": requisitos,
+        "Modelo de Execução": execucao
+    }
+
+    faltantes = [
+        nome
+        for nome, valor in campos_obrigatorios.items()
+        if not _texto(valor)
+    ]
+
+    if faltantes:
+        st.warning(
+            "⚠️ Preencha os campos obrigatórios: "
+            + ", ".join(faltantes)
+            + "."
+        )
+        return
+
+    if not confirmar:
+        st.warning("⚠️ Confirme a revisão do Termo de Referência.")
+        return
+
+    requisitos_salvar = _juntar_blocos(
+        requisitos,
+        f"Garantia contratual: {garantia}.",
+        f"Amostra / prova de conceito: {amostra}.",
+        f"Critérios de sustentabilidade: {sustentabilidade}.",
+        f"Requisitos adicionais:\n{requisitos_adicionais}" if _texto(requisitos_adicionais) else ""
+    )
+
+    execucao_salvar = _juntar_blocos(
+        execucao,
+        f"Prazo de execução/entrega: {prazo_execucao}." if _texto(prazo_execucao) else "",
+        f"Local de execução/entrega: {local_execucao}." if _texto(local_execucao) else "",
+        f"Prazo de vigência: {vigencia}." if _texto(vigencia) else "",
+        f"Parcelamento / formação de lotes:\n{parcelamento}" if _texto(parcelamento) else "",
+        f"Impactos / providências:\n{impactos}" if _texto(impactos) else ""
+    )
+
+    gestao_salvar = _juntar_blocos(
+        gestao,
+        f"Gestor / unidade gestora: {gestor_previsto}." if _texto(gestor_previsto) else "",
+        f"Fiscal / unidade fiscalizadora: {fiscal_previsto}." if _texto(fiscal_previsto) else ""
+    )
+
+    pagamento_salvar = _juntar_blocos(
+        pagamento,
+        f"Periodicidade da medição: {medicao_periodicidade}.",
+        f"Forma de recebimento: {recebimento}.",
+        f"Prazo de pagamento: {prazo_pagamento}." if _texto(prazo_pagamento) else ""
+    )
+
+    selecao_salvar = _juntar_blocos(
+        selecao,
+        f"Qualificação técnica:\n{qualificacao_tecnica}" if _texto(qualificacao_tecnica) else "",
+        f"Qualificação econômico-financeira:\n{qualificacao_economica}" if _texto(qualificacao_economica) else "",
+        f"Fundamento legal do enquadramento: {fundamento_legal}" if _texto(fundamento_legal) else "",
+        f"Justificativa do enquadramento:\n{justificativa_enquadramento}" if _texto(justificativa_enquadramento) else ""
+    )
+
+    adequacao_salvar = _juntar_blocos(
+        adequacao,
+        f"Valor de referência considerado no TR: {_moeda(valor_referencia)}."
+    )
+
+    sancoes_salvar = _juntar_blocos(
+        sancoes,
+        f"Observações finais:\n{observacoes_finais}" if _texto(observacoes_finais) else ""
+    )
+
+    etapa = _sisget_fetchone(
+        """
+        SELECT etapa_atual
+        FROM solicitacoes
+        WHERE id = ?
+          AND ativo = TRUE
+        """,
+        (solicitacao_id,)
+    )
+
+    etapa_atual = str((etapa[0] if etapa else "") or "").strip().upper()
+
+    if etapa_atual != "TR":
+        st.warning("⚠️ A solicitação não está mais na etapa TR.")
+        return
 
     codigo = sisget_proximo_codigo(
         "solicitacoes_tr",
         tamanho=6
     )
 
-    with st.form(
-        f"form_tr_incluir_{reset}_{solicitacao_id}"
+    if _sisget_salvar(
+        """
+        INSERT INTO solicitacoes_tr
+        (
+            codigo,
+            solicitacao_id,
+            objeto,
+            fundamentacao,
+            descricao_solucao,
+            requisitos,
+            modelo_execucao,
+            gestao_fiscalizacao,
+            medicao_pagamento,
+            criterios_selecao,
+            estimativa_valor,
+            adequacao_orcamentaria,
+            obrigacoes_contratada,
+            obrigacoes_administracao,
+            sancoes
+        )
+        VALUES
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            codigo,
+            solicitacao_id,
+            objeto.strip(),
+            fundamentacao.strip(),
+            solucao.strip(),
+            requisitos_salvar,
+            execucao_salvar,
+            gestao_salvar or None,
+            pagamento_salvar or None,
+            selecao_salvar or None,
+            estimativa.strip() or None,
+            adequacao_salvar or None,
+            obrigacoes_contratada.strip() or None,
+            obrigacoes_adm.strip() or None,
+            sancoes_salvar or None
+        )
     ):
-        st.text_input(
-            "Código",
-            value=codigo,
-            disabled=True
+        st.session_state["sisget_mensagem_tr"] = (
+            "✅ Termo de Referência salvo com sucesso. "
+            "Revise o documento e utilize ✍️ Assinar para concluir o fluxo da solicitação."
         )
 
-        objeto = st.text_area(
-            "1. Definição do Objeto *",
-            value=objeto_base or ""
-        )
-
-        fundamentacao = st.text_area(
-            "2. Fundamentação *"
-        )
-
-        solucao = st.text_area(
-            "3. Descrição da Solução *"
-        )
-
-        requisitos = st.text_area(
-            "4. Requisitos *"
-        )
-
-        execucao = st.text_area(
-            "5. Modelo de Execução *"
-        )
-
-        gestao = st.text_area(
-            "6. Gestão e Fiscalização"
-        )
-
-        pagamento = st.text_area(
-            "7. Medição e Pagamento"
-        )
-
-        selecao = st.text_area(
-            "8. Critérios de Seleção"
-        )
-
-        estimativa = st.text_area(
-            "9. Estimativa do Valor"
-        )
-
-        adequacao = st.text_area(
-            "10. Adequação Orçamentária"
-        )
-
-        obrigacoes_contratada = st.text_area(
-            "11. Obrigações da Contratada"
-        )
-
-        obrigacoes_adm = st.text_area(
-            "12. Obrigações da Administração"
-        )
-
-        sancoes = st.text_area(
-            "13. Sanções"
-        )
-
-        salvar = st.form_submit_button(
-            "💾 Salvar TR",
-            type="primary",
-            use_container_width=True
-        )
-
-    if salvar:
-        codigo = sisget_proximo_codigo(
-            "solicitacoes_tr",
-            tamanho=6
-        )
-
-        if _sisget_salvar(
-            """
-            INSERT INTO solicitacoes_tr
-            (
-                codigo,
-                solicitacao_id,
-                objeto,
-                fundamentacao,
-                descricao_solucao,
-                requisitos,
-                modelo_execucao,
-                gestao_fiscalizacao,
-                medicao_pagamento,
-                criterios_selecao,
-                estimativa_valor,
-                adequacao_orcamentaria,
-                obrigacoes_contratada,
-                obrigacoes_administracao,
-                sancoes
-            )
-            VALUES
-            (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                codigo,
-                solicitacao_id,
-                objeto.strip(),
-                fundamentacao.strip(),
-                solucao.strip(),
-                requisitos.strip(),
-                execucao.strip(),
-                gestao.strip() or None,
-                pagamento.strip() or None,
-                selecao.strip() or None,
-                estimativa.strip() or None,
-                adequacao.strip() or None,
-                obrigacoes_contratada.strip() or None,
-                obrigacoes_adm.strip() or None,
-                sancoes.strip() or None
-            )
-        ):
-            st.session_state[
-                "sisget_tr_reset"
-            ] += 1
-            st.rerun()
+        st.session_state["sisget_tr_reset"] += 1
+        st.session_state["sisget_tela_solicitacoes_tr"] = "principal"
+        st.session_state["sisget_id_solicitacoes_tr"] = None
+        st.rerun()
 
 
 def tr_localizar():
