@@ -25395,6 +25395,15 @@ def planejamento_relatorios():
 
 
 # ============================================================
+# TELA PADRÃO PARA MÓDULOS AINDA NÃO IMPLEMENTADOS
+# ============================================================
+def modulo_em_desenvolvimento(titulo, icone="🚧"):
+    """Exibe uma mensagem informativa sem alterar dados."""
+    st.title(f"{icone} {titulo}")
+    st.info("🚧 Este módulo está em desenvolvimento.")
+
+
+# ============================================================
 # SISCOM
 # ============================================================
 def modulo_siscom():
