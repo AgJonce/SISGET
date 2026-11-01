@@ -332,21 +332,7 @@ conn = None
 cursor = None
 
 
-# A falha de conexão não deve apresentar um traceback ao usuário.
-try:
-    sisget_obter_conexao()
-except psycopg2.OperationalError:
-    st.error("❌ Não foi possível estabelecer conexão com o banco de dados.")
-    st.info(
-        "Verifique se o Supabase está disponível e se host, port, "
-        "dbname, user e password estão corretos nos Secrets do Streamlit. "
-        "Se estiver usando a conexão direta do Supabase, verifique também "
-        "a compatibilidade de IPv4/IPv6; o pooler pode ser necessário."
-    )
-    st.stop()
-except (KeyError, FileNotFoundError):
-    st.error("❌ Configuração do PostgreSQL ausente ou incompleta nos Secrets do Streamlit.")
-    st.stop()
+sisget_obter_conexao()
 
 
 # ============================================================
@@ -25389,81 +25375,6 @@ def planejamento_relatorios():
 
     st.info(
         "Aqui serão gerados os relatórios orçamentários."
-    )
-
-
-# ============================================================
-# TELAS PROVISÓRIAS DO SISCOM
-# Evitam NameError enquanto as rotinas definitivas não são implementadas.
-# Não criam tabelas nem alteram dados existentes.
-# ============================================================
-
-def _siscom_tela_em_desenvolvimento(titulo, descricao):
-    st.subheader(titulo)
-    st.info("Esta funcionalidade do SISCOM ainda está em desenvolvimento.")
-    st.caption(descricao)
-
-
-def siscom_modulo_processos():
-    _siscom_tela_em_desenvolvimento(
-        '📊 Processos',
-        'Painel de acompanhamento dos processos licitatórios.'
-    )
-
-
-def cadastro_siscom_processos():
-    _siscom_tela_em_desenvolvimento(
-        '📁 Abrir Processo',
-        'Cadastro e abertura de processos licitatórios.'
-    )
-
-
-def siscom_modulo_publicacao_sessao():
-    _siscom_tela_em_desenvolvimento(
-        '📣 Publicação / Sessão',
-        'Publicação e agendamento das sessões.'
-    )
-
-
-def siscom_modulo_licitantes():
-    _siscom_tela_em_desenvolvimento(
-        '🏢 Licitantes',
-        'Cadastro e gerenciamento dos licitantes.'
-    )
-
-
-def siscom_modulo_portal_eletronico():
-    _siscom_tela_em_desenvolvimento(
-        '🌐 Plataforma Eletrônica',
-        'Integração e acompanhamento da sessão eletrônica.'
-    )
-
-
-def siscom_modulo_sessao_presencial():
-    _siscom_tela_em_desenvolvimento(
-        '🏛️ Sessão Presencial',
-        'Acompanhamento das sessões presenciais.'
-    )
-
-
-def siscom_modulo_avaliacao():
-    _siscom_tela_em_desenvolvimento(
-        '🧠 Avaliação Técnica / Econômica',
-        'Avaliação das propostas e documentos.'
-    )
-
-
-def siscom_modulo_julgamento():
-    _siscom_tela_em_desenvolvimento(
-        '⚖️ Julgamento',
-        'Julgamento e classificação das propostas.'
-    )
-
-
-def siscom_modulo_compras():
-    _siscom_tela_em_desenvolvimento(
-        '🛒 Liberação para Compra',
-        'Liberação dos processos para a etapa de compras.'
     )
 
 
