@@ -332,7 +332,21 @@ conn = None
 cursor = None
 
 
-sisget_obter_conexao()
+# A falha de conexão não deve apresentar um traceback ao usuário.
+try:
+    sisget_obter_conexao()
+except psycopg2.OperationalError:
+    st.error("❌ Não foi possível estabelecer conexão com o banco de dados.")
+    st.info(
+        "Verifique se o Supabase está disponível e se host, port, "
+        "dbname, user e password estão corretos nos Secrets do Streamlit. "
+        "Se estiver usando a conexão direta do Supabase, verifique também "
+        "a compatibilidade de IPv4/IPv6; o pooler pode ser necessário."
+    )
+    st.stop()
+except (KeyError, FileNotFoundError):
+    st.error("❌ Configuração do PostgreSQL ausente ou incompleta nos Secrets do Streamlit.")
+    st.stop()
 
 
 # ============================================================
