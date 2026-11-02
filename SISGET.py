@@ -1,6 +1,9 @@
-# ============================================================
-# IMPORTS
-# ============================================================
+import io
+import csv
+import json
+from decimal import Decimal, InvalidOperation
+from contextlib import contextmanager
+from datetime import date, datetime
 import requests
 import re
 import os
@@ -25403,20 +25406,749 @@ def modulo_em_desenvolvimento(titulo, icone="🚧"):
     st.info("🚧 Este módulo está em desenvolvimento.")
 
 
-# ============================================================
-# SISCOM
-# ============================================================
-def modulo_siscom():
+def siscom_usuario():
+    # Registra identificador de sessão; substitua por ID real do usuário
+    # autenticado caso o SISGET já o exponha no st.session_state.
+    for chave in ("usuario_logado", "usuario", "username", "login"):
+        valor = st.session_state.get(chave)
+        if isinstance(valor, str) and valor.strip():
+            return valor[:100]
+        if isinstance(valor, dict):
+            for nome in ("nome", "usuario", "username"):
+                if valor.get(nome):
+                    return str(valor[nome])[:100]
+    return "usuario_nao_identificado"
 
-    modulo_em_desenvolvimento(
-        "SISCOM - Licitações e Compras",
-        "🛒"
+
+def siscom_dinheiro(valor):
+    try:
+        return Decimal(str(valor).replace("R$", "").replace(".", "").replace(",", ".").strip())
+    except (InvalidOperation, ValueError, TypeError):
+        return Decimal("0")
+
+
+def siscom_real(valor):
+    try:
+        n = Decimal(str(valor or 0))
+    except (InvalidOperation, TypeError):
+        n = Decimal("0")
+    return "R$ " + f"{n:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+
+
+@contextmanager
+def siscom_conexao():
+    cfg = st.secrets["postgres"]
+    conexao = psycopg2.connect(
+        host=cfg["host"], port=cfg["port"], dbname=cfg["dbname"],
+        user=cfg["user"], password=cfg["password"], sslmode="require",
+        connect_timeout=10
+    )
+    try:
+        yield conexao
+        conexao.commit()
+    except Exception:
+        conexao.rollback()
+        raise
+    finally:
+        conexao.close()
+
+
+def siscom_exec(sql, params=(), retornar=False):
+    with siscom_conexao() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            if retornar:
+                return cur.fetchone()
+            return cur.rowcount
+
+
+def siscom_consulta(sql, params=()):
+    with siscom_conexao() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            colunas = [d[0] for d in cur.description]
+            return pd.DataFrame(cur.fetchall(), columns=colunas)
+
+
+def siscom_log(processo_id, evento, detalhes=""):
+    siscom_exec(
+        "INSERT INTO siscom_auditoria(processo_id, usuario, evento, detalhes) VALUES (%s,%s,%s,%s)",
+        (processo_id, siscom_usuario(), evento, str(detalhes)[:4000])
     )
 
 
-# ============================================================
-# SISCON
-# ============================================================
+def siscom_schema():
+    # Operação explícita: não executar em toda renderização.
+    ddl = [
+        """CREATE TABLE IF NOT EXISTS siscom_processos (
+            id BIGSERIAL PRIMARY KEY, numero VARCHAR(60) NOT NULL, exercicio INTEGER NOT NULL,
+            objeto TEXT NOT NULL, modalidade VARCHAR(90) NOT NULL,
+            criterio VARCHAR(90) NOT NULL, tipo_objeto VARCHAR(80) NOT NULL DEFAULT 'Bens',
+            unidade_requisitante VARCHAR(180), processo_origem VARCHAR(120),
+            valor_estimado NUMERIC(18,2) DEFAULT 0 CHECK (valor_estimado >= 0),
+            fase VARCHAR(40) NOT NULL DEFAULT 'Planejamento',
+            data_abertura DATE NOT NULL DEFAULT CURRENT_DATE,
+            data_sessao TIMESTAMP, responsavel VARCHAR(180),
+            justificativa TEXT, observacoes TEXT,
+            ativo BOOLEAN NOT NULL DEFAULT TRUE,
+            criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            atualizado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(numero, exercicio)
+        )""",
+        """CREATE TABLE IF NOT EXISTS siscom_itens (
+            id BIGSERIAL PRIMARY KEY,
+            processo_id BIGINT NOT NULL REFERENCES siscom_processos(id),
+            numero_item INTEGER NOT NULL CHECK(numero_item > 0),
+            descricao TEXT NOT NULL, unidade VARCHAR(30) NOT NULL,
+            quantidade NUMERIC(18,4) NOT NULL CHECK (quantidade > 0),
+            valor_unitario NUMERIC(18,4) NOT NULL CHECK(valor_unitario >= 0),
+            lote VARCHAR(50), observacoes TEXT, ativo BOOLEAN DEFAULT TRUE,
+            UNIQUE(processo_id, numero_item)
+        )""",
+        """CREATE TABLE IF NOT EXISTS siscom_licitantes (
+            id BIGSERIAL PRIMARY KEY, processo_id BIGINT NOT NULL REFERENCES siscom_processos(id),
+            nome VARCHAR(220) NOT NULL, documento VARCHAR(25), email VARCHAR(200),
+            telefone VARCHAR(40), representante VARCHAR(180),
+            situacao VARCHAR(50) DEFAULT 'Cadastrado', observacoes TEXT,
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS siscom_propostas (
+            id BIGSERIAL PRIMARY KEY,
+            processo_id BIGINT NOT NULL REFERENCES siscom_processos(id),
+            item_id BIGINT NOT NULL REFERENCES siscom_itens(id),
+            licitante_id BIGINT NOT NULL REFERENCES siscom_licitantes(id),
+            valor_unitario NUMERIC(18,4) NOT NULL CHECK(valor_unitario >= 0),
+            marca VARCHAR(120), status VARCHAR(40) DEFAULT 'Apresentada',
+            observacoes TEXT, criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(item_id, licitante_id)
+        )""",
+        """CREATE TABLE IF NOT EXISTS siscom_registros (
+            id BIGSERIAL PRIMARY KEY, processo_id BIGINT NOT NULL REFERENCES siscom_processos(id),
+            categoria VARCHAR(70) NOT NULL, titulo VARCHAR(250) NOT NULL,
+            data_referencia DATE, descricao TEXT,
+            documento_url TEXT, protocolo VARCHAR(200),
+            situacao VARCHAR(100) DEFAULT 'Registrado',
+            criado_por VARCHAR(120), criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS siscom_auditoria (
+            id BIGSERIAL PRIMARY KEY, processo_id BIGINT REFERENCES siscom_processos(id),
+            usuario VARCHAR(120), evento VARCHAR(140) NOT NULL,
+            detalhes TEXT, criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
+    ]
+    with siscom_conexao() as conn:
+        with conn.cursor() as cur:
+            for sql in ddl:
+                cur.execute(sql)
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_siscom_processo_fase ON siscom_processos(fase)")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_siscom_registros_proc ON siscom_registros(processo_id, categoria)")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_siscom_propostas_proc ON siscom_propostas(processo_id)")
+
+
+def siscom_pronto():
+    try:
+        siscom_consulta("SELECT id FROM siscom_processos LIMIT 1")
+        return True
+    except Exception:
+        st.warning("A estrutura do SISCOM ainda não está acessível. Abra Configuração e crie/verifique as tabelas.")
+        return False
+
+
+def siscom_configuracao():
+    st.subheader("⚙️ Configuração e diagnóstico")
+    st.warning("Antes de criar tabelas, faça backup do PostgreSQL/Supabase e teste em homologação.")
+    if st.button("🗄️ Criar/verificar estrutura SISCOM", type="primary"):
+        try:
+            siscom_schema()
+            st.success("Estrutura SISCOM criada/verificada. As tabelas legadas não foram modificadas.")
+        except Exception as erro:
+            st.error("Não foi possível preparar as tabelas. Consulte as permissões do banco.")
+            st.code(type(erro).__name__)
+    st.caption("O SISCOM não transmite para PNCP, TCE ou portais externos. Registre links e protocolos obtidos nos canais oficiais.")
+
+
+def siscom_processos_df(ativos=True):
+    cond = "WHERE ativo = TRUE" if ativos else ""
+    return siscom_consulta(
+        "SELECT id, numero, exercicio, objeto, modalidade, fase, valor_estimado, "
+        "data_abertura, responsavel FROM siscom_processos " + cond + " ORDER BY exercicio DESC, id DESC"
+    )
+
+
+def siscom_escolher_processo(chave="padrao", incluir_inativos=False):
+    df = siscom_processos_df(not incluir_inativos)
+    if df.empty:
+        st.info("Nenhum processo cadastrado.")
+        return None
+    opcoes = {int(r.id): f"{r.numero}/{r.exercicio} · {r.modalidade} · {str(r.objeto)[:75]} [{r.fase}]"
+              for r in df.itertuples(index=False)}
+    escolha = st.selectbox("Processo licitatório", list(opcoes), format_func=lambda x: opcoes[x], key=f"siscom_proc_{chave}")
+    return int(escolha)
+
+
+def siscom_dados_processo(processo_id):
+    df = siscom_consulta("SELECT * FROM siscom_processos WHERE id=%s", (processo_id,))
+    return None if df.empty else df.iloc[0].to_dict()
+
+
+def siscom_tabela(df, nome="registros"):
+    if df.empty:
+        st.info("Nenhum registro encontrado.")
+        return
+    st.dataframe(df, use_container_width=True, hide_index=True)
+    csv_data = df.to_csv(index=False, sep=";").encode("utf-8-sig")
+    st.download_button("⬇️ Exportar CSV", csv_data, file_name=f"siscom_{nome}.csv", mime="text/csv", key=f"export_{nome}")
+
+
+def siscom_resumo_dashboard():
+    st.subheader("📊 Painel de processos")
+    df = siscom_processos_df()
+    if df.empty:
+        st.info("Cadastre o primeiro processo.")
+        return
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Processos ativos", len(df))
+    col2.metric("Em planejamento", int((df["fase"] == "Planejamento").sum()))
+    col3.metric("Homologados", int((df["fase"] == "Homologado").sum()))
+    col4.metric("Estimativa total", siscom_real(df["valor_estimado"].sum()))
+    st.bar_chart(df.groupby("fase").size().rename("Processos"))
+    siscom_tabela(df, "painel")
+
+
+def siscom_formulario_processo(processo_id=None):
+    atual = siscom_dados_processo(processo_id) if processo_id else {}
+    if atual is None:
+        st.error("Processo não encontrado.")
+        return
+    with st.form(f"siscom_form_processo_{processo_id or 'novo'}"):
+        c1, c2, c3 = st.columns(3)
+        numero = c1.text_input("Número do processo *", value=str(atual.get("numero") or ""), max_chars=60)
+        exercicio = c2.number_input("Exercício *", min_value=2000, max_value=2100, value=int(atual.get("exercicio") or date.today().year), step=1)
+        data_abertura = c3.date_input("Data de abertura", value=atual.get("data_abertura") or date.today())
+        objeto = st.text_area("Objeto da contratação *", value=str(atual.get("objeto") or ""), height=90)
+        c4, c5, c6 = st.columns(3)
+        modalidade = c4.selectbox("Modalidade *", SISCOM_MODALIDADES, index=SISCOM_MODALIDADES.index(atual.get("modalidade")) if atual.get("modalidade") in SISCOM_MODALIDADES else 0)
+        criterio = c5.selectbox("Critério de julgamento", SISCOM_CRITERIOS, index=SISCOM_CRITERIOS.index(atual.get("criterio")) if atual.get("criterio") in SISCOM_CRITERIOS else 0)
+        tipos = ["Bens", "Serviços", "Obras", "Serviços de engenharia", "Soluções de TIC", "Outros"]
+        tipo_objeto = c6.selectbox("Tipo de objeto", tipos, index=tipos.index(atual.get("tipo_objeto")) if atual.get("tipo_objeto") in tipos else 0)
+        c7, c8, c9 = st.columns(3)
+        unidade = c7.text_input("Unidade requisitante", value=str(atual.get("unidade_requisitante") or ""))
+        origem = c8.text_input("Solicitação/DFD de origem", value=str(atual.get("processo_origem") or ""))
+        responsavel = c9.text_input("Responsável", value=str(atual.get("responsavel") or ""))
+        estimativa = st.number_input("Valor estimado (R$)", min_value=0.0, value=float(atual.get("valor_estimado") or 0), step=100.0, format="%.2f")
+        justificativa = st.text_area("Justificativa", value=str(atual.get("justificativa") or ""))
+        observacoes = st.text_area("Observações", value=str(atual.get("observacoes") or ""))
+        salvar = st.form_submit_button("💾 Salvar processo", type="primary")
+    if salvar:
+        if not numero.strip() or not objeto.strip():
+            st.error("Número e objeto são obrigatórios.")
+            return
+        try:
+            params = (numero.strip(), int(exercicio), objeto.strip(), modalidade, criterio, tipo_objeto,
+                      unidade.strip(), origem.strip(), float(estimativa), data_abertura,
+                      responsavel.strip(), justificativa, observacoes)
+            if processo_id:
+                siscom_exec("""UPDATE siscom_processos SET numero=%s, exercicio=%s, objeto=%s,
+                    modalidade=%s, criterio=%s, tipo_objeto=%s, unidade_requisitante=%s,
+                    processo_origem=%s, valor_estimado=%s, data_abertura=%s,
+                    responsavel=%s, justificativa=%s, observacoes=%s,
+                    atualizado_em=CURRENT_TIMESTAMP WHERE id=%s AND ativo=TRUE""", params + (processo_id,))
+                siscom_log(processo_id, "PROCESSO_ALTERADO", f"Número {numero}/{exercicio}")
+            else:
+                novo = siscom_exec_retorno("""INSERT INTO siscom_processos
+                    (numero,exercicio,objeto,modalidade,criterio,tipo_objeto,unidade_requisitante,
+                     processo_origem,valor_estimado,data_abertura,responsavel,justificativa,observacoes)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""", params)
+                siscom_log(novo, "PROCESSO_INCLUIDO", f"Número {numero}/{exercicio}")
+            st.success("Processo salvo com sucesso.")
+        except psycopg2.errors.UniqueViolation:
+            st.error("Já existe processo com este número e exercício.")
+        except Exception as erro:
+            st.error(f"Não foi possível salvar: {type(erro).__name__}")
+
+
+def siscom_exec_retorno(sql, params=()):
+    with siscom_conexao() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            return cur.fetchone()[0]
+
+
+def siscom_processo_incluir():
+    st.subheader("➕ Inserir processo administrativo / licitatório")
+    siscom_formulario_processo()
+
+
+def siscom_processo_localizar():
+    st.subheader("🔎 Localizar e alterar processo")
+    df = siscom_processos_df()
+    busca = st.text_input("Pesquisar por número ou objeto", key="siscom_busca_processos").lower()
+    if busca:
+        df = df[df["numero"].astype(str).str.lower().str.contains(busca, regex=False) |
+                df["objeto"].astype(str).str.lower().str.contains(busca, regex=False)]
+    siscom_tabela(df, "localizar_processos")
+    if df.empty:
+        return
+    escolhas = {int(r.id): f"{r.numero}/{r.exercicio}: {str(r.objeto)[:80]}" for r in df.itertuples()}
+    proc = st.selectbox("Selecione para editar", list(escolhas), format_func=lambda x: escolhas[x], key="siscom_editar_escolha")
+    if st.button("✏️ Abrir alteração"):
+        st.session_state["siscom_editar_id"] = proc
+    if st.session_state.get("siscom_editar_id"):
+        siscom_formulario_processo(st.session_state["siscom_editar_id"])
+
+
+def siscom_processo_excluir():
+    st.subheader("🗑️ Desativar processo (exclusão lógica)")
+    st.caption("Preserva histórico e referências, sem apagar dados do banco.")
+    pid = siscom_escolher_processo("excluir")
+    if pid is None:
+        return
+    dados = siscom_dados_processo(pid)
+    st.warning(f"Desativação de {dados['numero']}/{dados['exercicio']}. Não altera registros já publicados externamente.")
+    confirmar = st.checkbox("Confirmo a desativação deste processo", key=f"siscom_confirmar_excluir_{pid}")
+    justificativa = st.text_area("Justificativa obrigatória", key=f"siscom_just_excluir_{pid}")
+    if st.button("🗑️ Desativar", disabled=not confirmar):
+        if not justificativa.strip():
+            st.error("Informe uma justificativa.")
+            return
+        if dados["fase"] not in ("Planejamento", "Instrução", "Cancelado"):
+            st.error("Processo em fase avançada: utilize a rotina formal de revogação/anulação quando aplicável.")
+            return
+        siscom_exec("UPDATE siscom_processos SET ativo=FALSE, atualizado_em=NOW() WHERE id=%s", (pid,))
+        siscom_log(pid, "PROCESSO_DESATIVADO", justificativa)
+        st.success("Processo desativado, com histórico preservado.")
+
+
+def siscom_processo_estornar():
+    st.subheader("↩️ Estornar / retornar fase")
+    pid = siscom_escolher_processo("estornar")
+    if pid is None:
+        return
+    dados = siscom_dados_processo(pid)
+    st.write("Fase atual:", dados["fase"])
+    st.warning("Estorno administrativo requer autorização, justificativa e revisão dos atos praticados. Não desfaz publicações externas.")
+    justificativa = st.text_area("Motivo fundamentado *", key=f"estorno_motivo_{pid}")
+    destino = st.selectbox("Fase de retorno", SISCOM_FASES[:6], key=f"estorno_destino_{pid}")
+    confirma = st.checkbox("Confirmo que sou responsável autorizado pelo ato", key=f"estorno_conf_{pid}")
+    if st.button("↩️ Registrar estorno", disabled=not confirma):
+        if len(justificativa.strip()) < 15:
+            st.error("Informe justificativa com pelo menos 15 caracteres.")
+            return
+        siscom_exec("UPDATE siscom_processos SET fase=%s, atualizado_em=NOW() WHERE id=%s", (destino, pid))
+        siscom_log(pid, "ESTORNO_FASE", f"De {dados['fase']} para {destino}. Motivo: {justificativa}")
+        st.success("Retorno de fase registrado. Revise os atos e registros dependentes.")
+
+
+def siscom_registro_pdf_bytes(processo_id):
+    from reportlab.lib.pagesizes import A4
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.lib import colors
+    from xml.sax.saxutils import escape
+    dados = siscom_dados_processo(processo_id)
+    itens = siscom_consulta("SELECT numero_item,descricao,unidade,quantidade,valor_unitario FROM siscom_itens WHERE processo_id=%s AND ativo=TRUE ORDER BY numero_item", (processo_id,))
+    saida = io.BytesIO()
+    doc = SimpleDocTemplate(saida, pagesize=A4, title="Relatório SISCOM")
+    styles = getSampleStyleSheet()
+    partes = [Paragraph("SISGET — SISCOM | Espelho do Processo", styles["Title"]), Spacer(1,12)]
+    for titulo, valor in (("Número", f"{dados['numero']}/{dados['exercicio']}"), ("Objeto", dados['objeto']),
+                         ("Modalidade", dados['modalidade']), ("Fase", dados['fase']),
+                         ("Valor estimado", siscom_real(dados['valor_estimado'])),
+                         ("Responsável", dados.get('responsavel') or "—")):
+        partes.append(Paragraph(f"<b>{escape(str(titulo))}:</b> {escape(str(valor))}", styles["Normal"]))
+        partes.append(Spacer(1,6))
+    partes.append(Spacer(1,12))
+    partes.append(Paragraph("Itens cadastrados", styles["Heading2"]))
+    for r in itens.itertuples():
+        partes.append(Paragraph(escape(f"{r.numero_item} - {r.descricao} | {r.quantidade} {r.unidade} | {siscom_real(r.valor_unitario)}"), styles["Normal"]))
+        partes.append(Spacer(1,5))
+    partes.append(Spacer(1,12))
+    partes.append(Paragraph("Documento de consulta interna. Não substitui o processo formal assinado.", styles["Italic"]))
+    doc.build(partes)
+    return saida.getvalue()
+
+
+def siscom_processo_imprimir():
+    st.subheader("🖨️ Relatório do processo")
+    pid = siscom_escolher_processo("imprimir")
+    if pid is None:
+        return
+    if st.button("📄 Preparar PDF"):
+        try:
+            st.session_state["siscom_pdf"] = siscom_registro_pdf_bytes(pid)
+            st.session_state["siscom_pdf_pid"] = pid
+        except Exception as erro:
+            st.error(f"Erro ao gerar PDF: {type(erro).__name__}")
+    if st.session_state.get("siscom_pdf_pid") == pid and st.session_state.get("siscom_pdf"):
+        st.download_button("⬇️ Baixar relatório PDF", st.session_state["siscom_pdf"],
+                           file_name=f"siscom_processo_{pid}.pdf", mime="application/pdf")
+
+
+def siscom_itens():
+    st.subheader("📦 Itens, lotes e estimativas")
+    pid = siscom_escolher_processo("itens")
+    if pid is None:
+        return
+    df = siscom_consulta("""SELECT id,numero_item,lote,descricao,unidade,quantidade,valor_unitario,
+        ROUND(quantidade*valor_unitario,2) total FROM siscom_itens WHERE processo_id=%s AND ativo=TRUE
+        ORDER BY numero_item""", (pid,))
+    siscom_tabela(df, "itens")
+    with st.form("siscom_incluir_item"):
+        c1,c2,c3 = st.columns(3)
+        numero = c1.number_input("Número do item", min_value=1, value=1, step=1)
+        unidade = c2.text_input("Unidade de medida *", value="UN")
+        lote = c3.text_input("Lote")
+        descricao = st.text_area("Descrição detalhada *")
+        c4,c5 = st.columns(2)
+        quantidade = c4.number_input("Quantidade *", min_value=0.0001, value=1.0, format="%.4f")
+        preco = c5.number_input("Preço unitário estimado (R$)", min_value=0.0, value=0.0, format="%.4f")
+        observacao = st.text_area("Observação técnica")
+        salvar = st.form_submit_button("➕ Adicionar item")
+    if salvar:
+        if not descricao.strip() or not unidade.strip():
+            st.error("Descrição e unidade de medida são obrigatórias.")
+            return
+        try:
+            iid = siscom_exec_retorno("""INSERT INTO siscom_itens
+                (processo_id,numero_item,lote,descricao,unidade,quantidade,valor_unitario,observacoes)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+                (pid,int(numero),lote,descricao,unidade,float(quantidade),float(preco),observacao))
+            siscom_log(pid, "ITEM_INCLUIDO", f"Item {iid} / nº {numero}")
+            st.success("Item incluído.")
+            st.rerun()
+        except psycopg2.errors.UniqueViolation:
+            st.error("Este número de item já está cadastrado neste processo.")
+    if not df.empty:
+        ids = {int(r.id): f"{r.numero_item} · {str(r.descricao)[:65]}" for r in df.itertuples()}
+        escolhido = st.selectbox("Item para desativar", list(ids), format_func=lambda k: ids[k], key="siscom_item_baixa")
+        if st.checkbox("Confirmo a desativação deste item", key="siscom_item_confirm") and st.button("🗑️ Desativar item"):
+            n = siscom_consulta("SELECT count(*) quantidade FROM siscom_propostas WHERE item_id=%s", (escolhido,)).iloc[0]["quantidade"]
+            if n:
+                st.error("Item já tem propostas. Não pode ser desativado sem revisar o procedimento.")
+            else:
+                siscom_exec("UPDATE siscom_itens SET ativo=FALSE WHERE id=%s AND processo_id=%s", (escolhido,pid))
+                siscom_log(pid,"ITEM_DESATIVADO",f"Item {escolhido}")
+                st.success("Item desativado.")
+                st.rerun()
+
+
+def siscom_licitantes():
+    st.subheader("👥 Cadastro de licitantes por processo")
+    pid = siscom_escolher_processo("licitantes")
+    if pid is None:
+        return
+    df = siscom_consulta("SELECT id,nome,documento,email,telefone,representante,situacao FROM siscom_licitantes WHERE processo_id=%s ORDER BY nome", (pid,))
+    siscom_tabela(df,"licitantes")
+    with st.form("siscom_licitante_form"):
+        nome = st.text_input("Razão social / nome *")
+        c1,c2 = st.columns(2)
+        documento = c1.text_input("CNPJ/CPF")
+        email = c2.text_input("E-mail")
+        c3,c4 = st.columns(2)
+        telefone = c3.text_input("Telefone")
+        representante = c4.text_input("Representante")
+        observacoes = st.text_area("Observações")
+        salvar = st.form_submit_button("💾 Cadastrar licitante")
+    if salvar:
+        if not nome.strip():
+            st.error("Informe a razão social/nome.")
+            return
+        lid = siscom_exec_retorno("""INSERT INTO siscom_licitantes
+          (processo_id,nome,documento,email,telefone,representante,observacoes)
+          VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+          (pid,nome.strip(),documento,email,telefone,representante,observacoes))
+        siscom_log(pid,"LICITANTE_CADASTRADO",f"Licitante {lid}: {nome}")
+        st.success("Licitante cadastrado.")
+        st.rerun()
+
+
+def siscom_propostas():
+    st.subheader("💰 Propostas por item e licitante")
+    pid = siscom_escolher_processo("propostas")
+    if pid is None:
+        return
+    df = siscom_consulta("""SELECT p.id,i.numero_item,l.nome licitante,p.valor_unitario,
+      i.quantidade,ROUND(p.valor_unitario*i.quantidade,2) valor_total,p.status,p.marca
+      FROM siscom_propostas p JOIN siscom_itens i ON i.id=p.item_id
+      JOIN siscom_licitantes l ON l.id=p.licitante_id WHERE p.processo_id=%s ORDER BY i.numero_item,p.valor_unitario""", (pid,))
+    siscom_tabela(df,"propostas")
+    itens = siscom_consulta("SELECT id,numero_item,descricao FROM siscom_itens WHERE processo_id=%s AND ativo=TRUE ORDER BY numero_item",(pid,))
+    lic = siscom_consulta("SELECT id,nome FROM siscom_licitantes WHERE processo_id=%s ORDER BY nome",(pid,))
+    if itens.empty or lic.empty:
+        st.warning("Cadastre ao menos um item e um licitante antes das propostas.")
+        return
+    map_it = {int(r.id): f"{r.numero_item}: {str(r.descricao)[:80]}" for r in itens.itertuples()}
+    map_li = {int(r.id): r.nome for r in lic.itertuples()}
+    with st.form("siscom_form_proposta"):
+        item_id = st.selectbox("Item", list(map_it), format_func=lambda x: map_it[x])
+        lic_id = st.selectbox("Licitante",list(map_li),format_func=lambda x: map_li[x])
+        preco = st.number_input("Valor unitário ofertado (R$)",min_value=0.0,value=0.0,format="%.4f")
+        marca = st.text_input("Marca/modelo (quando aplicável)")
+        observacao = st.text_area("Condições / observações")
+        salvar = st.form_submit_button("💾 Registrar proposta")
+    if salvar:
+        try:
+            prop = siscom_exec_retorno("""INSERT INTO siscom_propostas
+                (processo_id,item_id,licitante_id,valor_unitario,marca,observacoes)
+                VALUES (%s,%s,%s,%s,%s,%s) RETURNING id""",
+                (pid,item_id,lic_id,preco,marca,observacao))
+            siscom_log(pid,"PROPOSTA_RECEBIDA",f"Proposta {prop}; item {item_id}; licitante {lic_id}")
+            st.success("Proposta registrada.")
+            st.rerun()
+        except psycopg2.errors.UniqueViolation:
+            st.error("Já existe proposta deste licitante para esse item. Utilize a rotina de lances/negociação para novos valores.")
+
+
+def siscom_documento_generico(categoria, titulo=None):
+    st.subheader(titulo or categoria)
+    pid = siscom_escolher_processo("reg_"+categoria.lower().replace(" ","_"))
+    if pid is None:
+        return
+    df = siscom_consulta("""SELECT id,titulo,data_referencia,descricao,documento_url,protocolo,situacao,criado_por,criado_em
+       FROM siscom_registros WHERE processo_id=%s AND categoria=%s ORDER BY id DESC""", (pid,categoria))
+    siscom_tabela(df,"registros_"+categoria.lower().replace(" ","_"))
+    with st.form("siscom_form_"+categoria.lower().replace(" ","_")):
+        assunto = st.text_input("Título/assunto *")
+        data_ref = st.date_input("Data do ato",value=date.today())
+        descricao = st.text_area("Descrição / fundamentação / resultado *",height=140)
+        c1,c2 = st.columns(2)
+        url = c1.text_input("Link externo / documento")
+        protocolo = c2.text_input("Protocolo / identificador")
+        situacao = st.selectbox("Situação",["Rascunho","Registrado","Em análise","Concluído","Cancelado"])
+        salvar = st.form_submit_button("💾 Registrar")
+    if salvar:
+        if not assunto.strip() or not descricao.strip():
+            st.error("Informe título e descrição.")
+            return
+        rid = siscom_exec_retorno("""INSERT INTO siscom_registros
+            (processo_id,categoria,titulo,data_referencia,descricao,documento_url,protocolo,situacao,criado_por)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+            (pid,categoria,assunto.strip(),data_ref,descricao,url,protocolo,situacao,siscom_usuario()))
+        siscom_log(pid,"REGISTRO_INCLUIDO",f"{categoria} #{rid}: {assunto}")
+        st.success("Registro salvo.")
+        st.rerun()
+    st.caption("Informações declaradas pelo usuário. Este registro não executa publicação, assinatura nem transmissão externa.")
+
+
+def siscom_mudar_fase():
+    st.subheader("🧭 Tramitação e movimentação do processo")
+    pid = siscom_escolher_processo("fase")
+    if pid is None:
+        return
+    proc = siscom_dados_processo(pid)
+    atual = proc["fase"]
+    st.write("Fase atual:", atual)
+    if atual in ("Cancelado","Revogado","Anulado","Encerrado"):
+        st.error("Processo em fase terminal. Alterações exigem procedimento administrativo próprio.")
+        return
+    idx = SISCOM_FASES.index(atual) if atual in SISCOM_FASES else 0
+    opcoes = SISCOM_FASES[idx+1:idx+2]
+    if atual == "Planejamento":
+        opcoes = ["Instrução"]
+    elif atual == "Instrução":
+        opcoes = ["Edital preparado"]
+    elif atual == "Edital preparado":
+        opcoes = ["Publicado"]
+    elif atual == "Publicado":
+        opcoes = ["Sessão"]
+    elif atual == "Sessão":
+        opcoes = ["Julgamento"]
+    elif atual == "Julgamento":
+        opcoes = ["Habilitação"]
+    elif atual == "Habilitação":
+        opcoes = ["Recursos"]
+    elif atual == "Recursos":
+        opcoes = ["Adjudicado"]
+    elif atual == "Adjudicado":
+        opcoes = ["Homologado"]
+    elif atual == "Homologado":
+        opcoes = ["Contratação"]
+    elif atual == "Contratação":
+        opcoes = ["Encerrado"]
+    if not opcoes:
+        st.info("Não há fase seguinte definida.")
+        return
+    destino = st.selectbox("Próxima fase",opcoes)
+    justificativa = st.text_area("Comprovação e observações da mudança *")
+    confirma = st.checkbox("Confirmo a existência dos atos e documentos exigidos para esta fase")
+    if st.button("✅ Avançar fase",disabled=not confirma):
+        if len(justificativa.strip()) < 10:
+            st.error("Descreva os documentos/atos que sustentam a mudança.")
+            return
+        if destino in ("Adjudicado","Homologado","Contratação"):
+            jul = siscom_consulta("SELECT count(*) n FROM siscom_registros WHERE processo_id=%s AND categoria=%s",(pid,"Julgamento"))
+            if jul.iloc[0]["n"] == 0:
+                st.error("Registre o julgamento antes de avançar para as etapas finais.")
+                return
+        if destino == "Homologado":
+            hom = siscom_consulta("SELECT count(*) n FROM siscom_registros WHERE processo_id=%s AND categoria=%s",(pid,"Homologação"))
+            if hom.iloc[0]["n"] == 0:
+                st.error("Registre o ato de homologação antes de avançar.")
+                return
+        siscom_exec("UPDATE siscom_processos SET fase=%s, atualizado_em=NOW() WHERE id=%s",(destino,pid))
+        siscom_log(pid,"FASE_ALTERADA",f"{atual} → {destino} | {justificativa}")
+        st.success(f"Processo avançou para {destino}.")
+        st.rerun()
+
+
+def siscom_auditoria():
+    st.subheader("🕒 Histórico e trilha de auditoria")
+    pid = siscom_escolher_processo("auditoria",incluir_inativos=True)
+    if pid is not None:
+        df = siscom_consulta("""SELECT id,criado_em,usuario,evento,detalhes
+              FROM siscom_auditoria WHERE processo_id=%s ORDER BY id DESC""",(pid,))
+        siscom_tabela(df,"auditoria")
+
+
+def siscom_relatorios():
+    st.subheader("📈 Relatórios gerenciais")
+    df = siscom_processos_df(False)
+    if df.empty:
+        st.info("Nenhum processo cadastrado.")
+        return
+    fases = ["Todas"] + sorted(df.fase.dropna().unique().tolist())
+    escolha = st.selectbox("Filtrar por fase",fases)
+    if escolha != "Todas":
+        df = df[df.fase == escolha]
+    siscom_tabela(df,"relatorio_processos")
+    st.caption("Valores estimados são informativos. Não equivalem a valores adjudicados, empenhados ou pagos.")
+
+
+def cadastro_siscom_processos():
+    st.subheader("📁 Abrir Processo — centro de operações")
+    acoes = [
+        ("➕ Inserir", "inserir"), ("🔎 Localizar / Alterar", "localizar"),
+        ("🗑️ Excluir", "excluir"), ("↩️ Estornar", "estornar"),
+        ("🖨️ Imprimir", "imprimir"),
+        ("📄 Parecer", "parecer"), ("👥 Comissão", "comissao"),
+        ("👤 Responsáveis", "responsaveis"), ("📣 Publicação", "publicacao"),
+        ("🏛️ TCE", "tce")
+    ]
+    for inicio in (0,5):
+        cols = st.columns(5)
+        for coluna,(titulo,acao) in zip(cols,acoes[inicio:inicio+5]):
+            if coluna.button(titulo,key="siscom_acao_"+acao,use_container_width=True):
+                st.session_state["siscom_acao_aberta"] = acao
+    acao = st.session_state.get("siscom_acao_aberta", "painel")
+    if acao != "painel":
+        if st.button("⬅️ Voltar ao painel", key="siscom_voltar_painel"):
+            st.session_state["siscom_acao_aberta"] = "painel"
+            st.rerun()
+    rotas = {
+        "painel": siscom_resumo_dashboard, "inserir": siscom_processo_incluir,
+        "localizar": siscom_processo_localizar, "excluir": siscom_processo_excluir,
+        "estornar": siscom_processo_estornar, "imprimir": siscom_processo_imprimir,
+        "parecer": siscom_processo_parecer, "comissao": siscom_processo_comissao,
+        "responsaveis": siscom_processo_responsaveis,
+        "publicacao": siscom_processo_publicacao, "tce": siscom_processo_tce
+    }
+    rotas.get(acao,siscom_resumo_dashboard)()
+
+
+def siscom_processo_parecer():
+    siscom_documento_generico("Parecer", "📄 Pareceres técnicos e jurídicos")
+
+
+def siscom_processo_comissao():
+    siscom_documento_generico("Comissão", "👥 Comissão / agente de contratação")
+
+
+def siscom_processo_responsaveis():
+    siscom_documento_generico("Responsáveis", "👤 Responsáveis pelo procedimento")
+
+
+def siscom_processo_publicacao():
+    siscom_documento_generico("Publicação", "📣 Controle de publicações")
+
+
+def siscom_processo_tce():
+    siscom_documento_generico("TCE", "🏛️ Controle de envio e protocolos TCEMG (manual)")
+
+
+def siscom_modulo_publicacao_sessao():
+    siscom_documento_generico("Sessão", "📋 Publicação e sessão")
+
+
+def siscom_modulo_licitantes():
+    siscom_licitantes()
+
+
+def siscom_modulo_julgamento():
+    siscom_documento_generico("Julgamento", "⚖️ Julgamento das propostas — registro do ato")
+    st.caption("Para disputa detalhada por item, utilize Propostas e Lances. Avalie a legalidade dos critérios no edital.")
+
+
+def siscom_modulo_avaliacao():
+    siscom_documento_generico("Avaliação", "📊 Avaliação e análise técnica")
+
+
+def siscom_modulo_compras():
+    siscom_documento_generico("Compras", "🛍️ Solicitações de compra vinculadas ao processo")
+
+
+def siscom_modulo_portal_eletronico():
+    siscom_documento_generico("Portal Eletrônico", "🖥️ Protocolos do portal eletrônico")
+
+
+def siscom_modulo_sessao_presencial():
+    siscom_documento_generico("Sessão Presencial", "🏛️ Ata e registros de sessão presencial")
+
+
+def siscom_menu_registro(nome):
+    siscom_documento_generico(nome, "📋 " + nome)
+
+
+def modulo_siscom():
+    """Menu SISCOM. Mantenha somente UMA definição desta função no SISGET."""
+    st.title("🛒 SISCOM — Compras e Licitações")
+    st.caption("Planejamento da contratação, processos, competição, julgamento, decisões e acompanhamento.")
+    with st.sidebar:
+        st.caption("SISCOM | Controle interno")
+    categorias = {
+        "🏠 Visão geral": ["Dashboard", "Relatórios", "Configuração"],
+        "📂 Processo": ["📁 Abrir Processo", "📦 Itens e Lotes", "🧭 Tramitação", "📚 Documentos", "📜 Histórico"],
+        "📝 Preparação": ["Pesquisa de Preços", "Contratação Direta", "Parecer", "Comissão", "Responsáveis"],
+        "📢 Disputa": ["Publicação", "Publicação e Sessão", "Licitantes", "Propostas", "Lances", "Sessão Presencial", "Portal Eletrônico"],
+        "⚖️ Resultado": ["Avaliação", "Julgamento", "Habilitação", "Recursos", "Adjudicação", "Homologação"],
+        "🛒 Execução": ["Compras", "TCE"]
+    }
+    grupo = st.selectbox("Área SISCOM",list(categorias), key="siscom_menu_grupo")
+    opcao = st.selectbox("Funcionalidade", categorias[grupo], key="siscom_menu_opcao")
+    st.markdown("---")
+    if opcao == "Configuração":
+        siscom_configuracao()
+        return
+    if not siscom_pronto():
+        st.info("Selecione Visão geral → Configuração para preparar a estrutura.")
+        return
+    rotas = {
+        "Dashboard": siscom_resumo_dashboard, "Relatórios": siscom_relatorios,
+        "📁 Abrir Processo": cadastro_siscom_processos,
+        "📦 Itens e Lotes": siscom_itens, "🧭 Tramitação": siscom_mudar_fase,
+        "📚 Documentos": lambda: siscom_menu_registro("Documentos"),
+        "📜 Histórico": siscom_auditoria,
+        "Pesquisa de Preços": lambda: siscom_menu_registro("Pesquisa de Preços"),
+        "Contratação Direta": lambda: siscom_menu_registro("Contratação Direta"),
+        "Parecer": siscom_processo_parecer, "Comissão": siscom_processo_comissao,
+        "Responsáveis": siscom_processo_responsaveis,
+        "Publicação": siscom_processo_publicacao,
+        "Publicação e Sessão": siscom_modulo_publicacao_sessao,
+        "Licitantes": siscom_modulo_licitantes, "Propostas": siscom_propostas,
+        "Lances": lambda: siscom_menu_registro("Lances"),
+        "Sessão Presencial": siscom_modulo_sessao_presencial,
+        "Portal Eletrônico": siscom_modulo_portal_eletronico,
+        "Avaliação": siscom_modulo_avaliacao,
+        "Julgamento": siscom_modulo_julgamento,
+        "Habilitação": lambda: siscom_menu_registro("Habilitação"),
+        "Recursos": lambda: siscom_menu_registro("Recursos"),
+        "Adjudicação": lambda: siscom_menu_registro("Adjudicação"),
+        "Homologação": lambda: siscom_menu_registro("Homologação"),
+        "Compras": siscom_modulo_compras,
+        "TCE": siscom_processo_tce,
+    }
+    rotas[opcao]()
+
+
 
 def modulo_siscon():
 
