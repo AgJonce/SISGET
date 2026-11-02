@@ -25406,6 +25406,39 @@ def modulo_em_desenvolvimento(titulo, icone="🚧"):
     st.info("🚧 Este módulo está em desenvolvimento.")
 
 
+import io
+import csv
+import json
+from decimal import Decimal, InvalidOperation
+from contextlib import contextmanager
+from datetime import date, datetime
+
+SISCOM_FASES = [
+    "Planejamento", "Instrução", "Edital preparado", "Publicado", "Sessão",
+    "Julgamento", "Habilitação", "Recursos", "Adjudicado", "Homologado",
+    "Contratação", "Encerrado", "Cancelado", "Revogado", "Anulado",
+]
+SISCOM_MODALIDADES = [
+    "Pregão", "Concorrência", "Concurso", "Leilão", "Diálogo competitivo",
+    "Dispensa", "Inexigibilidade", "Outra / não definida"
+]
+SISCOM_CRITERIOS = [
+    "Menor preço", "Maior desconto", "Melhor técnica ou conteúdo artístico",
+    "Técnica e preço", "Maior lance", "Maior retorno econômico", "Não aplicável"
+]
+SISCOM_ENTIDADES = {
+    "Parecer": "siscom_pareceres", "Comissão": "siscom_comissao",
+    "Responsáveis": "siscom_responsaveis", "Publicação": "siscom_publicacoes",
+    "TCE": "siscom_tce", "Sessão": "siscom_sessoes",
+    "Documentos": "siscom_documentos", "Lances": "siscom_lances",
+    "Recursos": "siscom_recursos", "Avaliação": "siscom_avaliacoes",
+    "Portal Eletrônico": "siscom_portais", "Sessão Presencial": "siscom_presenciais",
+    "Pesquisa de Preços": "siscom_pesquisas", "Contratação Direta": "siscom_diretas",
+    "Compras": "siscom_compras", "Julgamento": "siscom_julgamentos",
+    "Habilitação": "siscom_habilitacoes", "Adjudicação": "siscom_adjudicacoes",
+    "Homologação": "siscom_homologacoes"
+}
+
 def siscom_usuario():
     # Registra identificador de sessão; substitua por ID real do usuário
     # autenticado caso o SISGET já o exponha no st.session_state.
