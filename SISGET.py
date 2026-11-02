@@ -25518,161 +25518,6 @@ def siscom_log(processo_id, evento, detalhes=""):
     )
 
 
-def siscom_schema():
-    # Operação explícita: não executar em toda renderização.
-    ddl = [
-        """CREATE TABLE IF NOT EXISTS siscom_processos (
-            id BIGSERIAL PRIMARY KEY, numero VARCHAR(60) NOT NULL, exercicio INTEGER NOT NULL,
-            objeto TEXT NOT NULL, modalidade VARCHAR(90) NOT NULL,
-            criterio VARCHAR(90) NOT NULL, tipo_objeto VARCHAR(80) NOT NULL DEFAULT 'Bens',
-            unidade_requisitante VARCHAR(180), processo_origem VARCHAR(120),
-            valor_estimado NUMERIC(18,2) DEFAULT 0 CHECK (valor_estimado >= 0),
-            fase VARCHAR(40) NOT NULL DEFAULT 'Planejamento',
-            data_abertura DATE NOT NULL DEFAULT CURRENT_DATE,
-            data_sessao TIMESTAMP, responsavel VARCHAR(180),
-            justificativa TEXT, observacoes TEXT,
-            ativo BOOLEAN NOT NULL DEFAULT TRUE,
-            criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            atualizado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(numero, exercicio)
-        )""",
-        """CREATE TABLE IF NOT EXISTS siscom_itens (
-            id BIGSERIAL PRIMARY KEY,
-            processo_id BIGINT NOT NULL REFERENCES siscom_processos(id),
-            numero_item INTEGER NOT NULL CHECK(numero_item > 0),
-            descricao TEXT NOT NULL, unidade VARCHAR(30) NOT NULL,
-            quantidade NUMERIC(18,4) NOT NULL CHECK (quantidade > 0),
-            valor_unitario NUMERIC(18,4) NOT NULL CHECK(valor_unitario >= 0),
-            lote VARCHAR(50), observacoes TEXT, ativo BOOLEAN DEFAULT TRUE,
-            UNIQUE(processo_id, numero_item)
-        )""",
-        """CREATE TABLE IF NOT EXISTS siscom_licitantes (
-            id BIGSERIAL PRIMARY KEY, processo_id BIGINT NOT NULL REFERENCES siscom_processos(id),
-            nome VARCHAR(220) NOT NULL, documento VARCHAR(25), email VARCHAR(200),
-            telefone VARCHAR(40), representante VARCHAR(180),
-            situacao VARCHAR(50) DEFAULT 'Cadastrado', observacoes TEXT,
-            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )""",
-        """CREATE TABLE IF NOT EXISTS siscom_propostas (
-            id BIGSERIAL PRIMARY KEY,
-            processo_id BIGINT NOT NULL REFERENCES siscom_processos(id),
-            item_id BIGINT NOT NULL REFERENCES siscom_itens(id),
-            licitante_id BIGINT NOT NULL REFERENCES siscom_licitantes(id),
-            valor_unitario NUMERIC(18,4) NOT NULL CHECK(valor_unitario >= 0),
-            marca VARCHAR(120), status VARCHAR(40) DEFAULT 'Apresentada',
-            observacoes TEXT, criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(item_id, licitante_id)
-        )""",
-        """CREATE TABLE IF NOT EXISTS siscom_registros (
-            id BIGSERIAL PRIMARY KEY, processo_id BIGINT NOT NULL REFERENCES siscom_processos(id),
-            categoria VARCHAR(70) NOT NULL, titulo VARCHAR(250) NOT NULL,
-            data_referencia DATE, descricao TEXT,
-            documento_url TEXT, protocolo VARCHAR(200),
-            situacao VARCHAR(100) DEFAULT 'Registrado',
-            criado_por VARCHAR(120), criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )""",
-        """CREATE TABLE IF NOT EXISTS siscom_auditoria (
-            id BIGSERIAL PRIMARY KEY, processo_id BIGINT REFERENCES siscom_processos(id),
-            usuario VARCHAR(120), evento VARCHAR(140) NOT NULL,
-            detalhes TEXT, criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )""",
-    ]
-    with siscom_conexao() as conn:
-        with conn.cursor() as cur:
-            for sql in ddl:
-                cur.execute(sql)
-            # COMPATIBILIDADE: versões anteriores tinham ano/situacao em vez
-            # de exercicio/fase e tipo em vez de categoria para registros.
-            # Não apaga nenhuma tabela, coluna ou registro existente.
-            novos_processos = {
-                "exercicio": "INTEGER",
-                "criterio": "VARCHAR(90) DEFAULT 'Menor preço'",
-                "tipo_objeto": "VARCHAR(80) DEFAULT 'Bens'",
-                "unidade_requisitante": "VARCHAR(180)",
-                "processo_origem": "VARCHAR(120)",
-                "fase": "VARCHAR(40) DEFAULT 'Planejamento'",
-                "data_abertura": "DATE DEFAULT CURRENT_DATE",
-                "data_sessao": "TIMESTAMP",
-                "responsavel": "VARCHAR(180)",
-                "justificativa": "TEXT",
-                "ativo": "BOOLEAN DEFAULT TRUE",
-                "criado_em": "TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
-                "atualizado_em": "TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
-                "observacoes": "TEXT",
-                "valor_estimado": "NUMERIC(18,2) DEFAULT 0",
-            }
-            for nome, definicao in novos_processos.items():
-                cur.execute(f"ALTER TABLE siscom_processos ADD COLUMN IF NOT EXISTS {nome} {definicao}")
-            cur.execute("""SELECT column_name FROM information_schema.columns
-                WHERE table_schema=current_schema() AND table_name='siscom_processos'""")
-            colunas_processo = {x[0] for x in cur.fetchall()}
-            if "ano" in colunas_processo:
-                cur.execute("""UPDATE siscom_processos SET exercicio=ano
-                    WHERE exercicio IS NULL""")
-            if "criterio_julgamento" in colunas_processo:
-                cur.execute("""UPDATE siscom_processos
-                    SET criterio=criterio_julgamento
-                    WHERE criterio_julgamento IS NOT NULL
-                      AND (criterio IS NULL OR criterio='Menor preço')""")
-            if "situacao" in colunas_processo:
-                cur.execute("""UPDATE siscom_processos SET fase=CASE
-                    WHEN UPPER(COALESCE(situacao,'')) IN ('ESTORNADO','CANCELADO') THEN 'Cancelado'
-                    WHEN UPPER(COALESCE(situacao,''))='ANULADO' THEN 'Anulado'
-                    WHEN UPPER(COALESCE(situacao,''))='REVOGADO' THEN 'Revogado'
-                    ELSE 'Planejamento' END
-                    WHERE fase IS NULL OR fase='Planejamento'""")
-            cur.execute("""UPDATE siscom_processos SET
-                    exercicio=COALESCE(exercicio, EXTRACT(YEAR FROM COALESCE(criado_em,NOW()))::int),
-                    fase=COALESCE(fase,'Planejamento'), ativo=COALESCE(ativo,TRUE),
-                    criterio=COALESCE(criterio,'Menor preço'),
-                    tipo_objeto=COALESCE(tipo_objeto,'Bens'),
-                    data_abertura=COALESCE(data_abertura,CURRENT_DATE)""")
-            novos_registros = {
-                "categoria": "VARCHAR(70)", "data_referencia": "DATE",
-                "documento_url": "TEXT", "protocolo": "VARCHAR(200)",
-                "situacao": "VARCHAR(100) DEFAULT 'Registrado'",
-                "criado_por": "VARCHAR(120)", "criado_em": "TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
-                "descricao": "TEXT", "titulo": "VARCHAR(250)"
-            }
-            for nome, definicao in novos_registros.items():
-                cur.execute(f"ALTER TABLE siscom_registros ADD COLUMN IF NOT EXISTS {nome} {definicao}")
-            cur.execute("""SELECT column_name FROM information_schema.columns
-                WHERE table_schema=current_schema() AND table_name='siscom_registros'""")
-            colunas_registro = {x[0] for x in cur.fetchall()}
-            if "tipo" in colunas_registro:
-                cur.execute("UPDATE siscom_registros SET categoria=tipo WHERE categoria IS NULL")
-            if "data_evento" in colunas_registro:
-                cur.execute("UPDATE siscom_registros SET data_referencia=data_evento WHERE data_referencia IS NULL")
-            # Versões anteriores também podem ter tabelas auxiliares incompletas.
-            # Somente adiciona colunas; nunca executa DROP ou DELETE.
-            complementos = {
-                "siscom_itens": {
-                    "lote": "VARCHAR(50)", "observacoes": "TEXT", "ativo": "BOOLEAN DEFAULT TRUE",
-                    "numero_item": "INTEGER", "descricao": "TEXT", "unidade": "VARCHAR(30)",
-                    "quantidade": "NUMERIC(18,4)", "valor_unitario": "NUMERIC(18,4)"
-                },
-                "siscom_licitantes": {
-                    "documento": "VARCHAR(25)", "email": "VARCHAR(200)",
-                    "telefone": "VARCHAR(40)", "representante": "VARCHAR(180)",
-                    "situacao": "VARCHAR(50) DEFAULT 'Cadastrado'", "observacoes": "TEXT"
-                },
-                "siscom_propostas": {
-                    "marca": "VARCHAR(120)", "status": "VARCHAR(40) DEFAULT 'Apresentada'",
-                    "observacoes": "TEXT", "valor_unitario": "NUMERIC(18,4)"
-                },
-                "siscom_auditoria": {
-                    "usuario": "VARCHAR(120)", "evento": "VARCHAR(140)",
-                    "detalhes": "TEXT", "criado_em": "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
-                },
-            }
-            for tabela, colunas in complementos.items():
-                for nome, definicao in colunas.items():
-                    cur.execute(f"ALTER TABLE {tabela} ADD COLUMN IF NOT EXISTS {nome} {definicao}")
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_siscom_processo_fase ON siscom_processos(fase)")
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_siscom_registros_proc ON siscom_registros(processo_id, categoria)")
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_siscom_propostas_proc ON siscom_propostas(processo_id)")
-
-
 def siscom_diagnostico_estrutura():
     """Inspeciona campos existentes sem alterar dados ou tabelas."""
     requisitos = {
@@ -25712,35 +25557,24 @@ def siscom_pronto():
 
 
 def siscom_configuracao():
-    st.subheader("⚙️ Diagnóstico e atualização do SISCOM")
-    st.warning("Faça backup e execute a atualização PRIMEIRO em homologação. Não apague as tabelas existentes.")
+    """Apenas diagnóstico; migrações devem ser executadas no SQL Editor."""
+    st.subheader("⚙️ Diagnóstico do SISCOM (somente leitura)")
+    st.info("Crie e atualize as tabelas exclusivamente pelo SQL Editor do Supabase, usando o arquivo SISCOM_SUPABASE_INSTALACAO.sql.")
     try:
         ausencias = siscom_diagnostico_estrutura()
         df = pd.DataFrame([
-            {"Tabela": tab, "Colunas ausentes": ", ".join(cols) if cols else "Nenhuma"}
-            for tab,cols in ausencias.items()
+            {"Tabela": tabela,
+             "Colunas ausentes": ", ".join(colunas) if colunas else "Nenhuma"}
+            for tabela, colunas in ausencias.items()
         ])
-        st.dataframe(df, hide_index=True, use_container_width=True)
-        if not any(ausencias.values()):
-            st.success("Todas as tabelas e colunas exigidas estão presentes.")
+        st.dataframe(df, use_container_width=True, hide_index=True)
+        if any(ausencias.values()):
+            st.warning("Há pendências no esquema. Execute a migração SQL após realizar backup.")
+        else:
+            st.success("Estrutura verificada: todas as colunas necessárias estão presentes.")
     except Exception as erro:
-        st.error("Falha ao consultar metadados do PostgreSQL.")
+        st.error("Não foi possível consultar a estrutura do Supabase.")
         st.code(type(erro).__name__)
-    confirmado = st.checkbox("Tenho backup do banco e autorizo criar/atualizar as tabelas do SISCOM", key="siscom_confirma_migracao")
-    if st.button("🗄️ Criar/verificar estrutura SISCOM", type="primary", disabled=not confirmado):
-        try:
-            siscom_schema()
-            pendencias = {t:c for t,c in siscom_diagnostico_estrutura().items() if c}
-            if pendencias:
-                st.error("A migração foi executada, porém ainda existem colunas ausentes. Revise o esquema.")
-                st.json(pendencias)
-            else:
-                st.success("Estrutura revisada. Os registros antigos foram preservados.")
-                st.rerun()
-        except Exception as erro:
-            st.error("A migração não pôde ser concluída. Nenhuma exclusão de tabela foi solicitada.")
-            st.code(type(erro).__name__)
-    st.caption("Sem transmissões automáticas ao PNCP, TCE ou portais eletrônicos.")
 
 
 def siscom_processos_df(ativos=True):
